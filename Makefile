@@ -184,7 +184,7 @@ compose-down:
 .PHONY: validate-keys
 validate-keys:
 	@echo "🐍 使用 Python 版本验证密钥..."
-	python3 scripts/validate-keys.py -c 300 -t 15
+	python3 scripts/validate-keys.py -c 100 -t 15
 
 # 健康检查
 .PHONY: health
