@@ -1,5 +1,9 @@
 # GPT-Load
 
+![Docker Build](https://github.com/tangbo/gpt-load/actions/workflows/docker-build.yml/badge.svg)
+![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 一个**极致高性能**的 OpenAI API 多密钥轮询透明代理服务器，使用 Go 语言开发！
 
 ## ✨ 特性
@@ -53,6 +57,21 @@ make build
 
 ### 方式三：Docker 运行
 
+#### 使用预构建镜像（推荐）
+
+```bash
+# 从GitHub Container Registry拉取镜像
+docker pull ghcr.io/tangbo/gpt-load:latest
+
+# 运行容器
+docker run -d -p 3000:3000 \
+  -e KEYS_FILE=/app/keys.txt \
+  -v $(pwd)/keys.txt:/app/keys.txt \
+  ghcr.io/tangbo/gpt-load:latest
+```
+
+#### 本地构建镜像
+
 ```bash
 # 构建镜像
 make docker-build
@@ -95,6 +114,24 @@ cp .env.example .env
 | `/stats`      | GET  | 详细统计信息       |
 | `/blacklist`  | GET  | 黑名单详情         |
 | `/reset-keys` | GET  | 重置所有密钥状态   |
+
+## 🚀 CI/CD 自动部署
+
+项目已配置 GitHub Actions 自动构建和部署：
+
+- **自动触发**：每次 push 到 main 分支时自动构建
+- **多平台支持**：同时构建 Linux AMD64 和 ARM64 镜像
+- **GitHub 集成**：自动推送到 GitHub Container Registry
+- **缓存优化**：使用 GitHub Actions 缓存加速构建
+
+### 预构建镜像
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/tangbo/gpt-load:latest
+```
+
+详细配置说明请参考：[GitHub Actions 配置指南](.docs/github-actions-setup.md)
 
 ## 🔧 开发指南
 

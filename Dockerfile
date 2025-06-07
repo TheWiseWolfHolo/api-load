@@ -18,8 +18,10 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 构建应用
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# 构建应用 - 支持多平台
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.Version=2.0.0" \
     -o gpt-load \
     ./cmd/main.go
