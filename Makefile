@@ -180,6 +180,12 @@ compose-down:
 	docker-compose down
 	docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
 
+# 密钥验证
+.PHONY: validate-keys
+validate-keys:
+	@echo "🐍 使用 Python 版本验证密钥..."
+	python3 scripts/validate-keys.py -c 300 -t 15
+
 # 健康检查
 .PHONY: health
 health:
@@ -245,3 +251,6 @@ help:
 	@echo "  stats      - 查看统计信息"
 	@echo "  reset-keys - 重置密钥状态"
 	@echo "  blacklist  - 查看黑名单"
+	@echo ""
+	@echo "密钥验证:"
+	@echo "  validate-keys        - 验证 API 密钥"

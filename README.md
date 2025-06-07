@@ -118,6 +118,20 @@ cp .env.example .env
 | CORS       | `ENABLE_CORS`         | true                   | 是否启用 CORS         |
 | 连接池     | `MAX_SOCKETS`         | 50                     | HTTP 连接池最大连接数 |
 
+## 🔑 密钥验证工具
+
+项目提供了高性能的 API 密钥验证工具，支持批量验证、去重和多模型测试：
+
+### 快速使用
+
+```bash
+# 自动选择最佳验证方式
+make validate-keys
+
+# 或直接运行
+./scripts/validate-keys.py
+```
+
 ## 📊 监控端点
 
 | 端点          | 方法 | 说明               |
