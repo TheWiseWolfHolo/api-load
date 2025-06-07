@@ -68,11 +68,14 @@ type CORSConfig struct {
 
 // PerformanceConfig 性能配置
 type PerformanceConfig struct {
-	MaxSockets         int  `json:"maxSockets"`
-	MaxFreeSockets     int  `json:"maxFreeSockets"`
-	EnableKeepAlive    bool `json:"enableKeepAlive"`
-	DisableCompression bool `json:"disableCompression"`
-	BufferSize         int  `json:"bufferSize"`
+	MaxSockets          int  `json:"maxSockets"`
+	MaxFreeSockets      int  `json:"maxFreeSockets"`
+	EnableKeepAlive     bool `json:"enableKeepAlive"`
+	DisableCompression  bool `json:"disableCompression"`
+	BufferSize          int  `json:"bufferSize"`
+	StreamBufferSize    int  `json:"streamBufferSize"`    // 流式传输缓冲区大小
+	StreamFlushInterval int  `json:"streamFlushInterval"` // 流式传输flush间隔（毫秒）
+	StreamHeaderTimeout int  `json:"streamHeaderTimeout"` // 流式请求响应头超时（毫秒）
 }
 
 // LogConfig 日志配置
@@ -129,11 +132,14 @@ func LoadConfig() (*Config, error) {
 			AllowedOrigins: parseArray(os.Getenv("ALLOWED_ORIGINS"), []string{"*"}),
 		},
 		Performance: PerformanceConfig{
-			MaxSockets:         parseInteger(os.Getenv("MAX_SOCKETS"), DefaultConstants.DefaultMaxSockets),
-			MaxFreeSockets:     parseInteger(os.Getenv("MAX_FREE_SOCKETS"), DefaultConstants.DefaultMaxFreeSockets),
-			EnableKeepAlive:    parseBoolean(os.Getenv("ENABLE_KEEP_ALIVE"), true),
-			DisableCompression: parseBoolean(os.Getenv("DISABLE_COMPRESSION"), true),
-			BufferSize:         parseInteger(os.Getenv("BUFFER_SIZE"), 32*1024),
+			MaxSockets:          parseInteger(os.Getenv("MAX_SOCKETS"), DefaultConstants.DefaultMaxSockets),
+			MaxFreeSockets:      parseInteger(os.Getenv("MAX_FREE_SOCKETS"), DefaultConstants.DefaultMaxFreeSockets),
+			EnableKeepAlive:     parseBoolean(os.Getenv("ENABLE_KEEP_ALIVE"), true),
+			DisableCompression:  parseBoolean(os.Getenv("DISABLE_COMPRESSION"), true),
+			BufferSize:          parseInteger(os.Getenv("BUFFER_SIZE"), 32*1024),
+			StreamBufferSize:    parseInteger(os.Getenv("STREAM_BUFFER_SIZE"), 64*1024),      // 默认64KB
+			StreamFlushInterval: parseInteger(os.Getenv("STREAM_FLUSH_INTERVAL"), 100),       // 默认100ms
+			StreamHeaderTimeout: parseInteger(os.Getenv("STREAM_HEADER_TIMEOUT"), 10000),     // 默认10秒
 		},
 		Log: LogConfig{
 			Level:         getEnvOrDefault("LOG_LEVEL", "info"),
@@ -191,6 +197,18 @@ func validateConfig(config *Config) error {
 		errors = append(errors, "最大空闲连接数不能小于 0")
 	}
 
+	if config.Performance.StreamBufferSize < 1024 {
+		errors = append(errors, "流式缓冲区大小不能小于 1KB")
+	}
+
+	if config.Performance.StreamFlushInterval < 10 {
+		errors = append(errors, "流式flush间隔不能小于 10ms")
+	}
+
+	if config.Performance.StreamHeaderTimeout < 1000 {
+		errors = append(errors, "流式响应头超时不能小于 1秒")
+	}
+
 	if len(errors) > 0 {
 		logrus.Error("❌ 配置验证失败:")
 		for _, err := range errors {
@@ -238,6 +256,9 @@ func DisplayConfig(config *Config) {
 	}
 	logrus.Infof("   压缩: %s", compressionStatus)
 	logrus.Infof("   缓冲区大小: %d bytes", config.Performance.BufferSize)
+	logrus.Infof("   流式缓冲区: %d bytes", config.Performance.StreamBufferSize)
+	logrus.Infof("   流式Flush间隔: %dms", config.Performance.StreamFlushInterval)
+	logrus.Infof("   流式响应头超时: %dms", config.Performance.StreamHeaderTimeout)
 
 	// 显示日志配置
 	requestLogStatus := "已启用"
