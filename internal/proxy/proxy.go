@@ -29,7 +29,6 @@ type ProxyServer struct {
 	upstreamURL  *url.URL
 	requestCount int64
 	startTime    time.Time
-	flushTicker  *time.Ticker // 流式响应的定时flush
 }
 
 // NewProxyServer 创建新的代理服务器
@@ -581,37 +580,31 @@ func (ps *ProxyServer) handleStreamResponse(c *gin.Context, body io.ReadCloser) 
 		return
 	}
 
-	// 使用智能flush策略
-	flushInterval := time.Duration(config.AppConfig.Performance.StreamFlushInterval) * time.Millisecond
-	lastFlush := time.Now()
+	// 实现零缓存、实时转发
+	copyDone := make(chan bool)
 
-	// 使用更大的缓冲区以减少系统调用
-	buf := make([]byte, config.AppConfig.Performance.StreamBufferSize)
-
-	for {
-		n, err := body.Read(buf)
-		if n > 0 {
-			_, writeErr := c.Writer.Write(buf[:n])
-			if writeErr != nil {
-				logrus.Errorf("写入流式响应失败: %v", writeErr)
-				break
-			}
-
-			// 智能flush：基于时间间隔或数据量
-			if time.Since(lastFlush) >= flushInterval || n >= config.AppConfig.Performance.StreamBufferSize/2 {
+	// 在一个独立的goroutine中定期flush，确保数据被立即发送
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-copyDone:
+				// io.Copy完成后，执行最后一次flush并退出
 				flusher.Flush()
-				lastFlush = time.Now()
+				return
+			case <-ticker.C:
+				flusher.Flush()
 			}
 		}
+	}()
 
-		if err != nil {
-			// 最后一次flush确保所有数据都发送出去
-			flusher.Flush()
-			if err != io.EOF {
-				logrus.Errorf("读取流式响应失败: %v", err)
-			}
-			break
-		}
+	// 使用io.Copy进行高效的数据复制
+	_, err := io.Copy(c.Writer, body)
+	close(copyDone) // 通知flush的goroutine可以停止了
+
+	if err != nil && err != io.EOF {
+		logrus.Errorf("复制流式响应失败: %v", err)
 	}
 }
 
@@ -619,8 +612,5 @@ func (ps *ProxyServer) handleStreamResponse(c *gin.Context, body io.ReadCloser) 
 func (ps *ProxyServer) Close() {
 	if ps.keyManager != nil {
 		ps.keyManager.Close()
-	}
-	if ps.flushTicker != nil {
-		ps.flushTicker.Stop()
 	}
 }
