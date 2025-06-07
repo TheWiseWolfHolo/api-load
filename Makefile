@@ -137,17 +137,48 @@ docker-build:
 	docker tag gpt-load:$(VERSION) gpt-load:latest
 	@echo "✅ Docker 镜像构建完成"
 
-# Docker 运行
+# Docker 运行（使用预构建镜像）
 .PHONY: docker-run
 docker-run:
-	@echo "🐳 运行 Docker 容器..."
+	@echo "🐳 运行 Docker 容器（预构建镜像）..."
 	docker run -d \
 		--name gpt-load \
 		-p 3000:3000 \
 		-v $(PWD)/keys.txt:/app/keys.txt:ro \
 		-v $(PWD)/.env:/app/.env:ro \
 		--restart unless-stopped \
+		ghcr.io/tbphp/gpt-load:latest
+
+# Docker 运行（本地构建）
+.PHONY: docker-run-local
+docker-run-local:
+	@echo "🐳 运行 Docker 容器（本地构建）..."
+	docker run -d \
+		--name gpt-load-local \
+		-p 3000:3000 \
+		-v $(PWD)/keys.txt:/app/keys.txt:ro \
+		-v $(PWD)/.env:/app/.env:ro \
+		--restart unless-stopped \
 		gpt-load:latest
+
+# Docker Compose 运行（预构建镜像）
+.PHONY: compose-up
+compose-up:
+	@echo "🐳 使用 Docker Compose 启动（预构建镜像）..."
+	docker-compose up -d
+
+# Docker Compose 运行（本地构建）
+.PHONY: compose-up-dev
+compose-up-dev:
+	@echo "🐳 使用 Docker Compose 启动（本地构建）..."
+	docker-compose -f docker-compose.dev.yml up -d
+
+# Docker Compose 停止
+.PHONY: compose-down
+compose-down:
+	@echo "🐳 停止 Docker Compose..."
+	docker-compose down
+	docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
 
 # 健康检查
 .PHONY: health
@@ -202,8 +233,12 @@ help:
 	@echo "  uninstall  - 从系统卸载"
 	@echo ""
 	@echo "Docker 相关:"
-	@echo "  docker-build - 构建 Docker 镜像"
-	@echo "  docker-run   - 运行 Docker 容器"
+	@echo "  docker-build     - 构建 Docker 镜像"
+	@echo "  docker-run       - 运行 Docker 容器（预构建镜像）"
+	@echo "  docker-run-local - 运行 Docker 容器（本地构建）"
+	@echo "  compose-up       - Docker Compose 启动（预构建镜像）"
+	@echo "  compose-up-dev   - Docker Compose 启动（本地构建）"
+	@echo "  compose-down     - Docker Compose 停止"
 	@echo ""
 	@echo "管理相关:"
 	@echo "  health     - 健康检查"

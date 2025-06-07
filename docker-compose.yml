@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   gpt-load:
-    build: .
+    image: ghcr.io/tbphp/gpt-load:latest
     container_name: gpt-load
     ports:
       - "3000:3000"

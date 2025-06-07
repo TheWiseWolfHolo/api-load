@@ -1,6 +1,6 @@
 # GPT-Load
 
-![Docker Build](https://github.com/tangbo/gpt-load/actions/workflows/docker-build.yml/badge.svg)
+![Docker Build](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)
 ![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -61,13 +61,25 @@ make build
 
 ```bash
 # 从GitHub Container Registry拉取镜像
-docker pull ghcr.io/tangbo/gpt-load:latest
+docker pull ghcr.io/tbphp/gpt-load:latest
 
 # 运行容器
 docker run -d -p 3000:3000 \
   -e KEYS_FILE=/app/keys.txt \
   -v $(pwd)/keys.txt:/app/keys.txt \
-  ghcr.io/tangbo/gpt-load:latest
+  ghcr.io/tbphp/gpt-load:latest
+```
+
+#### 使用 Docker Compose（推荐）
+
+```bash
+# 使用预构建镜像启动
+make compose-up
+# 或者
+docker-compose up -d
+
+# 停止服务
+make compose-down
 ```
 
 #### 本地构建镜像
@@ -76,11 +88,11 @@ docker run -d -p 3000:3000 \
 # 构建镜像
 make docker-build
 
-# 运行容器
-make docker-run
+# 运行容器（本地构建）
+make docker-run-local
 
-# 或使用 docker-compose
-docker-compose up -d
+# 或使用 docker-compose（本地构建）
+make compose-up-dev
 ```
 
 ## ⚙️ 配置管理
@@ -128,7 +140,7 @@ cp .env.example .env
 
 ```bash
 # 拉取最新镜像
-docker pull ghcr.io/tangbo/gpt-load:latest
+docker pull ghcr.io/tbphp/gpt-load:latest
 ```
 
 详细配置说明请参考：[GitHub Actions 配置指南](.docs/github-actions-setup.md)
