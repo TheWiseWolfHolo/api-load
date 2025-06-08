@@ -1,233 +1,194 @@
 # GPT-Load
 
+[中文文档](README_CN.md) | English
+
 ![Docker Build](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)
 ![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-一个**极致高性能**的 OpenAI API 多密钥轮询透明代理服务器，使用 Go 语言开发！
+A high-performance OpenAI API proxy server with multi-key rotation and load balancing, built with Go.
 
-## ✨ 特性
+## Features
 
-- 🔄 **多密钥轮询**: 自动轮换使用多个 API 密钥，支持负载均衡
-- 🧠 **智能拉黑**: 区分永久性错误和临时性错误，智能密钥管理
-- 📊 **实时监控**: 提供详细的统计信息、健康检查和黑名单管理
-- 🔧 **灵活配置**: 支持 .env 文件配置，热重载配置
-- 🌐 **CORS 支持**: 完整的跨域请求支持
-- 📝 **结构化日志**: 彩色日志输出，包含响应时间和密钥信息
-- 🔒 **可选认证**: 项目级 Bearer Token 认证
-- ⚡ **极致性能**:
-  - **零拷贝流式传输**: 最小化内存使用和延迟
-  - **高并发处理**: 支持数万并发连接
-  - **内存安全**: 自动垃圾回收，无内存泄漏
-  - **原子操作**: 无锁并发，极低延迟
-- 🛡️ **生产就绪**: 优雅关闭、错误恢复、内存管理
+- **Multi-key Rotation**: Automatic API key rotation with load balancing
+- **Intelligent Blacklisting**: Distinguishes between permanent and temporary errors for smart key management
+- **Real-time Monitoring**: Comprehensive statistics, health checks, and blacklist management
+- **Flexible Configuration**: Environment-based configuration with .env file support
+- **CORS Support**: Full cross-origin request support
+- **Structured Logging**: Detailed logging with response times and key information
+- **Optional Authentication**: Project-level Bearer token authentication
+- **High Performance**: Zero-copy streaming, concurrent processing, and atomic operations
+- **Production Ready**: Graceful shutdown, error recovery, and memory management
 
-## 🚀 快速开始
+## Quick Start
 
-### 方式一：直接运行
+### Prerequisites
 
-```bash
-# 1. 确保已安装 Go 1.21+
-go version
+- Go 1.21+ (for building from source)
+- Docker (for containerized deployment)
 
-# 2. 下载依赖
-go mod tidy
-
-# 3. 配置密钥文件
-cp ../keys.txt ./keys.txt
-
-# 4. 配置环境变量（可选）
-cp .env.example .env
-
-# 5. 运行服务器
-make run
-# 或者
-go run cmd/main.go
-```
-
-### 方式二：构建后运行
+### Option 1: Using Docker (Recommended)
 
 ```bash
-# 构建
-make build
-
-# 运行
-./build/gpt-load
-```
-
-### 方式三：Docker 运行
-
-#### 使用预构建镜像（推荐）
-
-```bash
-# 从GitHub Container Registry拉取镜像
+# Pull the latest image
 docker pull ghcr.io/tbphp/gpt-load:latest
 
-# 运行容器
+# Create keys.txt file with your OpenAI API keys (one per line)
+echo "sk-your-api-key-1" > keys.txt
+echo "sk-your-api-key-2" >> keys.txt
+
+# Run the container
 docker run -d -p 3000:3000 \
-  -e KEYS_FILE=/app/keys.txt \
-  -v $(pwd)/keys.txt:/app/keys.txt \
+  -v $(pwd)/keys.txt:/app/keys.txt:ro \
+  --name gpt-load \
   ghcr.io/tbphp/gpt-load:latest
 ```
 
-#### 使用 Docker Compose（推荐）
+### Option 2: Using Docker Compose
 
 ```bash
-# 使用预构建镜像启动
-make compose-up
-# 或者
+# Start the service
 docker-compose up -d
 
-# 停止服务
-make compose-down
+# Stop the service
+docker-compose down
 ```
 
-#### 本地构建镜像
+### Option 3: Build from Source
 
 ```bash
-# 构建镜像
-make docker-build
+# Clone and build
+git clone https://github.com/tbphp/gpt-load.git
+cd gpt-load
+go mod tidy
 
-# 运行容器（本地构建）
-make docker-run-local
+# Create configuration
+cp .env.example .env
+echo "sk-your-api-key" > keys.txt
 
-# 或使用 docker-compose（本地构建）
-make compose-up-dev
+# Run
+make run
 ```
 
-## ⚙️ 配置管理
+## Configuration
 
-### 环境变量配置
+### Environment Variables
+
+Copy the example configuration file and modify as needed:
 
 ```bash
 cp .env.example .env
 ```
 
-### 主要配置项
+### Key Configuration Options
 
-| 配置项     | 环境变量              | 默认值                 | 说明                  |
-| ---------- | --------------------- | ---------------------- | --------------------- |
-| 服务器端口 | `PORT`                | 3000                   | 服务器监听端口        |
-| 服务器主机 | `HOST`                | 0.0.0.0                | 服务器绑定地址        |
-| 密钥文件   | `KEYS_FILE`           | keys.txt               | API 密钥文件路径      |
-| 起始索引   | `START_INDEX`         | 0                      | 从哪个密钥开始轮询    |
-| 拉黑阈值   | `BLACKLIST_THRESHOLD` | 1                      | 错误多少次后拉黑      |
-| 上游地址   | `OPENAI_BASE_URL`     | https://api.openai.com | OpenAI API 地址       |
-| 请求超时   | `REQUEST_TIMEOUT`     | 30000                  | 请求超时时间（毫秒）  |
-| 认证密钥   | `AUTH_KEY`            | 无                     | 项目认证密钥（可选）  |
-| CORS       | `ENABLE_CORS`         | true                   | 是否启用 CORS         |
-| 连接池     | `MAX_SOCKETS`         | 50                     | HTTP 连接池最大连接数 |
+| Setting             | Environment Variable  | Default                  | Description                     |
+| ------------------- | --------------------- | ------------------------ | ------------------------------- |
+| Server Port         | `PORT`                | 3000                     | Server listening port           |
+| Server Host         | `HOST`                | 0.0.0.0                  | Server binding address          |
+| Keys File           | `KEYS_FILE`           | keys.txt                 | API keys file path              |
+| Start Index         | `START_INDEX`         | 0                        | Starting key index for rotation |
+| Blacklist Threshold | `BLACKLIST_THRESHOLD` | 1                        | Error count before blacklisting |
+| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI API base URL             |
+| Request Timeout     | `REQUEST_TIMEOUT`     | 30000                    | Request timeout in milliseconds |
+| Auth Key            | `AUTH_KEY`            | -                        | Optional authentication key     |
+| CORS                | `ENABLE_CORS`         | true                     | Enable CORS support             |
+| Max Connections     | `MAX_SOCKETS`         | 50                       | Maximum HTTP connections        |
 
-## 🔑 密钥验证工具
+## API Key Validation
 
-项目提供了高性能的 API 密钥验证工具，支持批量验证、去重和多模型测试：
-
-### 快速使用
+The project includes a high-performance API key validation tool:
 
 ```bash
-# 自动选择最佳验证方式
+# Validate keys automatically
 make validate-keys
 
-# 或直接运行
+# Or run directly
 ./scripts/validate-keys.py
 ```
 
-## 📊 监控端点
+## Monitoring Endpoints
 
-| 端点          | 方法 | 说明               |
-| ------------- | ---- | ------------------ |
-| `/health`     | GET  | 健康检查和基本状态 |
-| `/stats`      | GET  | 详细统计信息       |
-| `/blacklist`  | GET  | 黑名单详情         |
-| `/reset-keys` | GET  | 重置所有密钥状态   |
+| Endpoint      | Method | Description                   |
+| ------------- | ------ | ----------------------------- |
+| `/health`     | GET    | Health check and basic status |
+| `/stats`      | GET    | Detailed statistics           |
+| `/blacklist`  | GET    | Blacklist information         |
+| `/reset-keys` | GET    | Reset all key states          |
 
-## 🚀 CI/CD 自动部署
+## Development
 
-项目已配置 GitHub Actions 自动构建和部署：
-
-- **自动触发**：每次 push 到 main 分支时自动构建
-- **多平台支持**：同时构建 Linux AMD64 和 ARM64 镜像
-- **GitHub 集成**：自动推送到 GitHub Container Registry
-- **缓存优化**：使用 GitHub Actions 缓存加速构建
-
-### 预构建镜像
+### Available Commands
 
 ```bash
-# 拉取最新镜像
-docker pull ghcr.io/tbphp/gpt-load:latest
+# Build
+make build      # Build binary
+make build-all  # Build for all platforms
+make clean      # Clean build files
+
+# Run
+make run        # Run server
+make dev        # Development mode with race detection
+
+# Test
+make test       # Run tests
+make coverage   # Generate coverage report
+make bench      # Run benchmarks
+
+# Code Quality
+make lint       # Code linting
+make fmt        # Format code
+make tidy       # Tidy dependencies
+
+# Management
+make health     # Health check
+make stats      # View statistics
+make reset-keys # Reset key states
+make blacklist  # View blacklist
+
+# Help
+make help       # Show all commands
 ```
 
-详细配置说明请参考：[GitHub Actions 配置指南](.docs/github-actions-setup.md)
+### Project Structure
 
-## 🔧 开发指南
-
-### 可用命令
-
-```bash
-# 构建相关
-make build      # 构建二进制文件
-make build-all  # 构建所有平台版本
-make clean      # 清理构建文件
-
-# 运行相关
-make run        # 运行服务器
-make dev        # 开发模式运行（启用竞态检测）
-
-# 测试相关
-make test       # 运行测试
-make coverage   # 生成测试覆盖率报告
-make bench      # 运行基准测试
-
-# 代码质量
-make lint       # 代码检查
-make fmt        # 格式化代码
-make tidy       # 整理依赖
-
-# 管理相关
-make health     # 健康检查
-make stats      # 查看统计信息
-make reset-keys # 重置密钥状态
-make blacklist  # 查看黑名单
-
-# 查看所有命令
-make help
-```
-
-### 项目结构
-
-```
+```text
 /
 ├── cmd/
-│   └── main.go              # 主入口文件
+│   └── main.go              # Main entry point
 ├── internal/
 │   ├── config/
-│   │   └── config.go        # 配置管理
+│   │   └── config.go        # Configuration management
 │   ├── keymanager/
-│   │   └── keymanager.go    # 密钥管理器
+│   │   └── keymanager.go    # Key manager
 │   └── proxy/
-│       └── proxy.go         # 代理服务器核心
-├── build/                   # 构建输出目录
-├── .env.example            # 配置文件模板
-├── Dockerfile              # Docker 构建文件
-├── docker-compose.yml      # Docker Compose 配置
-├── Makefile               # 构建脚本
-├── go.mod                 # Go 模块文件
-└── README.md              # 项目文档
+│       └── proxy.go         # Proxy server core
+├── build/                   # Build output directory
+├── .env.example            # Configuration template
+├── Dockerfile              # Docker build file
+├── docker-compose.yml      # Docker Compose configuration
+├── Makefile               # Build scripts
+├── go.mod                 # Go module file
+└── README.md              # Project documentation
 ```
 
-## 🏗️ 架构设计
+## Architecture
 
-### 高性能设计
+### Performance Features
 
-1. **并发模型**: 使用 Go 的 goroutine 实现高并发处理
-2. **内存管理**: 零拷贝流式传输，最小化内存分配
-3. **连接复用**: HTTP/2 支持，连接池优化
-4. **原子操作**: 无锁并发，避免竞态条件
-5. **预编译正则**: 启动时预编译，避免运行时开销
+- **Concurrent Processing**: Leverages Go's goroutines for high concurrency
+- **Memory Efficiency**: Zero-copy streaming with minimal memory allocation
+- **Connection Pooling**: HTTP/2 support with optimized connection reuse
+- **Atomic Operations**: Lock-free concurrent operations
+- **Pre-compiled Patterns**: Regex patterns compiled at startup
 
-### 安全设计
+### Security & Reliability
 
-1. **内存安全**: Go 的内存安全保证，避免缓冲区溢出
-2. **并发安全**: sync.Map 和原子操作保证并发安全
-3. **错误处理**: 完整的错误处理和恢复机制
-4. **资源清理**: 自动资源清理，防止泄漏
+- **Memory Safety**: Go's built-in memory safety prevents buffer overflows
+- **Concurrent Safety**: Uses sync.Map and atomic operations for thread safety
+- **Error Handling**: Comprehensive error handling and recovery mechanisms
+- **Resource Management**: Automatic cleanup prevents resource leaks
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
