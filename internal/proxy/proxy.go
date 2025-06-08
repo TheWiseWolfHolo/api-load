@@ -410,7 +410,12 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 	// 构建上游请求URL
 	targetURL := *ps.upstreamURL
-	targetURL.Path = c.Request.URL.Path
+	// 正确拼接路径，而不是替换路径
+	if strings.HasSuffix(targetURL.Path, "/") {
+		targetURL.Path = targetURL.Path + strings.TrimPrefix(c.Request.URL.Path, "/")
+	} else {
+		targetURL.Path = targetURL.Path + c.Request.URL.Path
+	}
 	targetURL.RawQuery = c.Request.URL.RawQuery
 
 	// 为流式和非流式请求使用不同的超时策略
