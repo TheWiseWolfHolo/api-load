@@ -261,7 +261,7 @@ func (km *KeyManager) RecordFailure(key string, err error) {
 		km.keyFailureCounts.Delete(key) // 清理计数
 		logrus.Warnf("🚫 密钥已被拉黑（达到阈值）: %s (失败 %d 次: %s)", key[:20]+"...", newFailures, err.Error())
 	} else {
-		logrus.Warnf("⚠️ 密钥失败: %s (%d/%d 次: %s)", key[:20]+"...", newFailures, threshold, err.Error())
+		logrus.Debugf("⚠️ 密钥失败: %s (%d/%d 次: %s)", key[:20]+"...", newFailures, threshold, err.Error())
 	}
 }
 

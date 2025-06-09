@@ -490,9 +490,9 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 		// 记录失败日志
 		if retryCount > 0 {
-			logrus.Warnf("重试请求失败 (第 %d 次): %v (响应时间: %v)", retryCount, err, responseTime)
+			logrus.Debugf("重试请求失败 (第 %d 次): %v (响应时间: %v)", retryCount, err, responseTime)
 		} else {
-			logrus.Warnf("请求失败: %v (响应时间: %v)", err, responseTime)
+			logrus.Debugf("首次请求失败: %v (响应时间: %v)", err, responseTime)
 		}
 
 		// 异步记录失败
@@ -511,12 +511,13 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 		// 检查是否可以重试
 		if retryCount < config.AppConfig.Keys.MaxRetries {
-			logrus.Infof("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
+			logrus.Debugf("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
 			ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1, retryErrors)
 			return
 		}
 
-		// 达到最大重试次数，返回详细的重试信息
+		// 达到最大重试次数，记录最终失败并返回详细的重试信息
+		logrus.Infof("请求最终失败，已重试 %d 次，总响应时间: %v", retryCount, responseTime)
 		ps.returnRetryFailureResponse(c, retryCount, retryErrors)
 		return
 	}
@@ -526,12 +527,12 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 	// 检查HTTP状态码是否需要重试
 	// 429 (Too Many Requests) 和 5xx 服务器错误都需要重试
-	if (resp.StatusCode == 429 || resp.StatusCode >= 500) && retryCount < config.AppConfig.Keys.MaxRetries {
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
 		// 记录失败日志
 		if retryCount > 0 {
-			logrus.Warnf("重试请求返回错误 %d (第 %d 次) (响应时间: %v)", resp.StatusCode, retryCount, responseTime)
+			logrus.Debugf("重试请求返回错误 %d (第 %d 次) (响应时间: %v)", resp.StatusCode, retryCount, responseTime)
 		} else {
-			logrus.Warnf("请求返回错误 %d (响应时间: %v)", resp.StatusCode, responseTime)
+			logrus.Debugf("首次请求返回错误 %d (响应时间: %v)", resp.StatusCode, responseTime)
 		}
 
 		// 读取响应体以获取错误信息
@@ -559,14 +560,22 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		// 关闭当前响应
 		resp.Body.Close()
 
-		logrus.Infof("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
-		ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1, retryErrors)
+		// 检查是否可以重试
+		if retryCount < config.AppConfig.Keys.MaxRetries {
+			logrus.Debugf("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
+			ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1, retryErrors)
+			return
+		}
+
+		// 达到最大重试次数，记录最终失败并返回详细的重试信息
+		logrus.Infof("请求最终失败，已重试 %d 次，最后状态码: %d，总响应时间: %v", retryCount, resp.StatusCode, responseTime)
+		ps.returnRetryFailureResponse(c, retryCount, retryErrors)
 		return
 	}
 
-	// 如果有重试错误但最终成功，记录重试过程（可选）
+	// 记录最终成功的日志
 	if len(retryErrors) > 0 {
-		logrus.Infof("请求最终成功，经过 %d 次重试", len(retryErrors))
+		logrus.Debugf("请求最终成功，经过 %d 次重试，状态码: %d，总响应时间: %v", len(retryErrors), resp.StatusCode, responseTime)
 	}
 
 	// 异步记录统计信息（不阻塞响应）
