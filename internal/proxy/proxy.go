@@ -270,6 +270,11 @@ func (ps *ProxyServer) loggerMiddleware() gin.HandlerFunc {
 			retryInfo = fmt.Sprintf(" - Retry[%d]", retryCount)
 		}
 
+		// 过滤健康检查日志
+		if path == "/health" {
+			return
+		}
+
 		// 根据状态码选择日志级别
 		if statusCode >= 500 {
 			logrus.Errorf("%s %s - %d - %v%s%s", method, fullPath, statusCode, latency, keyInfo, retryInfo)
