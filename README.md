@@ -6,7 +6,7 @@
 ![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-A high-performance OpenAI API proxy server with multi-key rotation and load balancing, built with Go.
+A high-performance proxy server for OpenAI-compatible APIs with multi-key rotation and load balancing, built with Go.
 
 ## Features
 
@@ -33,7 +33,7 @@ A high-performance OpenAI API proxy server with multi-key rotation and load bala
 # Pull the latest image
 docker pull ghcr.io/tbphp/gpt-load:latest
 
-# Create keys.txt file with your OpenAI API keys (one per line)
+# Create keys.txt file with your API keys (one per line)
 echo "sk-your-api-key-1" > keys.txt
 echo "sk-your-api-key-2" >> keys.txt
 
@@ -72,6 +72,15 @@ make run
 
 ## Configuration
 
+### Supported API Providers
+
+This proxy server works with any OpenAI-compatible API, including:
+
+- **OpenAI**: `https://api.openai.com`
+- **Azure OpenAI**: `https://your-resource.openai.azure.com`
+- **Anthropic Claude**: `https://api.anthropic.com` (with compatible endpoints)
+- **Third-party Providers**: Any service implementing OpenAI API format
+
 ### Environment Variables
 
 Copy the example configuration file and modify as needed:
@@ -89,11 +98,34 @@ cp .env.example .env
 | Keys File           | `KEYS_FILE`           | keys.txt                 | API keys file path              |
 | Start Index         | `START_INDEX`         | 0                        | Starting key index for rotation |
 | Blacklist Threshold | `BLACKLIST_THRESHOLD` | 1                        | Error count before blacklisting |
-| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI API base URL             |
+| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI-compatible API base URL  |
 | Request Timeout     | `REQUEST_TIMEOUT`     | 30000                    | Request timeout in milliseconds |
 | Auth Key            | `AUTH_KEY`            | -                        | Optional authentication key     |
 | CORS                | `ENABLE_CORS`         | true                     | Enable CORS support             |
 | Max Connections     | `MAX_SOCKETS`         | 50                       | Maximum HTTP connections        |
+
+### Configuration Examples
+
+#### OpenAI (Default)
+
+```bash
+OPENAI_BASE_URL=https://api.openai.com
+# Use OpenAI API keys: sk-...
+```
+
+#### Azure OpenAI
+
+```bash
+OPENAI_BASE_URL=https://your-resource.openai.azure.com
+# Use Azure API keys and adjust endpoints as needed
+```
+
+#### Third-party Provider
+
+```bash
+OPENAI_BASE_URL=https://api.your-provider.com
+# Use provider-specific API keys
+```
 
 ## API Key Validation
 

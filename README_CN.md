@@ -6,7 +6,7 @@
 ![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-一个高性能的 OpenAI API 多密钥轮询代理服务器，支持负载均衡，使用 Go 语言开发。
+一个高性能的 OpenAI 兼容 API 多密钥轮询代理服务器，支持负载均衡，使用 Go 语言开发。
 
 ## 功能特性
 
@@ -33,7 +33,7 @@
 # 拉取最新镜像
 docker pull ghcr.io/tbphp/gpt-load:latest
 
-# 创建密钥文件，每行一个 OpenAI API 密钥
+# 创建密钥文件，每行一个 API 密钥
 echo "sk-your-api-key-1" > keys.txt
 echo "sk-your-api-key-2" >> keys.txt
 
@@ -72,6 +72,15 @@ make run
 
 ## 配置说明
 
+### 支持的 API 提供商
+
+此代理服务器支持任何 OpenAI 兼容的 API，包括：
+
+- **OpenAI**: `https://api.openai.com`
+- **Azure OpenAI**: `https://your-resource.openai.azure.com`
+- **Anthropic Claude**: `https://api.anthropic.com` (兼容端点)
+- **第三方提供商**: 任何实现 OpenAI API 格式的服务
+
 ### 环境变量
 
 复制示例配置文件并根据需要修改：
@@ -82,18 +91,41 @@ cp .env.example .env
 
 ### 主要配置选项
 
-| 配置项 | 环境变量 | 默认值 | 说明 |
-|--------|----------|--------|------|
-| 服务器端口 | `PORT` | 3000 | 服务器监听端口 |
-| 服务器主机 | `HOST` | 0.0.0.0 | 服务器绑定地址 |
-| 密钥文件 | `KEYS_FILE` | keys.txt | API 密钥文件路径 |
-| 起始索引 | `START_INDEX` | 0 | 密钥轮换起始索引 |
-| 拉黑阈值 | `BLACKLIST_THRESHOLD` | 1 | 拉黑前的错误次数 |
-| 上游地址 | `OPENAI_BASE_URL` | `https://api.openai.com` | OpenAI API 基础地址 |
-| 请求超时 | `REQUEST_TIMEOUT` | 30000 | 请求超时时间（毫秒） |
-| 认证密钥 | `AUTH_KEY` | - | 可选的认证密钥 |
-| CORS | `ENABLE_CORS` | true | 启用 CORS 支持 |
-| 最大连接数 | `MAX_SOCKETS` | 50 | 最大 HTTP 连接数 |
+| 配置项     | 环境变量              | 默认值                   | 说明                     |
+| ---------- | --------------------- | ------------------------ | ------------------------ |
+| 服务器端口 | `PORT`                | 3000                     | 服务器监听端口           |
+| 服务器主机 | `HOST`                | 0.0.0.0                  | 服务器绑定地址           |
+| 密钥文件   | `KEYS_FILE`           | keys.txt                 | API 密钥文件路径         |
+| 起始索引   | `START_INDEX`         | 0                        | 密钥轮换起始索引         |
+| 拉黑阈值   | `BLACKLIST_THRESHOLD` | 1                        | 拉黑前的错误次数         |
+| 上游地址   | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI 兼容 API 基础地址 |
+| 请求超时   | `REQUEST_TIMEOUT`     | 30000                    | 请求超时时间（毫秒）     |
+| 认证密钥   | `AUTH_KEY`            | -                        | 可选的认证密钥           |
+| CORS       | `ENABLE_CORS`         | true                     | 启用 CORS 支持           |
+| 最大连接数 | `MAX_SOCKETS`         | 50                       | 最大 HTTP 连接数         |
+
+### 配置示例
+
+#### OpenAI（默认）
+
+```bash
+OPENAI_BASE_URL=https://api.openai.com
+# 使用 OpenAI API 密钥: sk-...
+```
+
+#### Azure OpenAI
+
+```bash
+OPENAI_BASE_URL=https://your-resource.openai.azure.com
+# 使用 Azure API 密钥，根据需要调整端点
+```
+
+#### 第三方提供商
+
+```bash
+OPENAI_BASE_URL=https://api.your-provider.com
+# 使用提供商特定的 API 密钥
+```
 
 ## API 密钥验证
 
@@ -109,12 +141,12 @@ make validate-keys
 
 ## 监控端点
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/health` | GET | 健康检查和基本状态 |
-| `/stats` | GET | 详细统计信息 |
-| `/blacklist` | GET | 黑名单信息 |
-| `/reset-keys` | GET | 重置所有密钥状态 |
+| 端点          | 方法 | 说明               |
+| ------------- | ---- | ------------------ |
+| `/health`     | GET  | 健康检查和基本状态 |
+| `/stats`      | GET  | 详细统计信息       |
+| `/blacklist`  | GET  | 黑名单信息         |
+| `/reset-keys` | GET  | 重置所有密钥状态   |
 
 ## 开发
 
