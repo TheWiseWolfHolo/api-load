@@ -1,4 +1,4 @@
-module openai-multi-key-proxy
+module gpt-load
 
 go 1.21
 

@@ -2,7 +2,7 @@
 
 # 变量定义
 BINARY_NAME=gpt-load
-MAIN_PATH=./cmd/main.go
+MAIN_PATH=./cmd/gpt-load
 BUILD_DIR=./build
 VERSION=2.0.0
 LDFLAGS=-ldflags "-X main.Version=$(VERSION) -s -w"
