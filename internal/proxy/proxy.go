@@ -21,6 +21,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RetryError 重试过程中的错误信息
+type RetryError struct {
+	StatusCode   int    `json:"status_code"`
+	ErrorMessage string `json:"error_message"`
+	KeyIndex     int    `json:"key_index"`
+	Attempt      int    `json:"attempt"`
+}
+
 // ProxyServer 代理服务器
 type ProxyServer struct {
 	keyManager   *keymanager.KeyManager
@@ -356,7 +364,7 @@ func (ps *ProxyServer) handleProxy(c *gin.Context) {
 	isStreamRequest := ps.isStreamRequest(bodyBytes, c)
 
 	// 执行带重试的请求
-	ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, 0)
+	ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, 0, nil)
 }
 
 // isStreamRequest 判断是否为流式请求
@@ -383,7 +391,7 @@ func (ps *ProxyServer) isStreamRequest(bodyBytes []byte, c *gin.Context) bool {
 }
 
 // executeRequestWithRetry 执行带重试的请求
-func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Time, bodyBytes []byte, isStreamRequest bool, retryCount int) {
+func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Time, bodyBytes []byte, isStreamRequest bool, retryCount int, retryErrors []RetryError) {
 	// 获取密钥信息
 	keyInfo, err := ps.keyManager.GetNextKey()
 	if err != nil {
@@ -490,22 +498,26 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		// 异步记录失败
 		go ps.keyManager.RecordFailure(keyInfo.Key, err)
 
+		// 记录重试错误信息
+		if retryErrors == nil {
+			retryErrors = make([]RetryError, 0)
+		}
+		retryErrors = append(retryErrors, RetryError{
+			StatusCode:   0, // 网络错误，没有HTTP状态码
+			ErrorMessage: err.Error(),
+			KeyIndex:     keyInfo.Index,
+			Attempt:      retryCount + 1,
+		})
+
 		// 检查是否可以重试
 		if retryCount < config.AppConfig.Keys.MaxRetries {
 			logrus.Infof("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
-			ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1)
+			ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1, retryErrors)
 			return
 		}
 
-		// 达到最大重试次数
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": gin.H{
-				"message":   fmt.Sprintf("代理请求失败 (已重试 %d 次): %s", retryCount, err.Error()),
-				"type":      "proxy_error",
-				"code":      "request_failed",
-				"timestamp": time.Now().Format(time.RFC3339),
-			},
-		})
+		// 达到最大重试次数，返回详细的重试信息
+		ps.returnRetryFailureResponse(c, retryCount, retryErrors)
 		return
 	}
 	defer resp.Body.Close()
@@ -522,15 +534,39 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 			logrus.Warnf("请求返回错误 %d (响应时间: %v)", resp.StatusCode, responseTime)
 		}
 
+		// 读取响应体以获取错误信息
+		var errorMessage string
+		if bodyBytes, err := io.ReadAll(resp.Body); err == nil {
+			errorMessage = string(bodyBytes)
+		} else {
+			errorMessage = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
+
 		// 异步记录失败
 		go ps.keyManager.RecordFailure(keyInfo.Key, fmt.Errorf("HTTP %d", resp.StatusCode))
+
+		// 记录重试错误信息
+		if retryErrors == nil {
+			retryErrors = make([]RetryError, 0)
+		}
+		retryErrors = append(retryErrors, RetryError{
+			StatusCode:   resp.StatusCode,
+			ErrorMessage: errorMessage,
+			KeyIndex:     keyInfo.Index,
+			Attempt:      retryCount + 1,
+		})
 
 		// 关闭当前响应
 		resp.Body.Close()
 
 		logrus.Infof("准备重试请求 (第 %d/%d 次)", retryCount+1, config.AppConfig.Keys.MaxRetries)
-		ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1)
+		ps.executeRequestWithRetry(c, startTime, bodyBytes, isStreamRequest, retryCount+1, retryErrors)
 		return
+	}
+
+	// 如果有重试错误但最终成功，记录重试过程（可选）
+	if len(retryErrors) > 0 {
+		logrus.Infof("请求最终成功，经过 %d 次重试", len(retryErrors))
 	}
 
 	// 异步记录统计信息（不阻塞响应）
@@ -569,6 +605,44 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 			logrus.Errorf("复制响应体失败: %v (响应时间: %v)", err, responseTime)
 		}
 	}
+}
+
+// returnRetryFailureResponse 返回重试失败的详细响应
+func (ps *ProxyServer) returnRetryFailureResponse(c *gin.Context, retryCount int, retryErrors []RetryError) {
+	// 获取最后一次错误作为主要错误
+	var lastError RetryError
+	var lastStatusCode int = http.StatusBadGateway
+
+	if len(retryErrors) > 0 {
+		lastError = retryErrors[len(retryErrors)-1]
+		if lastError.StatusCode > 0 {
+			lastStatusCode = lastError.StatusCode
+		}
+	}
+
+	// 构建详细的错误响应
+	errorResponse := gin.H{
+		"error": gin.H{
+			"message":       fmt.Sprintf("请求失败，已重试 %d 次", retryCount),
+			"type":          "proxy_error",
+			"code":          "max_retries_exceeded",
+			"timestamp":     time.Now().Format(time.RFC3339),
+			"retry_count":   retryCount,
+			"retry_details": retryErrors,
+		},
+	}
+
+	// 如果最后一次错误有具体的错误信息，尝试解析并包含
+	if lastError.ErrorMessage != "" && lastError.StatusCode > 0 {
+		// 尝试解析上游的JSON错误响应
+		if strings.Contains(lastError.ErrorMessage, "{") {
+			errorResponse["upstream_error"] = lastError.ErrorMessage
+		} else {
+			errorResponse["upstream_message"] = lastError.ErrorMessage
+		}
+	}
+
+	c.JSON(lastStatusCode, errorResponse)
 }
 
 // handleStreamResponse 处理流式响应
