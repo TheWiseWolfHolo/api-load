@@ -121,7 +121,7 @@ func (km *KeyManager) LoadKeys() error {
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" && strings.HasPrefix(line, "sk-") {
+		if line != "" {
 			keys = append(keys, line)
 		}
 	}
