@@ -669,6 +669,7 @@ func (ps *ProxyServer) isConnectionError(err error) bool {
 		"write: broken pipe",
 		"use of closed network connection",
 		"context canceled",
+		"short write",
 	}
 
 	for _, connErr := range connectionErrors {
