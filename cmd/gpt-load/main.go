@@ -125,11 +125,10 @@ func setupRoutes(handlers *handler.Handler, proxyServer *proxy.ProxyServer, conf
 	router.GET("/reset-keys", handlers.ResetKeys)
 	router.GET("/config", handlers.GetConfig) // Debug endpoint
 
-	// Handle 404 and 405
-	router.NoRoute(handlers.NotFound)
+	// Handle 405 Method Not Allowed
 	router.NoMethod(handlers.MethodNotAllowed)
 
-	// Proxy all other requests
+	// Proxy all other requests (this handles 404 as well)
 	router.NoRoute(proxyServer.HandleProxy)
 
 	return router

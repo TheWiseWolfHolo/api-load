@@ -1,7 +1,11 @@
 // Package types defines common interfaces and types used across the application
 package types
 
-import "time"
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
 
 // ConfigManager defines the interface for configuration management
 type ConfigManager interface {
@@ -13,6 +17,7 @@ type ConfigManager interface {
 	GetPerformanceConfig() PerformanceConfig
 	GetLogConfig() LogConfig
 	Validate() error
+	DisplayConfig()
 }
 
 // KeyManager defines the interface for API key management
@@ -24,6 +29,12 @@ type KeyManager interface {
 	GetStats() Stats
 	ResetBlacklist()
 	GetBlacklist() []BlacklistEntry
+	Close()
+}
+
+// ProxyServer defines the interface for proxy server
+type ProxyServer interface {
+	HandleProxy(c *gin.Context)
 	Close()
 }
 
@@ -64,8 +75,8 @@ type CORSConfig struct {
 
 // PerformanceConfig represents performance configuration
 type PerformanceConfig struct {
-	MaxConcurrentRequests int `json:"maxConcurrentRequests"`
-	RequestTimeout        int `json:"requestTimeout"`
+	MaxConcurrentRequests int  `json:"maxConcurrentRequests"`
+	RequestTimeout        int  `json:"requestTimeout"`
 	EnableGzip            bool `json:"enableGzip"`
 }
 

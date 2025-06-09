@@ -29,10 +29,10 @@ func NewHandler(keyManager types.KeyManager, config types.ConfigManager) *Handle
 // Health handles health check requests
 func (h *Handler) Health(c *gin.Context) {
 	stats := h.keyManager.GetStats()
-	
+
 	status := "healthy"
 	httpStatus := http.StatusOK
-	
+
 	// Check if there are any healthy keys
 	if stats.HealthyKeys == 0 {
 		status = "unhealthy"
@@ -51,16 +51,16 @@ func (h *Handler) Health(c *gin.Context) {
 // Stats handles statistics requests
 func (h *Handler) Stats(c *gin.Context) {
 	stats := h.keyManager.GetStats()
-	
+
 	// Add additional system information
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	response := gin.H{
 		"keys": gin.H{
-			"total":       stats.TotalKeys,
-			"healthy":     stats.HealthyKeys,
-			"blacklisted": stats.BlacklistedKeys,
+			"total":         stats.TotalKeys,
+			"healthy":       stats.HealthyKeys,
+			"blacklisted":   stats.BlacklistedKeys,
 			"current_index": stats.CurrentIndex,
 		},
 		"requests": gin.H{
@@ -77,9 +77,9 @@ func (h *Handler) Stats(c *gin.Context) {
 			"next_gc_mb":     bToMb(m.NextGC),
 		},
 		"system": gin.H{
-			"goroutines":   runtime.NumGoroutine(),
-			"cpu_count":    runtime.NumCPU(),
-			"go_version":   runtime.Version(),
+			"goroutines": runtime.NumGoroutine(),
+			"cpu_count":  runtime.NumCPU(),
+			"go_version": runtime.Version(),
 		},
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
@@ -90,11 +90,11 @@ func (h *Handler) Stats(c *gin.Context) {
 // Blacklist handles blacklist requests
 func (h *Handler) Blacklist(c *gin.Context) {
 	blacklist := h.keyManager.GetBlacklist()
-	
+
 	response := gin.H{
 		"blacklisted_keys": blacklist,
-		"count":           len(blacklist),
-		"timestamp":       time.Now().UTC().Format(time.RFC3339),
+		"count":            len(blacklist),
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -104,7 +104,7 @@ func (h *Handler) Blacklist(c *gin.Context) {
 func (h *Handler) ResetKeys(c *gin.Context) {
 	// Reset blacklist
 	h.keyManager.ResetBlacklist()
-	
+
 	// Reload keys from file
 	if err := h.keyManager.LoadKeys(); err != nil {
 		logrus.Errorf("Failed to reload keys: %v", err)
@@ -116,25 +116,15 @@ func (h *Handler) ResetKeys(c *gin.Context) {
 	}
 
 	stats := h.keyManager.GetStats()
-	
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "Keys reset and reloaded successfully",
-		"total_keys":  stats.TotalKeys,
-		"healthy_keys": stats.HealthyKeys,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
-	})
-	
-	logrus.Info("Keys reset and reloaded successfully")
-}
 
-// NotFound handles 404 requests
-func (h *Handler) NotFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, gin.H{
-		"error":     "Endpoint not found",
-		"path":      c.Request.URL.Path,
-		"method":    c.Request.Method,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "Keys reset and reloaded successfully",
+		"total_keys":   stats.TotalKeys,
+		"healthy_keys": stats.HealthyKeys,
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 	})
+
+	logrus.Info("Keys reset and reloaded successfully")
 }
 
 // MethodNotAllowed handles 405 requests

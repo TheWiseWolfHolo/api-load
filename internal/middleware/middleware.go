@@ -173,7 +173,7 @@ func Auth(config types.AuthConfig) gin.HandlerFunc {
 
 // Recovery creates a recovery middleware with custom error handling
 func Recovery() gin.HandlerFunc {
-	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
+	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		if err, ok := recovered.(string); ok {
 			logrus.Errorf("Panic recovered: %s", err)
 			c.JSON(500, gin.H{

@@ -204,13 +204,15 @@ func (km *Manager) RecordFailure(key string, err error) {
 	}
 
 	// Increment failure count
-	failCount, _ := km.keyFailureCounts.LoadOrStore(key, int64(0))
-	newFailCount := atomic.AddInt64(failCount.(*int64), 1)
+	failCount, _ := km.keyFailureCounts.LoadOrStore(key, new(int64))
+	if counter, ok := failCount.(*int64); ok {
+		newFailCount := atomic.AddInt64(counter, 1)
 
-	// Blacklist if threshold exceeded
-	if int(newFailCount) >= km.config.BlacklistThreshold {
-		km.blacklistedKeys.Store(key, time.Now())
-		logrus.Debugf("Key blacklisted after %d failures", newFailCount)
+		// Blacklist if threshold exceeded
+		if int(newFailCount) >= km.config.BlacklistThreshold {
+			km.blacklistedKeys.Store(key, time.Now())
+			logrus.Debugf("Key blacklisted after %d failures", newFailCount)
+		}
 	}
 }
 
@@ -236,7 +238,7 @@ func (km *Manager) GetStats() types.Stats {
 	km.keysMutex.RUnlock()
 
 	blacklistedCount := 0
-	km.blacklistedKeys.Range(func(key, value interface{}) bool {
+	km.blacklistedKeys.Range(func(key, value any) bool {
 		blacklistedCount++
 		return true
 	})
@@ -273,7 +275,7 @@ func (km *Manager) ResetBlacklist() {
 func (km *Manager) GetBlacklist() []types.BlacklistEntry {
 	var blacklist []types.BlacklistEntry
 
-	km.blacklistedKeys.Range(func(key, value interface{}) bool {
+	km.blacklistedKeys.Range(func(key, value any) bool {
 		keyStr := key.(string)
 		blacklistTime := value.(time.Time)
 
