@@ -306,12 +306,20 @@ func (km *Manager) GetBlacklist() []types.BlacklistEntry {
 
 // setupMemoryCleanup sets up periodic memory cleanup
 func (km *Manager) setupMemoryCleanup() {
-	km.cleanupTicker = time.NewTicker(5 * time.Minute)
+	// Reduce GC frequency to every 15 minutes to avoid performance impact
+	km.cleanupTicker = time.NewTicker(15 * time.Minute)
 	go func() {
 		for {
 			select {
 			case <-km.cleanupTicker.C:
-				runtime.GC()
+				// Only trigger GC if memory usage is high
+				var m runtime.MemStats
+				runtime.ReadMemStats(&m)
+				// Trigger GC only if allocated memory is above 100MB
+				if m.Alloc > 100*1024*1024 {
+					runtime.GC()
+					logrus.Debugf("Manual GC triggered, memory usage: %d MB", m.Alloc/1024/1024)
+				}
 			case <-km.stopCleanup:
 				return
 			}

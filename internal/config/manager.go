@@ -243,7 +243,16 @@ func parseBoolean(value string, defaultValue bool) bool {
 	if value == "" {
 		return defaultValue
 	}
-	return strings.ToLower(value) == "true"
+
+	lowerValue := strings.ToLower(value)
+	switch lowerValue {
+	case "true", "1", "yes", "on":
+		return true
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return defaultValue
+	}
 }
 
 // parseArray parses array environment variable (comma-separated)

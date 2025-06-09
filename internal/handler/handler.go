@@ -39,12 +39,20 @@ func (h *Handler) Health(c *gin.Context) {
 		httpStatus = http.StatusServiceUnavailable
 	}
 
+	// Calculate uptime (this should be tracked from server start time)
+	uptime := "unknown"
+	if startTime, exists := c.Get("serverStartTime"); exists {
+		if st, ok := startTime.(time.Time); ok {
+			uptime = time.Since(st).String()
+		}
+	}
+
 	c.JSON(httpStatus, gin.H{
 		"status":       status,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"healthy_keys": stats.HealthyKeys,
 		"total_keys":   stats.TotalKeys,
-		"uptime":       time.Since(time.Now()).String(), // This would need to be tracked properly
+		"uptime":       uptime,
 	})
 }
 

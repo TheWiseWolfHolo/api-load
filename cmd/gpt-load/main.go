@@ -107,6 +107,13 @@ func setupRoutes(handlers *handler.Handler, proxyServer *proxy.ProxyServer, conf
 
 	router := gin.New()
 
+	// Add server start time middleware for uptime calculation
+	startTime := time.Now()
+	router.Use(func(c *gin.Context) {
+		c.Set("serverStartTime", startTime)
+		c.Next()
+	})
+
 	// Add middleware
 	router.Use(middleware.Recovery())
 	router.Use(middleware.Logger(configManager.GetLogConfig()))

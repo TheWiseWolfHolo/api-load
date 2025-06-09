@@ -369,8 +369,8 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 		return
 	}
 
-	// Copy streaming data
-	buffer := make([]byte, 4096)
+	// Copy streaming data with optimized buffer size
+	buffer := make([]byte, 32*1024) // 32KB buffer for better performance
 	for {
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {

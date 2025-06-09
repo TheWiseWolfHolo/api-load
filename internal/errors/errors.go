@@ -121,9 +121,9 @@ func IsRetryable(err error) bool {
 
 // Common error instances
 var (
-	ErrNoAPIKeysAvailable = NewAppError(ErrNoKeysAvailable, "No API keys available")
-	ErrAllAPIKeysBlacklisted = NewAppError(ErrAllKeysBlacklisted, "All API keys are blacklisted")
-	ErrInvalidConfiguration = NewAppError(ErrConfigInvalid, "Invalid configuration")
+	ErrNoAPIKeysAvailable     = NewAppError(ErrNoKeysAvailable, "No API keys available")
+	ErrAllAPIKeysBlacklisted  = NewAppError(ErrAllKeysBlacklisted, "All API keys are blacklisted")
+	ErrInvalidConfiguration   = NewAppError(ErrConfigInvalid, "Invalid configuration")
 	ErrAuthenticationRequired = NewAppError(ErrAuthMissing, "Authentication required")
-	ErrInvalidAuthToken = NewAppError(ErrAuthInvalid, "Invalid authentication token")
+	ErrInvalidAuthToken       = NewAppError(ErrAuthInvalid, "Invalid authentication token")
 )

@@ -62,8 +62,12 @@ func Logger(config types.LogConfig) gin.HandlerFunc {
 			retryInfo = fmt.Sprintf(" - Retry[%d]", retryCount)
 		}
 
-		// Filter health check logs
-		if path == "/health" {
+		// Filter health check and other monitoring endpoint logs to reduce noise
+		if isMonitoringEndpoint(path) {
+			// Only log errors for monitoring endpoints
+			if statusCode >= 400 {
+				logrus.Warnf("%s %s - %d - %v", method, fullPath, statusCode, latency)
+			}
 			return
 		}
 
@@ -256,4 +260,15 @@ func ErrorHandler() gin.HandlerFunc {
 			})
 		}
 	}
+}
+
+// isMonitoringEndpoint checks if the path is a monitoring endpoint
+func isMonitoringEndpoint(path string) bool {
+	monitoringPaths := []string{"/health", "/stats", "/blacklist", "/reset-keys"}
+	for _, monitoringPath := range monitoringPaths {
+		if path == monitoringPath {
+			return true
+		}
+	}
+	return false
 }

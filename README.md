@@ -187,20 +187,36 @@ make help       # Show all commands
 ```text
 /
 ├── cmd/
-│   └── main.go              # Main entry point
+│   └── gpt-load/
+│       └── main.go          # Main entry point
 ├── internal/
 │   ├── config/
-│   │   └── config.go        # Configuration management
+│   │   └── manager.go       # Configuration management
+│   ├── errors/
+│   │   └── errors.go        # Custom error types
+│   ├── handler/
+│   │   └── handler.go       # HTTP handlers
 │   ├── keymanager/
-│   │   └── keymanager.go    # Key manager
+│   │   └── manager.go       # Key manager
+│   ├── middleware/
+│   │   └── middleware.go    # HTTP middleware
 │   └── proxy/
-│       └── proxy.go         # Proxy server core
+│       └── server.go        # Proxy server core
+├── pkg/
+│   └── types/
+│       └── interfaces.go    # Common interfaces and types
+├── scripts/
+│   └── validate-keys.py     # Key validation script
+├── .github/
+│   └── workflows/
+│       └── docker-build.yml # GitHub Actions CI/CD
 ├── build/                   # Build output directory
 ├── .env.example            # Configuration template
 ├── Dockerfile              # Docker build file
 ├── docker-compose.yml      # Docker Compose configuration
 ├── Makefile               # Build scripts
 ├── go.mod                 # Go module file
+├── LICENSE                # MIT License
 └── README.md              # Project documentation
 ```
 

@@ -187,20 +187,36 @@ make help       # 显示所有命令
 ```text
 /
 ├── cmd/
-│   └── main.go              # 主入口文件
+│   └── gpt-load/
+│       └── main.go          # 主入口文件
 ├── internal/
 │   ├── config/
-│   │   └── config.go        # 配置管理
+│   │   └── manager.go       # 配置管理
+│   ├── errors/
+│   │   └── errors.go        # 自定义错误类型
+│   ├── handler/
+│   │   └── handler.go       # HTTP 处理器
 │   ├── keymanager/
-│   │   └── keymanager.go    # 密钥管理器
+│   │   └── manager.go       # 密钥管理器
+│   ├── middleware/
+│   │   └── middleware.go    # HTTP 中间件
 │   └── proxy/
-│       └── proxy.go         # 代理服务器核心
+│       └── server.go        # 代理服务器核心
+├── pkg/
+│   └── types/
+│       └── interfaces.go    # 通用接口和类型
+├── scripts/
+│   └── validate-keys.py     # 密钥验证脚本
+├── .github/
+│   └── workflows/
+│       └── docker-build.yml # GitHub Actions CI/CD
 ├── build/                   # 构建输出目录
 ├── .env.example            # 配置文件模板
 ├── Dockerfile              # Docker 构建文件
 ├── docker-compose.yml      # Docker Compose 配置
 ├── Makefile               # 构建脚本
 ├── go.mod                 # Go 模块文件
+├── LICENSE                # MIT 许可证
 └── README.md              # 项目文档
 ```
 
