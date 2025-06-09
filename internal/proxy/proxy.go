@@ -744,6 +744,7 @@ func (ps *ProxyServer) isConnectionError(err error) bool {
 		"use of closed network connection",
 		"context canceled",
 		"short write",
+		"context deadline exceeded",
 	}
 
 	for _, connErr := range connectionErrors {
