@@ -20,6 +20,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// A list of errors that are considered normal during streaming when a client disconnects.
+var ignorableStreamErrors = []string{
+	"context canceled",
+	"connection reset by peer",
+}
+
+// isIgnorableStreamError checks if the error is a common, non-critical error that can occur
+// when a client disconnects during a streaming response.
+func isIgnorableStreamError(err error) bool {
+	errStr := err.Error()
+	for _, ignorableError := range ignorableStreamErrors {
+		if strings.Contains(errStr, ignorableError) {
+			return true
+		}
+	}
+	return false
+}
+
 // ProxyServer represents the proxy server
 type ProxyServer struct {
 	keyManager    types.KeyManager
@@ -391,7 +409,11 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 		}
 		if err != nil {
 			if err != io.EOF {
-				logrus.Errorf("Error reading streaming response: %v", err)
+				if isIgnorableStreamError(err) {
+					logrus.Debugf("Stream closed by client or network: %v", err)
+				} else {
+					logrus.Errorf("Error reading streaming response: %v", err)
+				}
 			}
 			break
 		}
