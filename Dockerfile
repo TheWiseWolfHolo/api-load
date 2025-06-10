@@ -24,7 +24,7 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.Version=2.0.0" \
     -o gpt-load \
-    ./cmd/main.go
+    ./cmd/gpt-load/main.go
 
 # 运行阶段
 FROM alpine:latest
