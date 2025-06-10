@@ -261,9 +261,9 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 		// Log failure
 		if retryCount > 0 {
-			logrus.Debugf("Retry request failed (attempt %d): %v (response time: %v)", retryCount+1, err, responseTime)
+			logrus.Warnf("Retry request failed (attempt %d): %v (response time: %v)", retryCount+1, err, responseTime)
 		} else {
-			logrus.Debugf("Initial request failed: %v (response time: %v)", err, responseTime)
+			logrus.Warnf("Initial request failed: %v (response time: %v)", err, responseTime)
 		}
 
 		// Record failure asynchronously
@@ -312,9 +312,9 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		}
 
 		if err := json.Unmarshal([]byte(errorMessage), &jsonError); err == nil && jsonError.Error.Message != "" {
-			logrus.Errorf("Error message: %s", jsonError.Error.Message)
+			logrus.Warnf("Http Error: %s", jsonError.Error.Message)
 		} else {
-			logrus.Errorf("Error message: %s", errorMessage)
+			logrus.Warnf("Http Error: %s", errorMessage)
 		}
 
 		// Record failure asynchronously

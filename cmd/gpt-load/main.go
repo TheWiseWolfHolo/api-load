@@ -116,6 +116,7 @@ func setupRoutes(handlers *handler.Handler, proxyServer *proxy.ProxyServer, conf
 
 	// Add middleware
 	router.Use(middleware.Recovery())
+	router.Use(middleware.ErrorHandler())
 	router.Use(middleware.Logger(configManager.GetLogConfig()))
 	router.Use(middleware.CORS(configManager.GetCORSConfig()))
 	router.Use(middleware.RateLimiter(configManager.GetPerformanceConfig()))
