@@ -147,20 +147,17 @@ func (ps *ProxyServer) isStreamRequest(bodyBytes []byte, c *gin.Context) bool {
 func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Time, bodyBytes []byte, isStreamRequest bool, retryCount int, retryErrors []types.RetryError) {
 	keysConfig := ps.configManager.GetKeysConfig()
 
-	// Check retry limit
-	if retryCount >= keysConfig.MaxRetries {
-		logrus.Debugf("Max retries exceeded (%d)", retryCount)
+	if retryCount > keysConfig.MaxRetries {
+		logrus.Debugf("Max retries exceeded (%d)", retryCount-1)
 
-		// Return detailed error information
 		errorResponse := gin.H{
 			"error":        "Max retries exceeded",
 			"code":         errors.ErrProxyRetryExhausted,
-			"retry_count":  retryCount,
+			"retry_count":  retryCount - 1,
 			"retry_errors": retryErrors,
 			"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		}
 
-		// Use the last error's status code if available
 		statusCode := http.StatusBadGateway
 		if len(retryErrors) > 0 && retryErrors[len(retryErrors)-1].StatusCode > 0 {
 			statusCode = retryErrors[len(retryErrors)-1].StatusCode
