@@ -4,6 +4,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -148,7 +149,7 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 	// Check retry limit
 	if retryCount >= keysConfig.MaxRetries {
-		logrus.Errorf("Max retries exceeded (%d)", retryCount)
+		logrus.Debugf("Max retries exceeded (%d)", retryCount)
 
 		// Return detailed error information
 		errorResponse := gin.H{
@@ -288,8 +289,7 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 	responseTime := time.Since(startTime)
 
 	// Check if HTTP status code requires retry
-	// 429 (Too Many Requests) and 5xx server errors need retry
-	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+	if resp.StatusCode >= 400 {
 		// Log failure
 		if retryCount > 0 {
 			logrus.Debugf("Retry request returned error %d (attempt %d) (response time: %v)", resp.StatusCode, retryCount+1, responseTime)
@@ -303,6 +303,18 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 			errorMessage = string(bodyBytes)
 		} else {
 			errorMessage = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
+
+		var jsonError struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+
+		if err := json.Unmarshal([]byte(errorMessage), &jsonError); err == nil && jsonError.Error.Message != "" {
+			logrus.Errorf("Error message: %s", jsonError.Error.Message)
+		} else {
+			logrus.Errorf("Error message: %s", errorMessage)
 		}
 
 		// Record failure asynchronously
@@ -329,7 +341,7 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 	// Log final success result
 	if retryCount > 0 {
-		logrus.Infof("Request succeeded after %d retries (response time: %v)", retryCount, responseTime)
+		logrus.Debugf("Request succeeded after %d retries (response time: %v)", retryCount, responseTime)
 	} else {
 		logrus.Debugf("Request succeeded on first attempt (response time: %v)", responseTime)
 	}
