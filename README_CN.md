@@ -11,6 +11,7 @@
 ## 功能特性
 
 - **多密钥轮询**: 自动 API 密钥轮换和负载均衡
+- **多目标负载均衡**: 支持轮询多个上游 API 地址
 - **智能拉黑**: 区分永久性和临时性错误，智能密钥管理
 - **实时监控**: 全面的统计信息、健康检查和黑名单管理
 - **灵活配置**: 基于环境变量的配置，支持 .env 文件
@@ -98,7 +99,7 @@ cp .env.example .env
 | 密钥文件   | `KEYS_FILE`           | keys.txt                 | API 密钥文件路径         |
 | 起始索引   | `START_INDEX`         | 0                        | 密钥轮换起始索引         |
 | 拉黑阈值   | `BLACKLIST_THRESHOLD` | 1                        | 拉黑前的错误次数         |
-| 上游地址   | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI 兼容 API 基础地址 |
+| 上游地址   | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI 兼容 API 基础地址。支持多个地址，用逗号分隔 |
 | 请求超时   | `REQUEST_TIMEOUT`     | 30000                    | 请求超时时间（毫秒）     |
 | 认证密钥   | `AUTH_KEY`            | -                        | 可选的认证密钥           |
 | CORS       | `ENABLE_CORS`         | true                     | 启用 CORS 支持           |
@@ -125,9 +126,16 @@ OPENAI_BASE_URL=https://your-resource.openai.azure.com
 ```bash
 OPENAI_BASE_URL=https://api.your-provider.com
 # 使用提供商特定的 API 密钥
-```
-
-## API 密钥验证
+ ```
+ 
+ #### 多目标负载均衡
+ 
+ ```bash
+ # 使用逗号分隔多个目标地址
+ OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
+ ```
+ 
+ ## API 密钥验证
 
 项目包含高性能的 API 密钥验证工具：
 

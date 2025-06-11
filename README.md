@@ -11,6 +11,7 @@ A high-performance proxy server for OpenAI-compatible APIs with multi-key rotati
 ## Features
 
 - **Multi-key Rotation**: Automatic API key rotation with load balancing
+- **Multi-Target Load Balancing**: Supports round-robin load balancing across multiple upstream API targets
 - **Intelligent Blacklisting**: Distinguishes between permanent and temporary errors for smart key management
 - **Real-time Monitoring**: Comprehensive statistics, health checks, and blacklist management
 - **Flexible Configuration**: Environment-based configuration with .env file support
@@ -98,7 +99,7 @@ cp .env.example .env
 | Keys File           | `KEYS_FILE`           | keys.txt                 | API keys file path              |
 | Start Index         | `START_INDEX`         | 0                        | Starting key index for rotation |
 | Blacklist Threshold | `BLACKLIST_THRESHOLD` | 1                        | Error count before blacklisting |
-| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI-compatible API base URL  |
+| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
 | Request Timeout     | `REQUEST_TIMEOUT`     | 30000                    | Request timeout in milliseconds |
 | Auth Key            | `AUTH_KEY`            | -                        | Optional authentication key     |
 | CORS                | `ENABLE_CORS`         | true                     | Enable CORS support             |
@@ -125,9 +126,16 @@ OPENAI_BASE_URL=https://your-resource.openai.azure.com
 ```bash
 OPENAI_BASE_URL=https://api.your-provider.com
 # Use provider-specific API keys
-```
-
-## API Key Validation
+ ```
+ 
+ #### Multi-Target Load Balancing
+ 
+ ```bash
+ # Use a comma-separated list of target URLs
+ OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
+ ```
+ 
+ ## API Key Validation
 
 The project includes a high-performance API key validation tool:
 

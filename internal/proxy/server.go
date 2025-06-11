@@ -44,7 +44,6 @@ type ProxyServer struct {
 	configManager types.ConfigManager
 	httpClient    *http.Client
 	streamClient  *http.Client // Dedicated client for streaming
-	upstreamURL   *url.URL
 	requestCount  int64
 	startTime     time.Time
 }
@@ -54,11 +53,6 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 	openaiConfig := configManager.GetOpenAIConfig()
 	perfConfig := configManager.GetPerformanceConfig()
 
-	// Parse upstream URL
-	upstreamURL, err := url.Parse(openaiConfig.BaseURL)
-	if err != nil {
-		return nil, errors.NewAppErrorWithCause(errors.ErrConfigInvalid, "Failed to parse upstream URL", err)
-	}
 
 	// Create high-performance HTTP client
 	transport := &http.Transport{
@@ -104,7 +98,6 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 		configManager: configManager,
 		httpClient:    httpClient,
 		streamClient:  streamClient,
-		upstreamURL:   upstreamURL,
 		startTime:     time.Now(),
 	}, nil
 }
@@ -205,8 +198,20 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		c.Set("retryCount", retryCount)
 	}
 
+	// Get a base URL from the config manager (handles round-robin)
+	openaiConfig := ps.configManager.GetOpenAIConfig()
+	upstreamURL, err := url.Parse(openaiConfig.BaseURL)
+	if err != nil {
+		logrus.Errorf("Failed to parse upstream URL: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Invalid upstream URL configured",
+			"code":  errors.ErrConfigInvalid,
+		})
+		return
+	}
+
 	// Build upstream request URL
-	targetURL := *ps.upstreamURL
+	targetURL := *upstreamURL
 	// Correctly append path instead of replacing it
 	if strings.HasSuffix(targetURL.Path, "/") {
 		targetURL.Path = targetURL.Path + strings.TrimPrefix(c.Request.URL.Path, "/")
@@ -223,8 +228,7 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		// Streaming requests only set response header timeout, no overall timeout
 		ctx, cancel = context.WithCancel(c.Request.Context())
 	} else {
-		// Non-streaming requests use configured timeout
-		openaiConfig := ps.configManager.GetOpenAIConfig()
+		// Non-streaming requests use configured timeout from the already fetched config
 		timeout := time.Duration(openaiConfig.Timeout) * time.Millisecond
 		ctx, cancel = context.WithTimeout(c.Request.Context(), timeout)
 	}

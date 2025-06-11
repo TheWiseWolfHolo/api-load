@@ -54,8 +54,9 @@ type KeysConfig struct {
 
 // OpenAIConfig represents OpenAI API configuration
 type OpenAIConfig struct {
-	BaseURL string `json:"baseUrl"`
-	Timeout int    `json:"timeout"`
+	BaseURL  string   `json:"baseUrl"`
+	BaseURLs []string `json:"baseUrls"`
+	Timeout  int      `json:"timeout"`
 }
 
 // AuthConfig represents authentication configuration
