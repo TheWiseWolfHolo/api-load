@@ -218,6 +218,13 @@ func RateLimiter(config types.PerformanceConfig) gin.HandlerFunc {
 // Timeout creates a timeout middleware
 func Timeout(timeout time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		acceptHeader := c.Request.Header.Get("Accept")
+		if strings.Contains(acceptHeader, "text/event-stream") ||
+			strings.Contains(acceptHeader, "application/x-ndjson") ||
+			c.Request.Header.Get("X-Accel-Buffering") == "no" {
+			c.Next()
+			return
+		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 		defer cancel()
 
