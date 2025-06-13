@@ -53,14 +53,13 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 	openaiConfig := configManager.GetOpenAIConfig()
 	perfConfig := configManager.GetPerformanceConfig()
 
-
 	// Create high-performance HTTP client
 	transport := &http.Transport{
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   20,
 		MaxConnsPerHost:       0,
-		IdleConnTimeout:       120 * time.Second,
-		TLSHandshakeTimeout:   30 * time.Second,
+		IdleConnTimeout:       time.Duration(openaiConfig.IdleConnTimeout) * time.Second,
+		TLSHandshakeTimeout:   time.Duration(openaiConfig.ResponseTimeout) * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableCompression:    !perfConfig.EnableGzip,
 		ForceAttemptHTTP2:     true,
@@ -73,19 +72,19 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 		MaxIdleConns:          200,
 		MaxIdleConnsPerHost:   40,
 		MaxConnsPerHost:       0,
-		IdleConnTimeout:       300 * time.Second, // Keep streaming connections longer
-		TLSHandshakeTimeout:   30 * time.Second,
+		IdleConnTimeout:       time.Duration(openaiConfig.IdleConnTimeout) * time.Second,
+		TLSHandshakeTimeout:   time.Duration(openaiConfig.ResponseTimeout) * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableCompression:    true, // Always disable compression for streaming
 		ForceAttemptHTTP2:     true,
 		WriteBufferSize:       64 * 1024,
 		ReadBufferSize:        64 * 1024,
-		ResponseHeaderTimeout: 30 * time.Second,
+		ResponseHeaderTimeout: time.Duration(openaiConfig.ResponseTimeout) * time.Second,
 	}
 
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   time.Duration(openaiConfig.Timeout) * time.Millisecond,
+		Timeout:   time.Duration(openaiConfig.RequestTimeout) * time.Second,
 	}
 
 	// Streaming client without overall timeout
@@ -229,7 +228,7 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 		ctx, cancel = context.WithCancel(c.Request.Context())
 	} else {
 		// Non-streaming requests use configured timeout from the already fetched config
-		timeout := time.Duration(openaiConfig.Timeout) * time.Millisecond
+		timeout := time.Duration(openaiConfig.RequestTimeout) * time.Second
 		ctx, cancel = context.WithTimeout(c.Request.Context(), timeout)
 	}
 	defer cancel()

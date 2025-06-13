@@ -176,8 +176,10 @@ func (h *Handler) GetConfig(c *gin.Context) {
 			"max_retries":         keysConfig.MaxRetries,
 		},
 		"openai": gin.H{
-			"base_url": openaiConfig.BaseURL,
-			"timeout":  openaiConfig.Timeout,
+			"base_url":          openaiConfig.BaseURL,
+			"request_timeout":   openaiConfig.RequestTimeout,
+			"response_timeout":  openaiConfig.ResponseTimeout,
+			"idle_conn_timeout": openaiConfig.IdleConnTimeout,
 		},
 		"auth": gin.H{
 			"enabled": authConfig.Enabled,
@@ -192,8 +194,16 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		},
 		"performance": gin.H{
 			"max_concurrent_requests": perfConfig.MaxConcurrentRequests,
-			"request_timeout":         perfConfig.RequestTimeout,
 			"enable_gzip":             perfConfig.EnableGzip,
+		},
+		"timeout_config": gin.H{
+			"request_timeout_s":           openaiConfig.RequestTimeout,
+			"response_timeout_s":          openaiConfig.ResponseTimeout,
+			"idle_conn_timeout_s":         openaiConfig.IdleConnTimeout,
+			"server_read_timeout_s":       serverConfig.ReadTimeout,
+			"server_write_timeout_s":      serverConfig.WriteTimeout,
+			"server_idle_timeout_s":       serverConfig.IdleTimeout,
+			"graceful_shutdown_timeout_s": serverConfig.GracefulShutdownTimeout,
 		},
 		"log": gin.H{
 			"level":          logConfig.Level,

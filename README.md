@@ -92,18 +92,23 @@ cp .env.example .env
 
 ### Key Configuration Options
 
-| Setting             | Environment Variable  | Default                  | Description                     |
-| ------------------- | --------------------- | ------------------------ | ------------------------------- |
-| Server Port         | `PORT`                | 3000                     | Server listening port           |
-| Server Host         | `HOST`                | 0.0.0.0                  | Server binding address          |
-| Keys File           | `KEYS_FILE`           | keys.txt                 | API keys file path              |
-| Start Index         | `START_INDEX`         | 0                        | Starting key index for rotation |
-| Blacklist Threshold | `BLACKLIST_THRESHOLD` | 1                        | Error count before blacklisting |
-| Upstream URL        | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
-| Request Timeout     | `REQUEST_TIMEOUT`     | 30000                    | Request timeout in milliseconds |
-| Auth Key            | `AUTH_KEY`            | -                        | Optional authentication key     |
-| CORS                | `ENABLE_CORS`         | true                     | Enable CORS support             |
-| Max Connections     | `MAX_SOCKETS`         | 50                       | Maximum HTTP connections        |
+| Setting                 | Environment Variable               | Default                  | Description                                                                                 |
+| ----------------------- | ---------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------- |
+| Server Port             | `PORT`                             | 3000                     | Server listening port                                                                       |
+| Server Host             | `HOST`                             | 0.0.0.0                  | Server binding address                                                                      |
+| Keys File               | `KEYS_FILE`                        | keys.txt                 | API keys file path                                                                          |
+| Start Index             | `START_INDEX`                      | 0                        | Starting key index for rotation                                                             |
+| Blacklist Threshold     | `BLACKLIST_THRESHOLD`              | 1                        | Error count before blacklisting                                                             |
+| Upstream URL            | `OPENAI_BASE_URL`                  | `https://api.openai.com` | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
+| Auth Key                | `AUTH_KEY`                         | -                        | Optional authentication key                                                                 |
+| CORS                    | `ENABLE_CORS`                      | true                     | Enable CORS support                                                                         |
+| Server Read Timeout     | `SERVER_READ_TIMEOUT`              | 120                      | HTTP server read timeout in seconds                                                         |
+| Server Write Timeout    | `SERVER_WRITE_TIMEOUT`             | 1800                     | HTTP server write timeout in seconds                                                        |
+| Server Idle Timeout     | `SERVER_IDLE_TIMEOUT`              | 120                      | HTTP server idle timeout in seconds                                                         |
+| Graceful Shutdown       | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                       | Graceful shutdown timeout in seconds                                                        |
+| Request Timeout         | `REQUEST_TIMEOUT`                  | 30                       | Request timeout in seconds                                                                  |
+| Response Timeout        | `RESPONSE_TIMEOUT`                 | 30                       | Response timeout in seconds (TLS handshake & response header)                               |
+| Idle Connection Timeout | `IDLE_CONN_TIMEOUT`                | 120                      | Idle connection timeout in seconds                                                          |
 
 ### Configuration Examples
 
@@ -126,16 +131,16 @@ OPENAI_BASE_URL=https://your-resource.openai.azure.com
 ```bash
 OPENAI_BASE_URL=https://api.your-provider.com
 # Use provider-specific API keys
- ```
- 
- #### Multi-Target Load Balancing
- 
- ```bash
- # Use a comma-separated list of target URLs
- OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
- ```
- 
- ## API Key Validation
+```
+
+#### Multi-Target Load Balancing
+
+```bash
+# Use a comma-separated list of target URLs
+OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
+```
+
+## API Key Validation
 
 The project includes a high-performance API key validation tool:
 

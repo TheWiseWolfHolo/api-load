@@ -40,8 +40,12 @@ type ProxyServer interface {
 
 // ServerConfig represents server configuration
 type ServerConfig struct {
-	Port int    `json:"port"`
-	Host string `json:"host"`
+	Port                    int    `json:"port"`
+	Host                    string `json:"host"`
+	ReadTimeout             int    `json:"readTimeout"`
+	WriteTimeout            int    `json:"writeTimeout"`
+	IdleTimeout             int    `json:"idleTimeout"`
+	GracefulShutdownTimeout int    `json:"gracefulShutdownTimeout"`
 }
 
 // KeysConfig represents keys configuration
@@ -54,9 +58,11 @@ type KeysConfig struct {
 
 // OpenAIConfig represents OpenAI API configuration
 type OpenAIConfig struct {
-	BaseURL  string   `json:"baseUrl"`
-	BaseURLs []string `json:"baseUrls"`
-	Timeout  int      `json:"timeout"`
+	BaseURL         string   `json:"baseUrl"`
+	BaseURLs        []string `json:"baseUrls"`
+	RequestTimeout  int      `json:"requestTimeout"`
+	ResponseTimeout int      `json:"responseTimeout"`
+	IdleConnTimeout int      `json:"idleConnTimeout"`
 }
 
 // AuthConfig represents authentication configuration
@@ -77,7 +83,6 @@ type CORSConfig struct {
 // PerformanceConfig represents performance configuration
 type PerformanceConfig struct {
 	MaxConcurrentRequests int  `json:"maxConcurrentRequests"`
-	RequestTimeout        int  `json:"requestTimeout"`
 	EnableGzip            bool `json:"enableGzip"`
 }
 

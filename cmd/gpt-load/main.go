@@ -61,10 +61,10 @@ func main() {
 	server := &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port),
 		Handler:        router,
-		ReadTimeout:    120 * time.Second,  // Increased read timeout for large file uploads
-		WriteTimeout:   1800 * time.Second, // Increased write timeout for streaming responses
-		IdleTimeout:    120 * time.Second, // Increased idle timeout for connection reuse
-		MaxHeaderBytes: 1 << 20,           // 1MB header limit
+		ReadTimeout:    time.Duration(serverConfig.ReadTimeout) * time.Second,
+		WriteTimeout:   time.Duration(serverConfig.WriteTimeout) * time.Second,
+		IdleTimeout:    time.Duration(serverConfig.IdleTimeout) * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB header limit
 	}
 
 	// Start server
@@ -89,7 +89,7 @@ func main() {
 	logrus.Info("Shutting down server...")
 
 	// Give outstanding requests a deadline for completion
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(serverConfig.GracefulShutdownTimeout)*time.Second)
 	defer cancel()
 
 	// Attempt graceful shutdown
@@ -203,7 +203,9 @@ func displayStartupInfo(configManager types.ConfigManager) {
 	logrus.Infof("   Blacklist threshold: %d errors", keysConfig.BlacklistThreshold)
 	logrus.Infof("   Max retries: %d", keysConfig.MaxRetries)
 	logrus.Infof("   Upstream URL: %s", openaiConfig.BaseURL)
-	logrus.Infof("   Request timeout: %dms", openaiConfig.Timeout)
+	logrus.Infof("   Request timeout: %ds", openaiConfig.RequestTimeout)
+	logrus.Infof("   Response timeout: %ds", openaiConfig.ResponseTimeout)
+	logrus.Infof("   Idle connection timeout: %ds", openaiConfig.IdleConnTimeout)
 
 	authStatus := "disabled"
 	if authConfig.Enabled {

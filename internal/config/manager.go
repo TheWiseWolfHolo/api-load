@@ -30,8 +30,8 @@ type Constants struct {
 var DefaultConstants = Constants{
 	MinPort:               1,
 	MaxPort:               65535,
-	MinTimeout:            1000,
-	DefaultTimeout:        30000,
+	MinTimeout:            1,
+	DefaultTimeout:        30,
 	DefaultMaxSockets:     50,
 	DefaultMaxFreeSockets: 10,
 }
@@ -62,8 +62,12 @@ func NewManager() (types.ConfigManager, error) {
 
 	config := &Config{
 		Server: types.ServerConfig{
-			Port: parseInteger(os.Getenv("PORT"), 3000),
-			Host: getEnvOrDefault("HOST", "0.0.0.0"),
+			Port:                    parseInteger(os.Getenv("PORT"), 3000),
+			Host:                    getEnvOrDefault("HOST", "0.0.0.0"),
+			ReadTimeout:             parseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 120),
+			WriteTimeout:            parseInteger(os.Getenv("SERVER_WRITE_TIMEOUT"), 1800),
+			IdleTimeout:             parseInteger(os.Getenv("SERVER_IDLE_TIMEOUT"), 120),
+			GracefulShutdownTimeout: parseInteger(os.Getenv("SERVER_GRACEFUL_SHUTDOWN_TIMEOUT"), 60),
 		},
 		Keys: types.KeysConfig{
 			FilePath:           getEnvOrDefault("KEYS_FILE", "keys.txt"),
@@ -72,8 +76,10 @@ func NewManager() (types.ConfigManager, error) {
 			MaxRetries:         parseInteger(os.Getenv("MAX_RETRIES"), 3),
 		},
 		OpenAI: types.OpenAIConfig{
-			BaseURLs: parseArray(os.Getenv("OPENAI_BASE_URL"), []string{"https://api.openai.com"}),
-			Timeout:  parseInteger(os.Getenv("REQUEST_TIMEOUT"), DefaultConstants.DefaultTimeout),
+			BaseURLs:        parseArray(os.Getenv("OPENAI_BASE_URL"), []string{"https://api.openai.com"}),
+			RequestTimeout:  parseInteger(os.Getenv("REQUEST_TIMEOUT"), DefaultConstants.DefaultTimeout),
+			ResponseTimeout: parseInteger(os.Getenv("RESPONSE_TIMEOUT"), 30),
+			IdleConnTimeout: parseInteger(os.Getenv("IDLE_CONN_TIMEOUT"), 120),
 		},
 		Auth: types.AuthConfig{
 			Key:     os.Getenv("AUTH_KEY"),
@@ -88,7 +94,6 @@ func NewManager() (types.ConfigManager, error) {
 		},
 		Performance: types.PerformanceConfig{
 			MaxConcurrentRequests: parseInteger(os.Getenv("MAX_CONCURRENT_REQUESTS"), 100),
-			RequestTimeout:        parseInteger(os.Getenv("REQUEST_TIMEOUT"), DefaultConstants.DefaultTimeout),
 			EnableGzip:            parseBoolean(os.Getenv("ENABLE_GZIP"), true),
 		},
 		Log: types.LogConfig{
@@ -173,8 +178,8 @@ func (m *Manager) Validate() error {
 	}
 
 	// Validate timeout
-	if m.config.OpenAI.Timeout < DefaultConstants.MinTimeout {
-		validationErrors = append(validationErrors, fmt.Sprintf("request timeout cannot be less than %dms", DefaultConstants.MinTimeout))
+	if m.config.OpenAI.RequestTimeout < DefaultConstants.MinTimeout {
+		validationErrors = append(validationErrors, fmt.Sprintf("request timeout cannot be less than %ds", DefaultConstants.MinTimeout))
 	}
 
 	// Validate upstream URL format
@@ -212,7 +217,9 @@ func (m *Manager) DisplayConfig() {
 	logrus.Infof("   Blacklist threshold: %d errors", m.config.Keys.BlacklistThreshold)
 	logrus.Infof("   Max retries: %d", m.config.Keys.MaxRetries)
 	logrus.Infof("   Upstream URLs: %s", strings.Join(m.config.OpenAI.BaseURLs, ", "))
-	logrus.Infof("   Request timeout: %dms", m.config.OpenAI.Timeout)
+	logrus.Infof("   Request timeout: %ds", m.config.OpenAI.RequestTimeout)
+	logrus.Infof("   Response timeout: %ds", m.config.OpenAI.ResponseTimeout)
+	logrus.Infof("   Idle connection timeout: %ds", m.config.OpenAI.IdleConnTimeout)
 
 	authStatus := "disabled"
 	if m.config.Auth.Enabled {

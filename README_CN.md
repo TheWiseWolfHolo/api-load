@@ -92,18 +92,23 @@ cp .env.example .env
 
 ### 主要配置选项
 
-| 配置项     | 环境变量              | 默认值                   | 说明                     |
-| ---------- | --------------------- | ------------------------ | ------------------------ |
-| 服务器端口 | `PORT`                | 3000                     | 服务器监听端口           |
-| 服务器主机 | `HOST`                | 0.0.0.0                  | 服务器绑定地址           |
-| 密钥文件   | `KEYS_FILE`           | keys.txt                 | API 密钥文件路径         |
-| 起始索引   | `START_INDEX`         | 0                        | 密钥轮换起始索引         |
-| 拉黑阈值   | `BLACKLIST_THRESHOLD` | 1                        | 拉黑前的错误次数         |
-| 上游地址   | `OPENAI_BASE_URL`     | `https://api.openai.com` | OpenAI 兼容 API 基础地址。支持多个地址，用逗号分隔 |
-| 请求超时   | `REQUEST_TIMEOUT`     | 30000                    | 请求超时时间（毫秒）     |
-| 认证密钥   | `AUTH_KEY`            | -                        | 可选的认证密钥           |
-| CORS       | `ENABLE_CORS`         | true                     | 启用 CORS 支持           |
-| 最大连接数 | `MAX_SOCKETS`         | 50                       | 最大 HTTP 连接数         |
+| 配置项         | 环境变量                           | 默认值                   | 说明                                               |
+| -------------- | ---------------------------------- | ------------------------ | -------------------------------------------------- |
+| 服务器端口     | `PORT`                             | 3000                     | 服务器监听端口                                     |
+| 服务器主机     | `HOST`                             | 0.0.0.0                  | 服务器绑定地址                                     |
+| 密钥文件       | `KEYS_FILE`                        | keys.txt                 | API 密钥文件路径                                   |
+| 起始索引       | `START_INDEX`                      | 0                        | 密钥轮换起始索引                                   |
+| 拉黑阈值       | `BLACKLIST_THRESHOLD`              | 1                        | 拉黑前的错误次数                                   |
+| 上游地址       | `OPENAI_BASE_URL`                  | `https://api.openai.com` | OpenAI 兼容 API 基础地址。支持多个地址，用逗号分隔 |
+| 认证密钥       | `AUTH_KEY`                         | -                        | 可选的认证密钥                                     |
+| CORS           | `ENABLE_CORS`                      | true                     | 启用 CORS 支持                                     |
+| 服务器读取超时 | `SERVER_READ_TIMEOUT`              | 120                      | HTTP 服务器读取超时时间（秒）                      |
+| 服务器写入超时 | `SERVER_WRITE_TIMEOUT`             | 1800                     | HTTP 服务器写入超时时间（秒）                      |
+| 服务器空闲超时 | `SERVER_IDLE_TIMEOUT`              | 120                      | HTTP 服务器空闲超时时间（秒）                      |
+| 优雅关闭超时   | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                       | 服务器优雅关闭超时时间（秒）                       |
+| 请求超时       | `REQUEST_TIMEOUT`                  | 30                       | 请求超时时间（秒）                                 |
+| 响应超时       | `RESPONSE_TIMEOUT`                 | 30                       | 响应超时时间（秒）- 控制 TLS 握手和响应头接收      |
+| 空闲连接超时   | `IDLE_CONN_TIMEOUT`                | 120                      | 空闲连接超时时间（秒）                             |
 
 ### 配置示例
 
@@ -126,16 +131,16 @@ OPENAI_BASE_URL=https://your-resource.openai.azure.com
 ```bash
 OPENAI_BASE_URL=https://api.your-provider.com
 # 使用提供商特定的 API 密钥
- ```
- 
- #### 多目标负载均衡
- 
- ```bash
- # 使用逗号分隔多个目标地址
- OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
- ```
- 
- ## API 密钥验证
+```
+
+#### 多目标负载均衡
+
+```bash
+# 使用逗号分隔多个目标地址
+OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
+```
+
+## API 密钥验证
 
 项目包含高性能的 API 密钥验证工具：
 
