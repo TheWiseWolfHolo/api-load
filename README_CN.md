@@ -92,23 +92,35 @@ cp .env.example .env
 
 ### 主要配置选项
 
-| 配置项         | 环境变量                           | 默认值                   | 说明                                               |
-| -------------- | ---------------------------------- | ------------------------ | -------------------------------------------------- |
-| 服务器端口     | `PORT`                             | 3000                     | 服务器监听端口                                     |
-| 服务器主机     | `HOST`                             | 0.0.0.0                  | 服务器绑定地址                                     |
-| 密钥文件       | `KEYS_FILE`                        | keys.txt                 | API 密钥文件路径                                   |
-| 起始索引       | `START_INDEX`                      | 0                        | 密钥轮换起始索引                                   |
-| 拉黑阈值       | `BLACKLIST_THRESHOLD`              | 1                        | 拉黑前的错误次数                                   |
-| 上游地址       | `OPENAI_BASE_URL`                  | `https://api.openai.com` | OpenAI 兼容 API 基础地址。支持多个地址，用逗号分隔 |
-| 认证密钥       | `AUTH_KEY`                         | -                        | 可选的认证密钥                                     |
-| CORS           | `ENABLE_CORS`                      | true                     | 启用 CORS 支持                                     |
-| 服务器读取超时 | `SERVER_READ_TIMEOUT`              | 120                      | HTTP 服务器读取超时时间（秒）                      |
-| 服务器写入超时 | `SERVER_WRITE_TIMEOUT`             | 1800                     | HTTP 服务器写入超时时间（秒）                      |
-| 服务器空闲超时 | `SERVER_IDLE_TIMEOUT`              | 120                      | HTTP 服务器空闲超时时间（秒）                      |
-| 优雅关闭超时   | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                       | 服务器优雅关闭超时时间（秒）                       |
-| 请求超时       | `REQUEST_TIMEOUT`                  | 30                       | 请求超时时间（秒）                                 |
-| 响应超时       | `RESPONSE_TIMEOUT`                 | 30                       | 响应超时时间（秒）- 控制 TLS 握手和响应头接收      |
-| 空闲连接超时   | `IDLE_CONN_TIMEOUT`                | 120                      | 空闲连接超时时间（秒）                             |
+| 配置项         | 环境变量                           | 默认值                      | 说明                                               |
+| -------------- | ---------------------------------- | --------------------------- | -------------------------------------------------- |
+| 服务器端口     | `PORT`                             | 3000                        | 服务器监听端口                                     |
+| 服务器主机     | `HOST`                             | 0.0.0.0                     | 服务器绑定地址                                     |
+| 密钥文件       | `KEYS_FILE`                        | keys.txt                    | API 密钥文件路径                                   |
+| 起始索引       | `START_INDEX`                      | 0                           | 密钥轮换起始索引                                   |
+| 拉黑阈值       | `BLACKLIST_THRESHOLD`              | 1                           | 拉黑前的错误次数                                   |
+| 最大重试次数   | `MAX_RETRIES`                      | 3                           | 使用不同密钥的最大重试次数                         |
+| 上游地址       | `OPENAI_BASE_URL`                  | `https://api.openai.com`    | OpenAI 兼容 API 基础地址。支持多个地址，用逗号分隔 |
+| 最大并发请求数 | `MAX_CONCURRENT_REQUESTS`          | 100                         | 最大并发请求数                                     |
+| 启用 Gzip 压缩 | `ENABLE_GZIP`                      | true                        | 启用响应 Gzip 压缩                                 |
+| 认证密钥       | `AUTH_KEY`                         | -                           | 可选的认证密钥                                     |
+| 启用 CORS      | `ENABLE_CORS`                      | true                        | 启用 CORS 支持                                     |
+| 允许的来源     | `ALLOWED_ORIGINS`                  | \*                          | CORS 允许的来源（逗号分隔，\* 表示允许所有）       |
+| 允许的方法     | `ALLOWED_METHODS`                  | GET,POST,PUT,DELETE,OPTIONS | CORS 允许的 HTTP 方法                              |
+| 允许的头部     | `ALLOWED_HEADERS`                  | \*                          | CORS 允许的头部（逗号分隔，\* 表示允许所有）       |
+| 允许凭证       | `ALLOW_CREDENTIALS`                | false                       | CORS 允许凭证                                      |
+| 日志级别       | `LOG_LEVEL`                        | info                        | 日志级别（debug, info, warn, error）               |
+| 日志格式       | `LOG_FORMAT`                       | text                        | 日志格式（text, json）                             |
+| 启用文件日志   | `LOG_ENABLE_FILE`                  | false                       | 启用文件日志                                       |
+| 日志文件路径   | `LOG_FILE_PATH`                    | logs/app.log                | 日志文件路径                                       |
+| 启用请求日志   | `LOG_ENABLE_REQUEST`               | true                        | 启用请求日志（生产环境可设为 false 以提高性能）    |
+| 服务器读取超时 | `SERVER_READ_TIMEOUT`              | 120                         | HTTP 服务器读取超时时间（秒）                      |
+| 服务器写入超时 | `SERVER_WRITE_TIMEOUT`             | 1800                        | HTTP 服务器写入超时时间（秒）                      |
+| 服务器空闲超时 | `SERVER_IDLE_TIMEOUT`              | 120                         | HTTP 服务器空闲超时时间（秒）                      |
+| 优雅关闭超时   | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                          | 服务器优雅关闭超时时间（秒）                       |
+| 请求超时       | `REQUEST_TIMEOUT`                  | 30                          | 请求超时时间（秒）                                 |
+| 响应超时       | `RESPONSE_TIMEOUT`                 | 30                          | 响应超时时间（秒）- 控制 TLS 握手和响应头接收      |
+| 空闲连接超时   | `IDLE_CONN_TIMEOUT`                | 120                         | 空闲连接超时时间（秒）                             |
 
 ### 配置示例
 

@@ -92,23 +92,35 @@ cp .env.example .env
 
 ### Key Configuration Options
 
-| Setting                 | Environment Variable               | Default                  | Description                                                                                 |
-| ----------------------- | ---------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| Server Port             | `PORT`                             | 3000                     | Server listening port                                                                       |
-| Server Host             | `HOST`                             | 0.0.0.0                  | Server binding address                                                                      |
-| Keys File               | `KEYS_FILE`                        | keys.txt                 | API keys file path                                                                          |
-| Start Index             | `START_INDEX`                      | 0                        | Starting key index for rotation                                                             |
-| Blacklist Threshold     | `BLACKLIST_THRESHOLD`              | 1                        | Error count before blacklisting                                                             |
-| Upstream URL            | `OPENAI_BASE_URL`                  | `https://api.openai.com` | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
-| Auth Key                | `AUTH_KEY`                         | -                        | Optional authentication key                                                                 |
-| CORS                    | `ENABLE_CORS`                      | true                     | Enable CORS support                                                                         |
-| Server Read Timeout     | `SERVER_READ_TIMEOUT`              | 120                      | HTTP server read timeout in seconds                                                         |
-| Server Write Timeout    | `SERVER_WRITE_TIMEOUT`             | 1800                     | HTTP server write timeout in seconds                                                        |
-| Server Idle Timeout     | `SERVER_IDLE_TIMEOUT`              | 120                      | HTTP server idle timeout in seconds                                                         |
-| Graceful Shutdown       | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                       | Graceful shutdown timeout in seconds                                                        |
-| Request Timeout         | `REQUEST_TIMEOUT`                  | 30                       | Request timeout in seconds                                                                  |
-| Response Timeout        | `RESPONSE_TIMEOUT`                 | 30                       | Response timeout in seconds (TLS handshake & response header)                               |
-| Idle Connection Timeout | `IDLE_CONN_TIMEOUT`                | 120                      | Idle connection timeout in seconds                                                          |
+| Setting                 | Environment Variable               | Default                     | Description                                                                                 |
+| ----------------------- | ---------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
+| Server Port             | `PORT`                             | 3000                        | Server listening port                                                                       |
+| Server Host             | `HOST`                             | 0.0.0.0                     | Server binding address                                                                      |
+| Keys File               | `KEYS_FILE`                        | keys.txt                    | API keys file path                                                                          |
+| Start Index             | `START_INDEX`                      | 0                           | Starting key index for rotation                                                             |
+| Blacklist Threshold     | `BLACKLIST_THRESHOLD`              | 1                           | Error count before blacklisting                                                             |
+| Max Retries             | `MAX_RETRIES`                      | 3                           | Maximum retry attempts with different keys                                                  |
+| Upstream URL            | `OPENAI_BASE_URL`                  | `https://api.openai.com`    | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
+| Max Concurrent Requests | `MAX_CONCURRENT_REQUESTS`          | 100                         | Maximum number of concurrent requests                                                       |
+| Enable Gzip             | `ENABLE_GZIP`                      | true                        | Enable Gzip compression for responses                                                       |
+| Auth Key                | `AUTH_KEY`                         | -                           | Optional authentication key                                                                 |
+| CORS                    | `ENABLE_CORS`                      | true                        | Enable CORS support                                                                         |
+| Allowed Origins         | `ALLOWED_ORIGINS`                  | \*                          | CORS allowed origins (comma-separated, \* for all)                                          |
+| Allowed Methods         | `ALLOWED_METHODS`                  | GET,POST,PUT,DELETE,OPTIONS | CORS allowed HTTP methods                                                                   |
+| Allowed Headers         | `ALLOWED_HEADERS`                  | \*                          | CORS allowed headers (comma-separated, \* for all)                                          |
+| Allow Credentials       | `ALLOW_CREDENTIALS`                | false                       | CORS allow credentials                                                                      |
+| Log Level               | `LOG_LEVEL`                        | info                        | Logging level (debug, info, warn, error)                                                    |
+| Log Format              | `LOG_FORMAT`                       | text                        | Log format (text, json)                                                                     |
+| Enable File Logging     | `LOG_ENABLE_FILE`                  | false                       | Enable logging to file                                                                      |
+| Log File Path           | `LOG_FILE_PATH`                    | logs/app.log                | Log file path                                                                               |
+| Enable Request Logging  | `LOG_ENABLE_REQUEST`               | true                        | Enable request logging (set to false in production for performance)                         |
+| Server Read Timeout     | `SERVER_READ_TIMEOUT`              | 120                         | HTTP server read timeout in seconds                                                         |
+| Server Write Timeout    | `SERVER_WRITE_TIMEOUT`             | 1800                        | HTTP server write timeout in seconds                                                        |
+| Server Idle Timeout     | `SERVER_IDLE_TIMEOUT`              | 120                         | HTTP server idle timeout in seconds                                                         |
+| Graceful Shutdown       | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                          | Graceful shutdown timeout in seconds                                                        |
+| Request Timeout         | `REQUEST_TIMEOUT`                  | 30                          | Request timeout in seconds                                                                  |
+| Response Timeout        | `RESPONSE_TIMEOUT`                 | 30                          | Response timeout in seconds (TLS handshake & response header)                               |
+| Idle Connection Timeout | `IDLE_CONN_TIMEOUT`                | 120                         | Idle connection timeout in seconds                                                          |
 
 ### Configuration Examples
 
