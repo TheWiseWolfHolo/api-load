@@ -262,6 +262,10 @@ make help       # 显示所有命令
 - **错误处理**: 全面的错误处理和恢复机制
 - **资源管理**: 自动清理防止资源泄漏
 
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=tbphp/gpt-load&type=Date)](https://star-history.com/#tbphp/gpt-load&Date)
+
 ## 许可证
 
 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。

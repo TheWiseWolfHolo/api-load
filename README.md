@@ -262,6 +262,10 @@ make help       # Show all commands
 - **Error Handling**: Comprehensive error handling and recovery mechanisms
 - **Resource Management**: Automatic cleanup prevents resource leaks
 
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=tbphp/gpt-load&type=Date)](https://star-history.com/#tbphp/gpt-load&Date)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
