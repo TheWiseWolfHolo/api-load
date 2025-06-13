@@ -2,7 +2,6 @@
 package middleware
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -209,32 +208,6 @@ func RateLimiter(config types.PerformanceConfig) gin.HandlerFunc {
 			c.JSON(429, gin.H{
 				"error": "Too many concurrent requests",
 				"code":  errors.ErrServerUnavailable,
-			})
-			c.Abort()
-		}
-	}
-}
-
-// Timeout creates a timeout middleware
-func Timeout(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		acceptHeader := c.Request.Header.Get("Accept")
-		if strings.Contains(acceptHeader, "text/event-stream") ||
-			strings.Contains(acceptHeader, "application/x-ndjson") ||
-			c.Request.Header.Get("X-Accel-Buffering") == "no" {
-			c.Next()
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
-		defer cancel()
-
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-
-		if ctx.Err() == context.DeadlineExceeded {
-			c.JSON(408, gin.H{
-				"error": "Request timeout",
-				"code":  errors.ErrProxyTimeout,
 			})
 			c.Abort()
 		}

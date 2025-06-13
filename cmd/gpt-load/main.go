@@ -61,8 +61,8 @@ func main() {
 	server := &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port),
 		Handler:        router,
-		ReadTimeout:    60 * time.Second,  // Increased read timeout for large file uploads
-		WriteTimeout:   300 * time.Second, // Increased write timeout for streaming responses
+		ReadTimeout:    120 * time.Second,  // Increased read timeout for large file uploads
+		WriteTimeout:   1800 * time.Second, // Increased write timeout for streaming responses
 		IdleTimeout:    120 * time.Second, // Increased idle timeout for connection reuse
 		MaxHeaderBytes: 1 << 20,           // 1MB header limit
 	}

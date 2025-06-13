@@ -56,11 +56,11 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 
 	// Create high-performance HTTP client
 	transport := &http.Transport{
-		MaxIdleConns:          50,
-		MaxIdleConnsPerHost:   10,
-		MaxConnsPerHost:       0, // No limit to avoid connection pool bottleneck
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		MaxConnsPerHost:       0,
+		IdleConnTimeout:       120 * time.Second,
+		TLSHandshakeTimeout:   30 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableCompression:    !perfConfig.EnableGzip,
 		ForceAttemptHTTP2:     true,
@@ -70,17 +70,17 @@ func NewProxyServer(keyManager types.KeyManager, configManager types.ConfigManag
 
 	// Create dedicated transport for streaming, optimize TCP parameters
 	streamTransport := &http.Transport{
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   20,
+		MaxIdleConns:          200,
+		MaxIdleConnsPerHost:   40,
 		MaxConnsPerHost:       0,
 		IdleConnTimeout:       300 * time.Second, // Keep streaming connections longer
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   30 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableCompression:    true, // Always disable compression for streaming
 		ForceAttemptHTTP2:     true,
 		WriteBufferSize:       64 * 1024,
 		ReadBufferSize:        64 * 1024,
-		ResponseHeaderTimeout: 10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
 	}
 
 	httpClient := &http.Client{
