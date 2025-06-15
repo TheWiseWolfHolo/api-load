@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   gpt-load:
     image: ghcr.io/tbphp/gpt-load:latest
@@ -9,10 +7,9 @@ services:
     volumes:
       # 挂载密钥文件（只读）
       - ./keys.txt:/app/keys.txt:ro
-      # 挂载配置文件（只读）
-      - ./.env:/app/.env:ro
     restart: unless-stopped
-    tty: true
+    env_file:
+      - .env
 
     # 健康检查
     healthcheck:
@@ -21,6 +18,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-    env_file:
-      - .env
