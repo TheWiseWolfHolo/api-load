@@ -262,6 +262,12 @@ make help       # Show all commands
 - **Error Handling**: Comprehensive error handling and recovery mechanisms
 - **Resource Management**: Automatic cleanup prevents resource leaks
 
+## Sponsor
+
+<a href="https://edgeone.ai/?from=github"><img width="200" src="https://edgeone.ai/media/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png"></a>
+
+CDN acceleration and security protection for this project are sponsored by Tencent EdgeOne.
+
 ## 🌟 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=tbphp/gpt-load&type=Date)](https://star-history.com/#tbphp/gpt-load&Date)
