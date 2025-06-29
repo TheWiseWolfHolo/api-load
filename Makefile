@@ -44,9 +44,16 @@ build-all: clean
 
 # 运行
 .PHONY: run
+.PHONY: run
+
 run:
-	@echo "🚀 启动服务器..."
-	go run $(MAIN_PATH)
+	@echo "--- Building frontend... ---"
+	cd web && npm install && npm run build
+	@echo "--- Preparing backend... ---"
+	@rm -rf cmd/gpt-load/dist
+	@cp -r web/dist cmd/gpt-load/dist
+	@echo "--- Starting backend... ---"
+	cd $(MAIN_PATH) && go run .
 
 # 开发模式运行
 .PHONY: dev

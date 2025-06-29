@@ -55,6 +55,15 @@ type Config struct {
 
 // NewManager creates a new configuration manager
 func NewManager() (types.ConfigManager, error) {
+	manager := &Manager{}
+	if err := manager.ReloadConfig(); err != nil {
+		return nil, err
+	}
+	return manager, nil
+}
+
+// ReloadConfig reloads the configuration from environment variables
+func (m *Manager) ReloadConfig() error {
 	// Try to load .env file
 	if err := godotenv.Load(); err != nil {
 		logrus.Info("Info: Create .env file to support environment variable configuration")
@@ -104,15 +113,17 @@ func NewManager() (types.ConfigManager, error) {
 			EnableRequest: parseBoolean(os.Getenv("LOG_ENABLE_REQUEST"), true),
 		},
 	}
-
-	manager := &Manager{config: config}
+	m.config = config
 
 	// Validate configuration
-	if err := manager.Validate(); err != nil {
-		return nil, err
+	if err := m.Validate(); err != nil {
+		return err
 	}
 
-	return manager, nil
+	logrus.Info("Configuration reloaded successfully")
+	m.DisplayConfig()
+
+	return nil
 }
 
 // GetServerConfig returns server configuration

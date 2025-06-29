@@ -5,22 +5,27 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"gpt-load/internal/config"
+	"gpt-load/internal/db"
 	"gpt-load/internal/handler"
-	"gpt-load/internal/keymanager"
 	"gpt-load/internal/middleware"
+	"gpt-load/internal/models"
 	"gpt-load/internal/proxy"
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -33,28 +38,33 @@ func main() {
 	// Setup logger
 	setupLogger(configManager)
 
+	// Initialize database
+	database, err := db.InitDB()
+	if err != nil {
+		logrus.Fatalf("Failed to initialize database: %v", err)
+	}
+
 	// Display startup information
 	displayStartupInfo(configManager)
 
-	// Create key manager
-	keyManager, err := keymanager.NewManager(configManager.GetKeysConfig())
-	if err != nil {
-		logrus.Fatalf("Failed to create key manager: %v", err)
-	}
-	defer keyManager.Close()
+
+	// --- Asynchronous Request Logging Setup ---
+	requestLogChan := make(chan models.RequestLog, 1000)
+	go startRequestLogger(database, requestLogChan)
+	// ---
 
 	// Create proxy server
-	proxyServer, err := proxy.NewProxyServer(keyManager, configManager)
+	proxyServer, err := proxy.NewProxyServer(database, requestLogChan)
 	if err != nil {
 		logrus.Fatalf("Failed to create proxy server: %v", err)
 	}
 	defer proxyServer.Close()
 
 	// Create handlers
-	handlers := handler.NewHandler(keyManager, configManager)
+	serverHandler := handler.NewServer(database, configManager)
 
 	// Setup routes
-	router := setupRoutes(handlers, proxyServer, configManager)
+	router := setupRoutes(serverHandler, proxyServer, configManager)
 
 	// Create HTTP server with optimized timeout configuration
 	serverConfig := configManager.GetServerConfig()
@@ -73,8 +83,6 @@ func main() {
 		logrus.Infof("Server address: http://%s:%d", serverConfig.Host, serverConfig.Port)
 		logrus.Infof("Statistics: http://%s:%d/stats", serverConfig.Host, serverConfig.Port)
 		logrus.Infof("Health check: http://%s:%d/health", serverConfig.Host, serverConfig.Port)
-		logrus.Infof("Reset keys: http://%s:%d/reset-keys", serverConfig.Host, serverConfig.Port)
-		logrus.Infof("Blacklist query: http://%s:%d/blacklist", serverConfig.Host, serverConfig.Port)
 		logrus.Info("")
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -101,7 +109,7 @@ func main() {
 }
 
 // setupRoutes configures the HTTP routes
-func setupRoutes(handlers *handler.Handler, proxyServer *proxy.ProxyServer, configManager types.ConfigManager) *gin.Engine {
+func setupRoutes(serverHandler *handler.Server, proxyServer *proxy.ProxyServer, configManager types.ConfigManager) *gin.Engine {
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
@@ -127,19 +135,55 @@ func setupRoutes(handlers *handler.Handler, proxyServer *proxy.ProxyServer, conf
 	}
 
 	// Management endpoints
-	router.GET("/health", handlers.Health)
-	router.GET("/stats", handlers.Stats)
-	router.GET("/blacklist", handlers.Blacklist)
-	router.GET("/reset-keys", handlers.ResetKeys)
-	router.GET("/config", handlers.GetConfig) // Debug endpoint
+	router.GET("/health", serverHandler.Health)
+	router.GET("/stats", serverHandler.Stats)
+	router.GET("/config", serverHandler.GetConfig) // Debug endpoint
+
+	// Register API routes for group and key management
+	api := router.Group("/api")
+	serverHandler.RegisterAPIRoutes(api)
+
+	// Register the main proxy route
+	proxy := router.Group("/proxy")
+	proxyServer.RegisterProxyRoutes(proxy)
 
 	// Handle 405 Method Not Allowed
-	router.NoMethod(handlers.MethodNotAllowed)
+	router.NoMethod(serverHandler.MethodNotAllowed)
 
-	// Proxy all other requests (this handles 404 as well)
-	router.NoRoute(proxyServer.HandleProxy)
+	// Serve the frontend UI for all other requests
+	router.NoRoute(ServeUI())
 
 	return router
+}
+
+// ServeUI returns a gin.HandlerFunc to serve the embedded frontend UI.
+func ServeUI() gin.HandlerFunc {
+	subFS, err := fs.Sub(WebUI, "dist")
+	if err != nil {
+		// This should not happen at runtime if embed is correct.
+		// Panic is acceptable here as it's a startup failure.
+		panic(fmt.Sprintf("Failed to create sub filesystem for UI: %v", err))
+	}
+	fileServer := http.FileServer(http.FS(subFS))
+
+	return func(c *gin.Context) {
+		// Clean the path to prevent directory traversal attacks.
+		upath := path.Clean(c.Request.URL.Path)
+		if !strings.HasPrefix(upath, "/") {
+			upath = "/" + upath
+		}
+
+		// Check if the file exists in the embedded filesystem.
+		_, err := subFS.Open(strings.TrimPrefix(upath, "/"))
+		if os.IsNotExist(err) {
+			// The file does not exist, so we serve index.html for SPA routing.
+			// This allows the Vue router to handle the path.
+			c.Request.URL.Path = "/"
+		}
+
+		// Let the http.FileServer handle the request.
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	}
 }
 
 // setupLogger configures the logging system
@@ -231,4 +275,43 @@ func displayStartupInfo(configManager types.ConfigManager) {
 		requestLogStatus = "disabled"
 	}
 	logrus.Infof("   Request logging: %s", requestLogStatus)
+}
+
+// startRequestLogger runs a background goroutine to batch-insert request logs.
+func startRequestLogger(db *gorm.DB, logChan <-chan models.RequestLog) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	logBuffer := make([]models.RequestLog, 0, 100)
+
+	for {
+		select {
+		case logEntry, ok := <-logChan:
+			if !ok {
+				// Channel closed, flush remaining logs and exit
+				if len(logBuffer) > 0 {
+					if err := db.Create(&logBuffer).Error; err != nil {
+						logrus.Errorf("Failed to write remaining request logs: %v", err)
+					}
+				}
+				logrus.Info("Request logger stopped.")
+				return
+			}
+			logBuffer = append(logBuffer, logEntry)
+			if len(logBuffer) >= 100 {
+				if err := db.Create(&logBuffer).Error; err != nil {
+					logrus.Errorf("Failed to write request logs: %v", err)
+				}
+				logBuffer = make([]models.RequestLog, 0, 100) // Reset buffer
+			}
+		case <-ticker.C:
+			// Flush logs periodically
+			if len(logBuffer) > 0 {
+				if err := db.Create(&logBuffer).Error; err != nil {
+					logrus.Errorf("Failed to write request logs on tick: %v", err)
+				}
+				logBuffer = make([]models.RequestLog, 0, 100) // Reset buffer
+			}
+		}
+	}
 }

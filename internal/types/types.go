@@ -18,6 +18,7 @@ type ConfigManager interface {
 	GetLogConfig() LogConfig
 	Validate() error
 	DisplayConfig()
+	ReloadConfig() error
 }
 
 // KeyManager defines the interface for API key management

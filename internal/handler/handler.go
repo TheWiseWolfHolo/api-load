@@ -6,35 +6,80 @@ import (
 	"runtime"
 	"time"
 
+	"gpt-load/internal/models"
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
-// Handler contains dependencies for HTTP handlers
-type Handler struct {
-	keyManager types.KeyManager
-	config     types.ConfigManager
+// Server contains dependencies for HTTP handlers
+type Server struct {
+	DB     *gorm.DB
+	config types.ConfigManager
 }
 
-// NewHandler creates a new handler instance
-func NewHandler(keyManager types.KeyManager, config types.ConfigManager) *Handler {
-	return &Handler{
-		keyManager: keyManager,
-		config:     config,
+// NewServer creates a new handler instance
+func NewServer(db *gorm.DB, config types.ConfigManager) *Server {
+	return &Server{
+		DB:     db,
+		config: config,
 	}
 }
 
+// RegisterAPIRoutes registers all API routes under a given router group
+func (s *Server) RegisterAPIRoutes(api *gin.RouterGroup) {
+	// Group management routes
+	groups := api.Group("/groups")
+	{
+		groups.POST("", s.CreateGroup)
+		groups.GET("", s.ListGroups)
+		groups.GET("/:id", s.GetGroup)
+		groups.PUT("/:id", s.UpdateGroup)
+		groups.DELETE("/:id", s.DeleteGroup)
+
+		// Key management routes within a group
+		keys := groups.Group("/:id/keys")
+		{
+			keys.POST("", s.CreateKeysInGroup)
+			keys.GET("", s.ListKeysInGroup)
+		}
+	}
+
+	// Key management routes
+	api.PUT("/keys/:key_id", s.UpdateKey)
+	api.DELETE("/keys", s.DeleteKeys)
+
+	// Dashboard and logs routes
+	dashboard := api.Group("/dashboard")
+	{
+		dashboard.GET("/stats", GetDashboardStats)
+	}
+
+	api.GET("/logs", GetLogs)
+
+	// Settings routes
+	settings := api.Group("/settings")
+	{
+		settings.GET("", GetSettings)
+		settings.PUT("", UpdateSettings)
+	}
+
+	// Reload route
+	api.POST("/reload", s.ReloadConfig)
+}
+
 // Health handles health check requests
-func (h *Handler) Health(c *gin.Context) {
-	stats := h.keyManager.GetStats()
+func (s *Server) Health(c *gin.Context) {
+	var totalKeys, healthyKeys int64
+	s.DB.Model(&models.APIKey{}).Count(&totalKeys)
+	s.DB.Model(&models.APIKey{}).Where("status = ?", "active").Count(&healthyKeys)
 
 	status := "healthy"
 	httpStatus := http.StatusOK
 
 	// Check if there are any healthy keys
-	if stats.HealthyKeys == 0 {
+	if healthyKeys == 0 && totalKeys > 0 {
 		status = "unhealthy"
 		httpStatus = http.StatusServiceUnavailable
 	}
@@ -50,15 +95,23 @@ func (h *Handler) Health(c *gin.Context) {
 	c.JSON(httpStatus, gin.H{
 		"status":       status,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
-		"healthy_keys": stats.HealthyKeys,
-		"total_keys":   stats.TotalKeys,
+		"healthy_keys": healthyKeys,
+		"total_keys":   totalKeys,
 		"uptime":       uptime,
 	})
 }
 
 // Stats handles statistics requests
-func (h *Handler) Stats(c *gin.Context) {
-	stats := h.keyManager.GetStats()
+func (s *Server) Stats(c *gin.Context) {
+	var totalKeys, healthyKeys, disabledKeys int64
+	s.DB.Model(&models.APIKey{}).Count(&totalKeys)
+	s.DB.Model(&models.APIKey{}).Where("status = ?", "active").Count(&healthyKeys)
+	s.DB.Model(&models.APIKey{}).Where("status != ?", "active").Count(&disabledKeys)
+
+	// TODO: Get request counts from the database
+	var successCount, failureCount int64
+	s.DB.Model(&models.RequestLog{}).Where("status_code = ?", http.StatusOK).Count(&successCount)
+	s.DB.Model(&models.RequestLog{}).Where("status_code != ?", http.StatusOK).Count(&failureCount)
 
 	// Add additional system information
 	var m runtime.MemStats
@@ -66,15 +119,14 @@ func (h *Handler) Stats(c *gin.Context) {
 
 	response := gin.H{
 		"keys": gin.H{
-			"total":         stats.TotalKeys,
-			"healthy":       stats.HealthyKeys,
-			"blacklisted":   stats.BlacklistedKeys,
-			"current_index": stats.CurrentIndex,
+			"total":    totalKeys,
+			"healthy":  healthyKeys,
+			"disabled": disabledKeys,
 		},
 		"requests": gin.H{
-			"success_count": stats.SuccessCount,
-			"failure_count": stats.FailureCount,
-			"total_count":   stats.SuccessCount + stats.FailureCount,
+			"success_count": successCount,
+			"failure_count": failureCount,
+			"total_count":   successCount + failureCount,
 		},
 		"memory": gin.H{
 			"alloc_mb":       bToMb(m.Alloc),
@@ -95,48 +147,9 @@ func (h *Handler) Stats(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Blacklist handles blacklist requests
-func (h *Handler) Blacklist(c *gin.Context) {
-	blacklist := h.keyManager.GetBlacklist()
-
-	response := gin.H{
-		"blacklisted_keys": blacklist,
-		"count":            len(blacklist),
-		"timestamp":        time.Now().UTC().Format(time.RFC3339),
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-// ResetKeys handles key reset requests
-func (h *Handler) ResetKeys(c *gin.Context) {
-	// Reset blacklist
-	h.keyManager.ResetBlacklist()
-
-	// Reload keys from file
-	if err := h.keyManager.LoadKeys(); err != nil {
-		logrus.Errorf("Failed to reload keys: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to reload keys",
-			"message": err.Error(),
-		})
-		return
-	}
-
-	stats := h.keyManager.GetStats()
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":      "Keys reset and reloaded successfully",
-		"total_keys":   stats.TotalKeys,
-		"healthy_keys": stats.HealthyKeys,
-		"timestamp":    time.Now().UTC().Format(time.RFC3339),
-	})
-
-	logrus.Info("Keys reset and reloaded successfully")
-}
 
 // MethodNotAllowed handles 405 requests
-func (h *Handler) MethodNotAllowed(c *gin.Context) {
+func (s *Server) MethodNotAllowed(c *gin.Context) {
 	c.JSON(http.StatusMethodNotAllowed, gin.H{
 		"error":     "Method not allowed",
 		"path":      c.Request.URL.Path,
@@ -146,7 +159,7 @@ func (h *Handler) MethodNotAllowed(c *gin.Context) {
 }
 
 // GetConfig returns configuration information (for debugging)
-func (h *Handler) GetConfig(c *gin.Context) {
+func (s *Server) GetConfig(c *gin.Context) {
 	// Only allow in development mode or with special header
 	if c.GetHeader("X-Debug-Config") != "true" {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -155,13 +168,13 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		return
 	}
 
-	serverConfig := h.config.GetServerConfig()
-	keysConfig := h.config.GetKeysConfig()
-	openaiConfig := h.config.GetOpenAIConfig()
-	authConfig := h.config.GetAuthConfig()
-	corsConfig := h.config.GetCORSConfig()
-	perfConfig := h.config.GetPerformanceConfig()
-	logConfig := h.config.GetLogConfig()
+	serverConfig := s.config.GetServerConfig()
+	keysConfig := s.config.GetKeysConfig()
+	openaiConfig := s.config.GetOpenAIConfig()
+	authConfig := s.config.GetAuthConfig()
+	corsConfig := s.config.GetCORSConfig()
+	perfConfig := s.config.GetPerformanceConfig()
+	logConfig := s.config.GetLogConfig()
 
 	// Sanitize sensitive information
 	sanitizedConfig := gin.H{

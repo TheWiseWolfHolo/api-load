@@ -1,20 +1,70 @@
+version: '3.8'
+
 services:
-  gpt-load:
-    image: ghcr.io/tbphp/gpt-load:latest
-    container_name: gpt-load
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gpt-load-app
     ports:
-      - "3000:3000"
-    volumes:
-      # 挂载密钥文件（只读）
-      - ./keys.txt:/app/keys.txt:ro
-    restart: unless-stopped
+      - "8080:8080"
     env_file:
       - .env
+    environment:
+      # Override or set environment variables here
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - GIN_MODE=release
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - gpt-load-net
 
-    # 健康检查
+  db:
+    image: mysql:8.0
+    container_name: gpt-load-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gpt-load-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: gpt-load-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gpt-load-net
+
+volumes:
+  db-data:
+
+networks:
+  gpt-load-net:
+    driver: bridge

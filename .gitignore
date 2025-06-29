@@ -228,3 +228,5 @@ charts/*.tgz
 run-local.sh
 start-local.sh
 dev-setup.sh
+
+cmd/gpt-load/dist

@@ -1,62 +1,81 @@
-# 多阶段构建 Dockerfile for OpenAI 多密钥代理服务器 (Go版本)
+# --- Stage 1: Frontend Builder ---
+FROM node:20-alpine AS frontend-builder
 
-# 构建阶段
-FROM golang:1.21-alpine AS builder
+WORKDIR /app/web
 
-# 设置工作目录
+# Copy web project files
+COPY web/package.json web/package-lock.json ./
+COPY web/tsconfig.json web/tsconfig.node.json web/tsconfig.app.json ./
+COPY web/vite.config.ts ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the web source code
+COPY web/ ./
+
+# Build the frontend application
+RUN npm run build
+
+# --- Stage 2: Backend Builder ---
+FROM golang:1.22-alpine AS backend-builder
+
 WORKDIR /app
 
-# 安装必要的包
-RUN apk add --no-cache git ca-certificates tzdata
+# Install build tools
+RUN apk add --no-cache git build-base
 
-# 复制 go mod 文件
+# Copy Go module files and download dependencies
 COPY go.mod go.sum ./
-
-# 下载依赖
 RUN go mod download
 
-# 复制源代码
+# Copy the entire Go project source code
 COPY . .
 
-# 构建应用 - 支持多平台
-ARG TARGETOS
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X main.Version=2.0.0" \
-    -o gpt-load \
-    ./cmd/gpt-load/main.go
+# Copy the built frontend from the previous stage
+COPY --from=frontend-builder /app/web/dist ./web/dist
 
-# 运行阶段
+# Build the Go application
+# We use CGO_ENABLED=0 to create a static binary
+# -ldflags="-w -s" strips debug information and symbols to reduce binary size
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s" \
+    -o /gpt-load \
+    ./cmd/gpt-load
+
+# --- Stage 3: Final Image ---
 FROM alpine:latest
 
-# 安装必要的包
-RUN apk --no-cache add ca-certificates curl
+# Install necessary runtime dependencies
+# ca-certificates for HTTPS connections
+# tzdata for time zone information
+RUN apk --no-cache add ca-certificates tzdata
 
-# 创建非 root 用户
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -S appuser -u 1001 -G appgroup
+# Create a non-root user and group for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# 设置工作目录
+# Set the working directory
 WORKDIR /app
 
-# 从构建阶段复制二进制文件
-COPY --from=builder /app/gpt-load .
+# Copy the compiled binary from the backend-builder stage
+COPY --from=backend-builder /gpt-load .
 
-# 复制配置文件模板
-COPY --from=builder /app/.env.example .
+# Copy the configuration file example
+COPY .env.example .
 
-# 设置权限
+# Set ownership of the app directory to the non-root user
 RUN chown -R appuser:appgroup /app
 
-# 切换到非 root 用户
+# Switch to the non-root user
 USER appuser
 
-# 暴露端口
-EXPOSE 3000
+# Expose the application port
+# This should match the port defined in the configuration
+EXPOSE 8080
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+# Healthcheck to ensure the application is running
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD [ "wget", "-q", "--spider", "http://localhost:8080/health" ] || exit 1
 
-# 启动命令
-CMD ["./gpt-load"]
+# Set the entrypoint for the container
+ENTRYPOINT ["/app/gpt-load"]
