@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"gpt-load/internal/errors"
-	"gpt-load/pkg/types"
+	"gpt-load/internal/types"
 
 	"github.com/sirupsen/logrus"
 )

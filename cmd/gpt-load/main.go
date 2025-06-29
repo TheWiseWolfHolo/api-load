@@ -17,7 +17,7 @@ import (
 	"gpt-load/internal/keymanager"
 	"gpt-load/internal/middleware"
 	"gpt-load/internal/proxy"
-	"gpt-load/pkg/types"
+	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

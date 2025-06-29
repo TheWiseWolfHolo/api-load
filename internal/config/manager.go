@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 
 	"gpt-load/internal/errors"
-	"gpt-load/pkg/types"
+	"gpt-load/internal/types"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"

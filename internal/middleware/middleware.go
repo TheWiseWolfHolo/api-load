@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"gpt-load/internal/errors"
-	"gpt-load/pkg/types"
+	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
