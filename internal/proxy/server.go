@@ -4,6 +4,7 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -343,10 +344,26 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 
 		// Read response body to get error information
 		var errorMessage string
-		if bodyBytes, err := io.ReadAll(resp.Body); err == nil {
-			errorMessage = string(bodyBytes)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			errorMessage = fmt.Sprintf("HTTP %d (failed to read body: %v)", resp.StatusCode, err)
 		} else {
-			errorMessage = fmt.Sprintf("HTTP %d", resp.StatusCode)
+			if resp.Header.Get("Content-Encoding") == "gzip" {
+				reader, gErr := gzip.NewReader(bytes.NewReader(bodyBytes))
+				if gErr != nil {
+					errorMessage = fmt.Sprintf("gzip reader error: %v", gErr)
+				} else {
+					uncompressedBytes, rErr := io.ReadAll(reader)
+					reader.Close()
+					if rErr != nil {
+						errorMessage = fmt.Sprintf("gzip read error: %v", rErr)
+					} else {
+						errorMessage = string(uncompressedBytes)
+					}
+				}
+			} else {
+				errorMessage = string(bodyBytes)
+			}
 		}
 
 		var jsonError struct {
