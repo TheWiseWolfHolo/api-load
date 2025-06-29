@@ -262,9 +262,13 @@ func (ps *ProxyServer) executeRequestWithRetry(c *gin.Context, startTime time.Ti
 	if c.GetHeader("Authorization") != "" {
 		req.Header.Set("Authorization", "Bearer "+keyInfo.Key)
 		req.Header.Del("X-Goog-Api-Key")
-	} else if c.GetHeader("X-Goog-Api-Key") != "" || c.Query("key") != "" {
+	} else if c.GetHeader("X-Goog-Api-Key") != "" {
 		req.Header.Set("X-Goog-Api-Key", keyInfo.Key)
 		req.Header.Del("Authorization")
+	} else if c.Query("key") != "" {
+		q := req.URL.Query()
+		q.Set("key", keyInfo.Key)
+		req.URL.RawQuery = q.Encode()
 	} else {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "API key required. Please provide a key in 'Authorization' or 'X-Goog-Api-Key' header.",
