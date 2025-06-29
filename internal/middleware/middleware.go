@@ -137,31 +137,19 @@ func Auth(config types.AuthConfig) gin.HandlerFunc {
 			return
 		}
 
-		// Get authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		// Extract key from multiple sources
+		key := extractKey(c)
+		if key == "" {
 			c.JSON(401, gin.H{
-				"error": "Authorization header required",
+				"error": "Authorization required",
 				"code":  errors.ErrAuthMissing,
 			})
 			c.Abort()
 			return
 		}
 
-		// Check Bearer token format
-		const bearerPrefix = "Bearer "
-		if !strings.HasPrefix(authHeader, bearerPrefix) {
-			c.JSON(401, gin.H{
-				"error": "Invalid authorization format, expected 'Bearer <token>'",
-				"code":  errors.ErrAuthInvalid,
-			})
-			c.Abort()
-			return
-		}
-
-		// Extract and validate token
-		token := authHeader[len(bearerPrefix):]
-		if token != config.Key {
+		// Validate key
+		if key != config.Key {
 			c.JSON(401, gin.H{
 				"error": "Invalid authentication token",
 				"code":  errors.ErrAuthInvalid,
@@ -251,4 +239,29 @@ func isMonitoringEndpoint(path string) bool {
 		}
 	}
 	return false
+}
+
+// extractKey extracts the API key from the request, checking the Authorization header,
+// the X-Goog-Api-Key header, and the "key" query parameter.
+func extractKey(c *gin.Context) string {
+	// 1. Check Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		const bearerPrefix = "Bearer "
+		if strings.HasPrefix(authHeader, bearerPrefix) {
+			return authHeader[len(bearerPrefix):]
+		}
+	}
+
+	// 2. Check X-Goog-Api-Key header
+	if key := c.GetHeader("X-Goog-Api-Key"); key != "" {
+		return key
+	}
+
+	// 3. Check "key" query parameter
+	if key := c.Query("key"); key != "" {
+		return key
+	}
+
+	return ""
 }
