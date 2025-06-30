@@ -42,12 +42,10 @@ func (s *Server) RegisterAPIRoutes(api *gin.RouterGroup) {
 		{
 			keys.POST("", s.CreateKeysInGroup)
 			keys.GET("", s.ListKeysInGroup)
+			keys.PUT("/:key_id", s.UpdateKey)
+			keys.DELETE("", s.DeleteKeys)
 		}
 	}
-
-	// Key management routes
-	api.PUT("/keys/:key_id", s.UpdateKey)
-	api.DELETE("/keys", s.DeleteKeys)
 
 	// Dashboard and logs routes
 	dashboard := api.Group("/dashboard")
@@ -100,15 +98,6 @@ func (s *Server) Health(c *gin.Context) {
 	})
 }
 
-// MethodNotAllowed handles 405 requests
-func (s *Server) MethodNotAllowed(c *gin.Context) {
-	c.JSON(http.StatusMethodNotAllowed, gin.H{
-		"error":     "Method not allowed",
-		"path":      c.Request.URL.Path,
-		"method":    c.Request.Method,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
-}
 
 // GetConfig returns configuration information (for debugging)
 func (s *Server) GetConfig(c *gin.Context) {

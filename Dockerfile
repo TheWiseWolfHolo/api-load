@@ -33,7 +33,7 @@ RUN go mod download
 COPY . .
 
 # Copy the built frontend from the previous stage
-COPY --from=frontend-builder /app/web/dist ./web/dist
+COPY --from=frontend-builder /app/web/dist ./cmd/gpt-load/dist
 
 # Build the Go application
 # We use CGO_ENABLED=0 to create a static binary

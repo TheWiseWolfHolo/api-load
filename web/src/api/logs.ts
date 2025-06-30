@@ -20,5 +20,5 @@ export interface PaginatedLogs {
 }
 
 export const getLogs = (query: LogQuery): Promise<PaginatedLogs> => {
-  return request.get('/api/logs', { params: query });
+  return request.get('/logs', { params: query });
 };

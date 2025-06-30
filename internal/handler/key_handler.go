@@ -64,6 +64,12 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 
 // UpdateKey handles updating a specific key.
 func (s *Server) UpdateKey(c *gin.Context) {
+	groupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+
 	keyID, err := strconv.Atoi(c.Param("key_id"))
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, "Invalid key ID")
@@ -71,8 +77,8 @@ func (s *Server) UpdateKey(c *gin.Context) {
 	}
 
 	var key models.APIKey
-	if err := s.DB.First(&key, keyID).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Key not found")
+	if err := s.DB.Where("group_id = ? AND id = ?", groupID, keyID).First(&key).Error; err != nil {
+		response.Error(c, http.StatusNotFound, "Key not found in this group")
 		return
 	}
 
@@ -99,6 +105,12 @@ type DeleteKeysRequest struct {
 
 // DeleteKeys handles deleting one or more keys.
 func (s *Server) DeleteKeys(c *gin.Context) {
+	groupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+
 	var req DeleteKeysRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "Invalid request body")
@@ -110,10 +122,30 @@ func (s *Server) DeleteKeys(c *gin.Context) {
 		return
 	}
 
-	if err := s.DB.Delete(&models.APIKey{}, req.KeyIDs).Error; err != nil {
+	// Start a transaction
+	tx := s.DB.Begin()
+
+	// Verify all keys belong to the specified group
+	var count int64
+	if err := tx.Model(&models.APIKey{}).Where("id IN ? AND group_id = ?", req.KeyIDs, groupID).Count(&count).Error; err != nil {
+		tx.Rollback()
+		response.Error(c, http.StatusInternalServerError, "Failed to verify keys")
+		return
+	}
+
+	if count != int64(len(req.KeyIDs)) {
+		tx.Rollback()
+		response.Error(c, http.StatusForbidden, "One or more keys do not belong to the specified group")
+		return
+	}
+
+	// Delete the keys
+	if err := tx.Where("id IN ?", req.KeyIDs).Delete(&models.APIKey{}).Error; err != nil {
+		tx.Rollback()
 		response.Error(c, http.StatusInternalServerError, "Failed to delete keys")
 		return
 	}
 
+	tx.Commit()
 	response.Success(c, gin.H{"message": "Keys deleted successfully"})
 }

@@ -5,13 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -19,12 +16,11 @@ import (
 	"gpt-load/internal/config"
 	"gpt-load/internal/db"
 	"gpt-load/internal/handler"
-	"gpt-load/internal/middleware"
 	"gpt-load/internal/models"
 	"gpt-load/internal/proxy"
+	"gpt-load/internal/router" // <-- 引入新的 router 包
 	"gpt-load/internal/types"
 
-	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -48,7 +44,6 @@ func main() {
 	// Display startup information
 	displayStartupInfo(configManager)
 
-
 	// --- Asynchronous Request Logging Setup ---
 	requestLogChan := make(chan models.RequestLog, 1000)
 	var wg sync.WaitGroup
@@ -66,14 +61,14 @@ func main() {
 	// Create handlers
 	serverHandler := handler.NewServer(database, configManager)
 
-	// Setup routes
-	router := setupRoutes(serverHandler, proxyServer, configManager)
+	// Setup routes using the new router package
+	appRouter := router.New(serverHandler, proxyServer, configManager, WebUI)
 
 	// Create HTTP server with optimized timeout configuration
 	serverConfig := configManager.GetServerConfig()
 	server := &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port),
-		Handler:        router,
+		Handler:        appRouter,
 		ReadTimeout:    time.Duration(serverConfig.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(serverConfig.WriteTimeout) * time.Second,
 		IdleTimeout:    time.Duration(serverConfig.IdleTimeout) * time.Second,
@@ -117,83 +112,8 @@ func main() {
 	logrus.Info("Server exited gracefully")
 }
 
-// setupRoutes configures the HTTP routes
-func setupRoutes(serverHandler *handler.Server, proxyServer *proxy.ProxyServer, configManager types.ConfigManager) *gin.Engine {
-	// Set Gin mode
-	gin.SetMode(gin.ReleaseMode)
-
-	router := gin.New()
-
-	// Add server start time middleware for uptime calculation
-	startTime := time.Now()
-	router.Use(func(c *gin.Context) {
-		c.Set("serverStartTime", startTime)
-		c.Next()
-	})
-
-	// Add middleware
-	router.Use(middleware.Recovery())
-	router.Use(middleware.ErrorHandler())
-	router.Use(middleware.Logger(configManager.GetLogConfig()))
-	router.Use(middleware.CORS(configManager.GetCORSConfig()))
-	router.Use(middleware.RateLimiter(configManager.GetPerformanceConfig()))
-
-	// Add authentication middleware if enabled
-	if configManager.GetAuthConfig().Enabled {
-		router.Use(middleware.Auth(configManager.GetAuthConfig()))
-	}
-
-	// Management endpoints
-	router.GET("/health", serverHandler.Health)
-	router.GET("/stats", serverHandler.Stats)
-	router.GET("/config", serverHandler.GetConfig) // Debug endpoint
-
-	// Register API routes for group and key management
-	api := router.Group("/api")
-	serverHandler.RegisterAPIRoutes(api)
-
-	// Register the main proxy route
-	proxy := router.Group("/proxy")
-	proxyServer.RegisterProxyRoutes(proxy)
-
-	// Handle 405 Method Not Allowed
-	router.NoMethod(serverHandler.MethodNotAllowed)
-
-	// Serve the frontend UI for all other requests
-	router.NoRoute(ServeUI())
-
-	return router
-}
-
-// ServeUI returns a gin.HandlerFunc to serve the embedded frontend UI.
-func ServeUI() gin.HandlerFunc {
-	subFS, err := fs.Sub(WebUI, "dist")
-	if err != nil {
-		// This should not happen at runtime if embed is correct.
-		// Panic is acceptable here as it's a startup failure.
-		panic(fmt.Sprintf("Failed to create sub filesystem for UI: %v", err))
-	}
-	fileServer := http.FileServer(http.FS(subFS))
-
-	return func(c *gin.Context) {
-		// Clean the path to prevent directory traversal attacks.
-		upath := path.Clean(c.Request.URL.Path)
-		if !strings.HasPrefix(upath, "/") {
-			upath = "/" + upath
-		}
-
-		// Check if the file exists in the embedded filesystem.
-		_, err := subFS.Open(strings.TrimPrefix(upath, "/"))
-		if os.IsNotExist(err) {
-			// The file does not exist, so we serve index.html for SPA routing.
-			// This allows the Vue router to handle the path.
-			c.Request.URL.Path = "/"
-		}
-
-		// Let the http.FileServer handle the request.
-		fileServer.ServeHTTP(c.Writer, c.Request)
-	}
-}
+// setupLogger, displayStartupInfo, and startRequestLogger functions remain unchanged.
+// The old setupRoutes and ServeUI functions are now removed from this file.
 
 // setupLogger configures the logging system
 func setupLogger(configManager types.ConfigManager) {

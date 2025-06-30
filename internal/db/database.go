@@ -48,15 +48,16 @@ func InitDB() (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	// Auto-migrate models
-	err = DB.AutoMigrate(
-		&models.SystemSetting{},
-		&models.Group{},
-		&models.APIKey{},
-		&models.RequestLog{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to auto-migrate database: %w", err)
+	if os.Getenv("DB_AUTO_MIGRATE") != "false" {
+		err = DB.AutoMigrate(
+			&models.SystemSetting{},
+			&models.Group{},
+			&models.APIKey{},
+			&models.RequestLog{},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to auto-migrate database: %w", err)
+		}
 	}
 
 	fmt.Println("Database connection initialized and models migrated.")
