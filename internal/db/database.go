@@ -15,8 +15,10 @@ import (
 var DB *gorm.DB
 
 func InitDB() (*gorm.DB, error) {
-	// TODO: 从配置中心读取DSN
-	dsn := "root:1236@tcp(127.0.0.1:3306)/gpt_load?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := os.Getenv("DATABASE_DSN")
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_DSN environment variable not set")
+	}
 
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
