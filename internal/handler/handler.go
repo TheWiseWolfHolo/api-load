@@ -3,7 +3,6 @@ package handler
 
 import (
 	"net/http"
-	"runtime"
 	"time"
 
 	"gpt-load/internal/models"
@@ -53,7 +52,7 @@ func (s *Server) RegisterAPIRoutes(api *gin.RouterGroup) {
 	// Dashboard and logs routes
 	dashboard := api.Group("/dashboard")
 	{
-		dashboard.GET("/stats", GetDashboardStats)
+		dashboard.GET("/stats", s.Stats)
 	}
 
 	api.GET("/logs", GetLogs)
@@ -101,53 +100,6 @@ func (s *Server) Health(c *gin.Context) {
 	})
 }
 
-// Stats handles statistics requests
-func (s *Server) Stats(c *gin.Context) {
-	var totalKeys, healthyKeys, disabledKeys int64
-	s.DB.Model(&models.APIKey{}).Count(&totalKeys)
-	s.DB.Model(&models.APIKey{}).Where("status = ?", "active").Count(&healthyKeys)
-	s.DB.Model(&models.APIKey{}).Where("status != ?", "active").Count(&disabledKeys)
-
-	// TODO: Get request counts from the database
-	var successCount, failureCount int64
-	s.DB.Model(&models.RequestLog{}).Where("status_code = ?", http.StatusOK).Count(&successCount)
-	s.DB.Model(&models.RequestLog{}).Where("status_code != ?", http.StatusOK).Count(&failureCount)
-
-	// Add additional system information
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	response := gin.H{
-		"keys": gin.H{
-			"total":    totalKeys,
-			"healthy":  healthyKeys,
-			"disabled": disabledKeys,
-		},
-		"requests": gin.H{
-			"success_count": successCount,
-			"failure_count": failureCount,
-			"total_count":   successCount + failureCount,
-		},
-		"memory": gin.H{
-			"alloc_mb":       bToMb(m.Alloc),
-			"total_alloc_mb": bToMb(m.TotalAlloc),
-			"sys_mb":         bToMb(m.Sys),
-			"num_gc":         m.NumGC,
-			"last_gc":        time.Unix(0, int64(m.LastGC)).Format("2006-01-02 15:04:05"),
-			"next_gc_mb":     bToMb(m.NextGC),
-		},
-		"system": gin.H{
-			"goroutines": runtime.NumGoroutine(),
-			"cpu_count":  runtime.NumCPU(),
-			"go_version": runtime.Version(),
-		},
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-
 // MethodNotAllowed handles 405 requests
 func (s *Server) MethodNotAllowed(c *gin.Context) {
 	c.JSON(http.StatusMethodNotAllowed, gin.H{
@@ -169,7 +121,6 @@ func (s *Server) GetConfig(c *gin.Context) {
 	}
 
 	serverConfig := s.config.GetServerConfig()
-	keysConfig := s.config.GetKeysConfig()
 	openaiConfig := s.config.GetOpenAIConfig()
 	authConfig := s.config.GetAuthConfig()
 	corsConfig := s.config.GetCORSConfig()
@@ -181,12 +132,6 @@ func (s *Server) GetConfig(c *gin.Context) {
 		"server": gin.H{
 			"host": serverConfig.Host,
 			"port": serverConfig.Port,
-		},
-		"keys": gin.H{
-			"file_path":           keysConfig.FilePath,
-			"start_index":         keysConfig.StartIndex,
-			"blacklist_threshold": keysConfig.BlacklistThreshold,
-			"max_retries":         keysConfig.MaxRetries,
 		},
 		"openai": gin.H{
 			"base_url":          openaiConfig.BaseURL,
@@ -229,9 +174,4 @@ func (s *Server) GetConfig(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, sanitizedConfig)
-}
-
-// Helper function to convert bytes to megabytes
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
 }

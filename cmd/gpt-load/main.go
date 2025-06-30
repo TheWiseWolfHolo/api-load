@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,7 +51,9 @@ func main() {
 
 	// --- Asynchronous Request Logging Setup ---
 	requestLogChan := make(chan models.RequestLog, 1000)
-	go startRequestLogger(database, requestLogChan)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go startRequestLogger(database, requestLogChan, &wg)
 	// ---
 
 	// Create proxy server
@@ -103,9 +106,15 @@ func main() {
 	// Attempt graceful shutdown
 	if err := server.Shutdown(ctx); err != nil {
 		logrus.Errorf("Server forced to shutdown: %v", err)
-	} else {
-		logrus.Info("Server exited gracefully")
 	}
+
+	// Close the request log channel and wait for the logger to finish
+	logrus.Info("Closing request log channel...")
+	close(requestLogChan)
+	wg.Wait()
+	logrus.Info("All logs have been written.")
+
+	logrus.Info("Server exited gracefully")
 }
 
 // setupRoutes configures the HTTP routes
@@ -233,7 +242,6 @@ func setupLogger(configManager types.ConfigManager) {
 // displayStartupInfo shows startup information
 func displayStartupInfo(configManager types.ConfigManager) {
 	serverConfig := configManager.GetServerConfig()
-	keysConfig := configManager.GetKeysConfig()
 	openaiConfig := configManager.GetOpenAIConfig()
 	authConfig := configManager.GetAuthConfig()
 	corsConfig := configManager.GetCORSConfig()
@@ -242,10 +250,6 @@ func displayStartupInfo(configManager types.ConfigManager) {
 
 	logrus.Info("Current Configuration:")
 	logrus.Infof("   Server: %s:%d", serverConfig.Host, serverConfig.Port)
-	logrus.Infof("   Keys file: %s", keysConfig.FilePath)
-	logrus.Infof("   Start index: %d", keysConfig.StartIndex)
-	logrus.Infof("   Blacklist threshold: %d errors", keysConfig.BlacklistThreshold)
-	logrus.Infof("   Max retries: %d", keysConfig.MaxRetries)
 	logrus.Infof("   Upstream URL: %s", openaiConfig.BaseURL)
 	logrus.Infof("   Request timeout: %ds", openaiConfig.RequestTimeout)
 	logrus.Infof("   Response timeout: %ds", openaiConfig.ResponseTimeout)
@@ -278,7 +282,8 @@ func displayStartupInfo(configManager types.ConfigManager) {
 }
 
 // startRequestLogger runs a background goroutine to batch-insert request logs.
-func startRequestLogger(db *gorm.DB, logChan <-chan models.RequestLog) {
+func startRequestLogger(db *gorm.DB, logChan <-chan models.RequestLog, wg *sync.WaitGroup) {
+	defer wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 

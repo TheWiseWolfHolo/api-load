@@ -1,54 +1,39 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
-	"gpt-load/internal/db"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 )
 
 // GetDashboardStats godoc
 // @Summary Get dashboard statistics
-// @Description Get statistics for the dashboard, including total requests, success rate, and group distribution.
+// @Description Get statistics for the dashboard, including key counts and request metrics.
 // @Tags Dashboard
 // @Accept  json
 // @Produce  json
-// @Success 200 {object} models.DashboardStats
+// @Success 200 {object} map[string]interface{}
 // @Router /api/dashboard/stats [get]
-func GetDashboardStats(c *gin.Context) {
+func (s *Server) Stats(c *gin.Context) {
 	var totalRequests, successRequests int64
 	var groupStats []models.GroupRequestStat
 
-	// Get total requests
-	if err := db.DB.Model(&models.RequestLog{}).Count(&totalRequests).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get total requests")
-		return
-	}
+	// 1. Get total and successful requests from the api_keys table
+	s.DB.Model(&models.APIKey{}).Select("SUM(request_count)").Row().Scan(&totalRequests)
+	s.DB.Model(&models.APIKey{}).Select("SUM(request_count) - SUM(failure_count)").Row().Scan(&successRequests)
 
-	// Get success requests (status code 2xx)
-	if err := db.DB.Model(&models.RequestLog{}).Where("status_code >= ? AND status_code < ?", 200, 300).Count(&successRequests).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get success requests")
-		return
-	}
+	// 2. Get request counts per group
+	s.DB.Table("api_keys").
+		Select("groups.name as group_name, SUM(api_keys.request_count) as request_count").
+		Joins("join groups on groups.id = api_keys.group_id").
+		Group("groups.name").
+		Order("request_count DESC").
+		Scan(&groupStats)
 
-	// Calculate success rate
+	// 3. Calculate success rate
 	var successRate float64
 	if totalRequests > 0 {
-		successRate = float64(successRequests) / float64(totalRequests)
-	}
-
-	// Get group stats
-	err := db.DB.Table("request_logs").
-		Select("groups.name as group_name, count(request_logs.id) as request_count").
-		Joins("join groups on groups.id = request_logs.group_id").
-		Group("groups.name").
-		Order("request_count desc").
-		Scan(&groupStats).Error
-	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get group stats")
-		return
+		successRate = float64(successRequests) / float64(totalRequests) * 100
 	}
 
 	stats := models.DashboardStats{

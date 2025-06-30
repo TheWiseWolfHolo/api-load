@@ -2,15 +2,12 @@
 package types
 
 import (
-	"time"
-
 	"github.com/gin-gonic/gin"
 )
 
 // ConfigManager defines the interface for configuration management
 type ConfigManager interface {
 	GetServerConfig() ServerConfig
-	GetKeysConfig() KeysConfig
 	GetOpenAIConfig() OpenAIConfig
 	GetAuthConfig() AuthConfig
 	GetCORSConfig() CORSConfig
@@ -19,18 +16,6 @@ type ConfigManager interface {
 	Validate() error
 	DisplayConfig()
 	ReloadConfig() error
-}
-
-// KeyManager defines the interface for API key management
-type KeyManager interface {
-	LoadKeys() error
-	GetNextKey() (*KeyInfo, error)
-	RecordSuccess(key string)
-	RecordFailure(key string, err error)
-	GetStats() Stats
-	ResetBlacklist()
-	GetBlacklist() []BlacklistEntry
-	Close()
 }
 
 // ProxyServer defines the interface for proxy server
@@ -47,14 +32,6 @@ type ServerConfig struct {
 	WriteTimeout            int    `json:"writeTimeout"`
 	IdleTimeout             int    `json:"idleTimeout"`
 	GracefulShutdownTimeout int    `json:"gracefulShutdownTimeout"`
-}
-
-// KeysConfig represents keys configuration
-type KeysConfig struct {
-	FilePath           string `json:"filePath"`
-	StartIndex         int    `json:"startIndex"`
-	BlacklistThreshold int    `json:"blacklistThreshold"`
-	MaxRetries         int    `json:"maxRetries"`
 }
 
 // OpenAIConfig represents OpenAI API configuration
@@ -94,49 +71,4 @@ type LogConfig struct {
 	EnableFile    bool   `json:"enableFile"`
 	FilePath      string `json:"filePath"`
 	EnableRequest bool   `json:"enableRequest"`
-}
-
-// KeyInfo represents API key information
-type KeyInfo struct {
-	Key     string `json:"key"`
-	Index   int    `json:"index"`
-	Preview string `json:"preview"`
-}
-
-// Stats represents system statistics
-type Stats struct {
-	CurrentIndex    int64       `json:"currentIndex"`
-	TotalKeys       int         `json:"totalKeys"`
-	HealthyKeys     int         `json:"healthyKeys"`
-	BlacklistedKeys int         `json:"blacklistedKeys"`
-	SuccessCount    int64       `json:"successCount"`
-	FailureCount    int64       `json:"failureCount"`
-	MemoryUsage     MemoryUsage `json:"memoryUsage"`
-}
-
-// MemoryUsage represents memory usage statistics
-type MemoryUsage struct {
-	Alloc        uint64 `json:"alloc"`
-	TotalAlloc   uint64 `json:"totalAlloc"`
-	Sys          uint64 `json:"sys"`
-	NumGC        uint32 `json:"numGC"`
-	LastGCTime   string `json:"lastGCTime"`
-	NextGCTarget uint64 `json:"nextGCTarget"`
-}
-
-// BlacklistEntry represents a blacklisted key entry
-type BlacklistEntry struct {
-	Key         string    `json:"key"`
-	Preview     string    `json:"preview"`
-	Reason      string    `json:"reason"`
-	BlacklistAt time.Time `json:"blacklistAt"`
-	FailCount   int       `json:"failCount"`
-}
-
-// RetryError represents retry error information
-type RetryError struct {
-	StatusCode   int    `json:"statusCode"`
-	ErrorMessage string `json:"errorMessage"`
-	KeyIndex     int    `json:"keyIndex"`
-	Attempt      int    `json:"attempt"`
 }

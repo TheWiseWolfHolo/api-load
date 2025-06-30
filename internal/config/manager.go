@@ -45,7 +45,6 @@ type Manager struct {
 // Config represents the application configuration
 type Config struct {
 	Server      types.ServerConfig      `json:"server"`
-	Keys        types.KeysConfig        `json:"keys"`
 	OpenAI      types.OpenAIConfig      `json:"openai"`
 	Auth        types.AuthConfig        `json:"auth"`
 	CORS        types.CORSConfig        `json:"cors"`
@@ -77,12 +76,6 @@ func (m *Manager) ReloadConfig() error {
 			WriteTimeout:            parseInteger(os.Getenv("SERVER_WRITE_TIMEOUT"), 1800),
 			IdleTimeout:             parseInteger(os.Getenv("SERVER_IDLE_TIMEOUT"), 120),
 			GracefulShutdownTimeout: parseInteger(os.Getenv("SERVER_GRACEFUL_SHUTDOWN_TIMEOUT"), 60),
-		},
-		Keys: types.KeysConfig{
-			FilePath:           getEnvOrDefault("KEYS_FILE", "keys.txt"),
-			StartIndex:         parseInteger(os.Getenv("START_INDEX"), 0),
-			BlacklistThreshold: parseInteger(os.Getenv("BLACKLIST_THRESHOLD"), 1),
-			MaxRetries:         parseInteger(os.Getenv("MAX_RETRIES"), 3),
 		},
 		OpenAI: types.OpenAIConfig{
 			BaseURLs:        parseArray(os.Getenv("OPENAI_BASE_URL"), []string{"https://api.openai.com"}),
@@ -131,11 +124,6 @@ func (m *Manager) GetServerConfig() types.ServerConfig {
 	return m.config.Server
 }
 
-// GetKeysConfig returns keys configuration
-func (m *Manager) GetKeysConfig() types.KeysConfig {
-	return m.config.Keys
-}
-
 // GetOpenAIConfig returns OpenAI configuration
 func (m *Manager) GetOpenAIConfig() types.OpenAIConfig {
 	config := m.config.OpenAI
@@ -178,16 +166,6 @@ func (m *Manager) Validate() error {
 		validationErrors = append(validationErrors, fmt.Sprintf("port must be between %d-%d", DefaultConstants.MinPort, DefaultConstants.MaxPort))
 	}
 
-	// Validate start index
-	if m.config.Keys.StartIndex < 0 {
-		validationErrors = append(validationErrors, "start index cannot be less than 0")
-	}
-
-	// Validate blacklist threshold
-	if m.config.Keys.BlacklistThreshold < 1 {
-		validationErrors = append(validationErrors, "blacklist threshold cannot be less than 1")
-	}
-
 	// Validate timeout
 	if m.config.OpenAI.RequestTimeout < DefaultConstants.MinTimeout {
 		validationErrors = append(validationErrors, fmt.Sprintf("request timeout cannot be less than %ds", DefaultConstants.MinTimeout))
@@ -223,10 +201,6 @@ func (m *Manager) Validate() error {
 func (m *Manager) DisplayConfig() {
 	logrus.Info("Current Configuration:")
 	logrus.Infof("   Server: %s:%d", m.config.Server.Host, m.config.Server.Port)
-	logrus.Infof("   Keys file: %s", m.config.Keys.FilePath)
-	logrus.Infof("   Start index: %d", m.config.Keys.StartIndex)
-	logrus.Infof("   Blacklist threshold: %d errors", m.config.Keys.BlacklistThreshold)
-	logrus.Infof("   Max retries: %d", m.config.Keys.MaxRetries)
 	logrus.Infof("   Upstream URLs: %s", strings.Join(m.config.OpenAI.BaseURLs, ", "))
 	logrus.Infof("   Request timeout: %ds", m.config.OpenAI.RequestTimeout)
 	logrus.Infof("   Response timeout: %ds", m.config.OpenAI.ResponseTimeout)

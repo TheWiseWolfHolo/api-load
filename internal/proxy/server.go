@@ -8,6 +8,7 @@ import (
 	"gpt-load/internal/response"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,7 @@ import (
 // ProxyServer represents the proxy server
 type ProxyServer struct {
 	DB             *gorm.DB
-	groupCounters  sync.Map // For round-robin key selection
+	groupCounters  sync.Map // map[uint]*atomic.Uint64
 	requestLogChan chan models.RequestLog
 }
 
@@ -82,18 +83,22 @@ func (ps *ProxyServer) selectAPIKey(group *models.Group) (*models.APIKey, error)
 		return nil, fmt.Errorf("no active API keys available in group '%s'", group.Name)
 	}
 
-	// Get the current counter for the group
-	counter, _ := ps.groupCounters.LoadOrStore(group.ID, uint64(0))
-	currentCounter := counter.(uint64)
+	// Get or create a counter for the group. The value is a pointer to a uint64.
+	val, _ := ps.groupCounters.LoadOrStore(group.ID, new(atomic.Uint64))
+	counter := val.(*atomic.Uint64)
 
-	// Select the key and increment the counter
-	selectedKey := activeKeys[int(currentCounter%uint64(len(activeKeys)))]
-	ps.groupCounters.Store(group.ID, currentCounter+1)
+	// Atomically increment the counter and get the index for this request.
+	index := counter.Add(1) - 1
+	selectedKey := activeKeys[int(index%uint64(len(activeKeys)))]
 
 	return &selectedKey, nil
 }
 
 func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *models.APIKey, startTime time.Time) {
+	// Update key stats based on request success
+	isSuccess := c.Writer.Status() < 400
+	go ps.updateKeyStats(key.ID, isSuccess)
+
 	logEntry := models.RequestLog{
 		ID:                 fmt.Sprintf("req_%d", time.Now().UnixNano()),
 		Timestamp:          startTime,
@@ -110,6 +115,27 @@ func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *mode
 	case ps.requestLogChan <- logEntry:
 	default:
 		logrus.Warn("Request log channel is full. Dropping log entry.")
+	}
+}
+
+// updateKeyStats atomically updates the request and failure counts for a key
+func (ps *ProxyServer) updateKeyStats(keyID uint, success bool) {
+	// Always increment the request count
+	updates := map[string]interface{}{
+		"request_count": gorm.Expr("request_count + 1"),
+	}
+
+	// Additionally, increment the failure count if the request was not successful
+	if !success {
+		updates["failure_count"] = gorm.Expr("failure_count + 1")
+	}
+
+	result := ps.DB.Model(&models.APIKey{}).Where("id = ?", keyID).Updates(updates)
+	if result.Error != nil {
+		logrus.WithFields(logrus.Fields{
+			"keyID": keyID,
+			"error": result.Error,
+		}).Error("Failed to update key stats")
 	}
 }
 
