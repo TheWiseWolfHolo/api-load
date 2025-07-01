@@ -13,14 +13,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// New 创建并配置一个完整的 gin.Engine 实例
 func New(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
 	configManager types.ConfigManager,
 	webUI fs.FS,
 ) *gin.Engine {
-	// 设置 Gin 模式
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
@@ -31,43 +29,108 @@ func New(
 	router.Use(middleware.Logger(configManager.GetLogConfig()))
 	router.Use(middleware.CORS(configManager.GetCORSConfig()))
 	router.Use(middleware.RateLimiter(configManager.GetPerformanceConfig()))
-
-	// 添加服务器启动时间中间件
-	startTime := time.Now()
 	router.Use(func(c *gin.Context) {
-		c.Set("serverStartTime", startTime)
+		c.Set("serverStartTime", time.Now())
 		c.Next()
 	})
 
-	// 注册 Web UI 和通用端点
+	// 注册路由
+	registerSystemRoutes(router, serverHandler)
+	registerAPIRoutes(router, serverHandler, configManager)
+	registerProxyRoutes(router, proxyServer, configManager)
+	registerFrontendRoutes(router, webUI)
+
+	return router
+}
+
+// registerSystemRoutes 注册系统级路由
+func registerSystemRoutes(router *gin.Engine, serverHandler *handler.Server) {
 	router.GET("/health", serverHandler.Health)
 	router.GET("/stats", serverHandler.Stats)
-	router.GET("/config", serverHandler.GetConfig) // Debug endpoint
+	// router.GET("/config", serverHandler.GetConfig)
+}
 
-	// 注册管理 API 路由
+// registerAPIRoutes 注册API路由
+func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, configManager types.ConfigManager) {
 	api := router.Group("/api")
 	authConfig := configManager.GetAuthConfig()
-	if authConfig.Enabled {
-		api.Use(middleware.Auth(authConfig))
-	}
-	serverHandler.RegisterAPIRoutes(api)
 
-	// 注册代理路由
+	// 公开
+	registerPublicAPIRoutes(api, serverHandler)
+
+	// 认证
+	if authConfig.Enabled {
+		protectedAPI := api.Group("")
+		protectedAPI.Use(middleware.Auth(authConfig))
+		registerProtectedAPIRoutes(protectedAPI, serverHandler)
+	} else {
+		registerProtectedAPIRoutes(api, serverHandler)
+	}
+}
+
+// registerPublicAPIRoutes 公开API路由
+func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
+	api.POST("/auth/login", serverHandler.Login)
+}
+
+// registerProtectedAPIRoutes 认证API路由
+func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
+	groups := api.Group("/groups")
+	{
+		groups.POST("", serverHandler.CreateGroup)
+		groups.GET("", serverHandler.ListGroups)
+		groups.GET("/:id", serverHandler.GetGroup)
+		groups.PUT("/:id", serverHandler.UpdateGroup)
+		groups.DELETE("/:id", serverHandler.DeleteGroup)
+
+		keys := groups.Group("/:id/keys")
+		{
+			keys.POST("", serverHandler.CreateKeysInGroup)
+			keys.GET("", serverHandler.ListKeysInGroup)
+			keys.PUT("/:key_id", serverHandler.UpdateKey)
+			keys.DELETE("", serverHandler.DeleteKeys)
+		}
+	}
+
+	// 仪表板和日志
+	dashboard := api.Group("/dashboard")
+	{
+		dashboard.GET("/stats", serverHandler.Stats)
+	}
+
+	// 日志
+	api.GET("/logs", handler.GetLogs)
+
+	// 设置
+	settings := api.Group("/settings")
+	{
+		settings.GET("", handler.GetSettings)
+		settings.PUT("", handler.UpdateSettings)
+	}
+
+	// 重载配置
+	api.POST("/reload", serverHandler.ReloadConfig)
+}
+
+// registerProxyRoutes 注册代理路由
+func registerProxyRoutes(router *gin.Engine, proxyServer *proxy.ProxyServer, configManager types.ConfigManager) {
 	proxyGroup := router.Group("/proxy")
+	authConfig := configManager.GetAuthConfig()
+
 	if authConfig.Enabled {
 		proxyGroup.Use(middleware.Auth(authConfig))
 	}
-	proxyServer.RegisterProxyRoutes(proxyGroup)
 
-	// 处理 405 Method Not Allowed
+	proxyGroup.Any("/:group_name/*path", proxyServer.HandleProxy)
+}
+
+// registerFrontendRoutes 注册前端路由
+func registerFrontendRoutes(router *gin.Engine, webUI fs.FS) {
 	router.NoMethod(func(c *gin.Context) {
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "Method not allowed"})
 	})
 
-	// 其他所有路由都交给前端 UI 处理
 	router.NoRoute(ServeUI(webUI))
-
-	return router
 }
 
 // ServeUI 返回一个 gin.HandlerFunc 来服务嵌入式前端 UI
@@ -75,10 +138,7 @@ func ServeUI(webUI fs.FS) gin.HandlerFunc {
 	fileServer := http.FileServer(http.FS(webUI))
 
 	return func(c *gin.Context) {
-		// 检查文件是否存在于嵌入的文件系统中
 		if _, err := webUI.Open(strings.TrimPrefix(c.Request.URL.Path, "/")); err != nil {
-			// 如果文件不存在，并且不是API或代理请求，则将请求重写为 /
-			// 这将提供 index.html，以支持 SPA 的前端路由
 			if !strings.HasPrefix(c.Request.URL.Path, "/api/") && !strings.HasPrefix(c.Request.URL.Path, "/proxy/") {
 				c.Request.URL.Path = "/"
 			}

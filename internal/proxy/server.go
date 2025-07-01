@@ -32,11 +32,6 @@ func NewProxyServer(db *gorm.DB, requestLogChan chan models.RequestLog) (*ProxyS
 	}, nil
 }
 
-// RegisterProxyRoutes registers the main proxy route under a given router group
-func (ps *ProxyServer) RegisterProxyRoutes(proxy *gin.RouterGroup) {
-	proxy.Any("/:group_name/*path", ps.HandleProxy)
-}
-
 // HandleProxy handles the main proxy logic
 func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	startTime := time.Now()

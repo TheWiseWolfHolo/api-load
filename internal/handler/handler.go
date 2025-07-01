@@ -26,44 +26,49 @@ func NewServer(db *gorm.DB, config types.ConfigManager) *Server {
 	}
 }
 
-// RegisterAPIRoutes registers all API routes under a given router group
-func (s *Server) RegisterAPIRoutes(api *gin.RouterGroup) {
-	// Group management routes
-	groups := api.Group("/groups")
-	{
-		groups.POST("", s.CreateGroup)
-		groups.GET("", s.ListGroups)
-		groups.GET("/:id", s.GetGroup)
-		groups.PUT("/:id", s.UpdateGroup)
-		groups.DELETE("/:id", s.DeleteGroup)
+// LoginRequest represents the login request payload
+type LoginRequest struct {
+	AuthKey string `json:"auth_key" binding:"required"`
+}
 
-		// Key management routes within a group
-		keys := groups.Group("/:id/keys")
-		{
-			keys.POST("", s.CreateKeysInGroup)
-			keys.GET("", s.ListKeysInGroup)
-			keys.PUT("/:key_id", s.UpdateKey)
-			keys.DELETE("", s.DeleteKeys)
-		}
+// LoginResponse represents the login response
+type LoginResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// Login handles authentication verification
+func (s *Server) Login(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request format",
+		})
+		return
 	}
 
-	// Dashboard and logs routes
-	dashboard := api.Group("/dashboard")
-	{
-		dashboard.GET("/stats", s.Stats)
+	authConfig := s.config.GetAuthConfig()
+	
+	if !authConfig.Enabled {
+		c.JSON(http.StatusOK, LoginResponse{
+			Success: true,
+			Message: "Authentication disabled",
+		})
+		return
 	}
 
-	api.GET("/logs", GetLogs)
-
-	// Settings routes
-	settings := api.Group("/settings")
-	{
-		settings.GET("", GetSettings)
-		settings.PUT("", UpdateSettings)
+	if req.AuthKey == authConfig.Key {
+		c.JSON(http.StatusOK, LoginResponse{
+			Success: true,
+			Message: "Authentication successful",
+		})
+	} else {
+		c.JSON(http.StatusUnauthorized, LoginResponse{
+			Success: false,
+			Message: "Invalid authentication key",
+		})
 	}
-
-	// Reload route
-	api.POST("/reload", s.ReloadConfig)
 }
 
 // Health handles health check requests
