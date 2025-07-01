@@ -53,6 +53,11 @@ export interface Setting {
   key: string;
   value: string;
 }
+
+export interface AuthUser {
+  key: string;
+  isAuthenticated: boolean;
+}
 export interface Setting {
   key: string;
   value: string;
