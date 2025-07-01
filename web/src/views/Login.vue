@@ -35,7 +35,7 @@
             type="primary"
             size="large"
             :loading="loading"
-            @click="handleLogin"
+            native-type="submit"
             class="login-button"
           >
             {{ loading ? '登录中...' : '登录' }}

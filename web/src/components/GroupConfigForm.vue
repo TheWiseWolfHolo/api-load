@@ -61,7 +61,7 @@ watch(
     if (newGroup) {
       formData.name = newGroup.name;
       formData.description = newGroup.description;
-      formData.is_default = newGroup.is_default;
+      formData.is_default = newGroup.is_default || false;
     }
   },
   { immediate: true, deep: true }
@@ -73,7 +73,7 @@ const handleSave = async () => {
   try {
     await formRef.value.validate();
     isSaving.value = true;
-    await updateGroup(groupStore.selectedGroupId, {
+    await updateGroup(groupStore.selectedGroupId.toString(), {
       name: formData.name,
       description: formData.description,
       is_default: formData.is_default,

@@ -20,7 +20,7 @@ export const fetchGroup = (id: string): Promise<Group> => {
  * 创建一个新的分组
  * @param groupData 新分组的数据
  */
-export const createGroup = (groupData: Omit<Group, 'id' | 'created_at' | 'updated_at'>): Promise<Group> => {
+export const createGroup = (groupData: Omit<Group, 'id' | 'created_at' | 'updated_at' | 'api_keys'>): Promise<Group> => {
     return apiClient.post('/groups', groupData).then(res => res.data.data);
 };
 
@@ -29,7 +29,7 @@ export const createGroup = (groupData: Omit<Group, 'id' | 'created_at' | 'update
  * @param id 分组ID
  * @param groupData 要更新的数据
  */
-export const updateGroup = (id: string, groupData: Partial<Omit<Group, 'id' | 'created_at' | 'updated_at'>>): Promise<Group> => {
+export const updateGroup = (id: string, groupData: Partial<Omit<Group, 'id' | 'created_at' | 'updated_at' | 'api_keys'>>): Promise<Group> => {
     return apiClient.put(`/groups/${id}`, groupData).then(res => res.data.data);
 };
 

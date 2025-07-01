@@ -1,47 +1,67 @@
 import { defineStore } from 'pinia';
-import { getSettings, updateSettings as apiUpdateSettings } from '@/api/settings';
-import type { Setting } from '@/types/models';
+import { getSystemSettings, updateSystemSettings } from '@/api/settings';
+import type { SystemSettings } from '@/types/models';
 import { ElMessage } from 'element-plus';
 
-interface SettingState {
-  settings: Setting[];
+interface SettingsState {
+  systemSettings: SystemSettings | null;
   loading: boolean;
   error: any;
+  errors: Record<string, string>; // For field-specific validation errors
 }
 
 export const useSettingStore = defineStore('setting', {
-  state: (): SettingState => ({
-    settings: [],
+  state: (): SettingsState => ({
+    systemSettings: null,
     loading: false,
     error: null,
+    errors: {},
   }),
   actions: {
-    async fetchSettings() {
+    async fetchSystemSettings() {
       this.loading = true;
       this.error = null;
       try {
-        const response = await getSettings();
-        this.settings = response.data;
+        const response = await getSystemSettings();
+        this.systemSettings = response.data;
       } catch (error) {
         this.error = error;
-        ElMessage.error('Failed to fetch settings.');
+        ElMessage.error('Failed to fetch system settings.');
       } finally {
         this.loading = false;
       }
     },
-    async updateSettings(settingsToUpdate: Setting[]) {
+    async saveSystemSettings() {
+      if (!this.systemSettings) return;
+
       this.loading = true;
       this.error = null;
+      this.errors = {};
+
+      // Basic validation example
+      if (this.systemSettings.port < 1 || this.systemSettings.port > 65535) {
+        this.errors['port'] = 'Port must be between 1 and 65535.';
+      }
+      if (Object.keys(this.errors).length > 0) {
+        this.loading = false;
+        ElMessage.error('Please correct the errors before saving.');
+        return;
+      }
+
       try {
-        await apiUpdateSettings(settingsToUpdate);
-        await this.fetchSettings(); // Refresh the settings after update
-        ElMessage.success('Settings updated successfully.');
+        await updateSystemSettings(this.systemSettings);
+        await this.fetchSystemSettings(); // Refresh state
+        ElMessage.success('System settings updated successfully.');
       } catch (error) {
         this.error = error;
-        ElMessage.error('Failed to update settings.');
+        ElMessage.error('Failed to update system settings.');
       } finally {
         this.loading = false;
       }
+    },
+    // Action to reset settings to their original state (fetched from server)
+    async resetSystemSettings() {
+      await this.fetchSystemSettings();
     },
   },
 });

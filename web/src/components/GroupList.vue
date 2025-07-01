@@ -1,13 +1,13 @@
 <template>
   <div class="group-list" v-loading="groupStore.isLoading">
     <el-menu
-      :default-active="groupStore.selectedGroupId || undefined"
+      :default-active="groupStore.selectedGroupId?.toString() || undefined"
       @select="handleSelect"
     >
       <el-menu-item
         v-for="group in groupStore.groups"
         :key="group.id"
-        :index="group.id"
+        :index="group.id.toString()"
       >
         <template #title>
           <span>{{ group.name }}</span>
@@ -41,7 +41,7 @@ onMounted(() => {
 });
 
 const handleSelect = (index: string) => {
-  groupStore.selectGroup(index);
+  groupStore.selectGroup(Number(index));
 };
 </script>
 
