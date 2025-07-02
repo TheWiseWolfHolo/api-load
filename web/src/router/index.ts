@@ -1,3 +1,4 @@
+import { authService } from "@/services/auth";
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 
 const routes: Array<RouteRecordRaw> = [
@@ -21,11 +22,29 @@ const routes: Array<RouteRecordRaw> = [
     name: "settings",
     component: () => import("@/views/Settings.vue"),
   },
+  {
+    path: "/login",
+    name: "login",
+    component: () => import("@/views/Login.vue"),
+  },
 ];
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+});
+
+router.beforeEach((to, _from, next) => {
+  const loggedIn = authService.isLoggedIn();
+  if (to.path !== "/login" && !loggedIn) {
+    return next({ path: "/login" });
+  }
+
+  if (to.path === "/login" && loggedIn) {
+    return next({ path: "/" });
+  }
+
+  next();
 });
 
 export default router;

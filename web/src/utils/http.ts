@@ -1,4 +1,6 @@
+import { authService } from "@/services/auth";
 import axios from "axios";
+import { useRouter } from "vue-router";
 
 const http = axios.create({
   baseURL: "/api",
@@ -8,9 +10,9 @@ const http = axios.create({
 
 // 请求拦截器
 http.interceptors.request.use(config => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const authKey = authService.getAuthKey();
+  if (authKey) {
+    config.headers.Authorization = `Bearer ${authKey}`;
   }
   return config;
 });
@@ -19,6 +21,10 @@ http.interceptors.request.use(config => {
 http.interceptors.response.use(
   response => response.data,
   error => {
+    if (error.response && error.response.status === 401) {
+      authService.logout();
+      useRouter().push("/login");
+    }
     console.error("API Error:", error);
     return Promise.reject(error);
   }
