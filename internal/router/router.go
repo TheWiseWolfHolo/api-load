@@ -1,6 +1,7 @@
 package router
 
 import (
+	"embed"
 	"gpt-load/internal/handler"
 	"gpt-load/internal/middleware"
 	"gpt-load/internal/proxy"
@@ -10,14 +11,37 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-contrib/static"
+
 	"github.com/gin-gonic/gin"
 )
+
+type embedFileSystem struct {
+	http.FileSystem
+}
+
+func (e embedFileSystem) Exists(prefix string, path string) bool {
+	_, err := e.Open(path)
+	return err == nil
+}
+
+func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
+	efs, err := fs.Sub(fsEmbed, targetPath)
+	if err != nil {
+		panic(err)
+	}
+	return embedFileSystem{
+		FileSystem: http.FS(efs),
+	}
+}
 
 func New(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
 	configManager types.ConfigManager,
-	webUI fs.FS,
+	buildFS embed.FS,
+	indexPage []byte,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
@@ -38,7 +62,7 @@ func New(
 	registerSystemRoutes(router, serverHandler)
 	registerAPIRoutes(router, serverHandler, configManager)
 	registerProxyRoutes(router, proxyServer, configManager)
-	registerFrontendRoutes(router, webUI)
+	registerFrontendRoutes(router, buildFS, indexPage)
 
 	return router
 }
@@ -125,24 +149,19 @@ func registerProxyRoutes(router *gin.Engine, proxyServer *proxy.ProxyServer, con
 }
 
 // registerFrontendRoutes 注册前端路由
-func registerFrontendRoutes(router *gin.Engine, webUI fs.FS) {
+func registerFrontendRoutes(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.NoMethod(func(c *gin.Context) {
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "Method not allowed"})
 	})
 
-	router.NoRoute(ServeUI(webUI))
-}
-
-// ServeUI 返回一个 gin.HandlerFunc 来服务嵌入式前端 UI
-func ServeUI(webUI fs.FS) gin.HandlerFunc {
-	fileServer := http.FileServer(http.FS(webUI))
-
-	return func(c *gin.Context) {
-		if _, err := webUI.Open(strings.TrimPrefix(c.Request.URL.Path, "/")); err != nil {
-			if !strings.HasPrefix(c.Request.URL.Path, "/api/") && !strings.HasPrefix(c.Request.URL.Path, "/proxy/") {
-				c.Request.URL.Path = "/"
-			}
+	router.Use(static.Serve("/", EmbedFolder(buildFS, "dist")))
+	router.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/proxy") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not Found"})
+			return
 		}
-		fileServer.ServeHTTP(c.Writer, c.Request)
-	}
+		c.Header("Cache-Control", "no-cache")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
+	})
 }

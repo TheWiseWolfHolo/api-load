@@ -48,12 +48,12 @@ run: ## 构建前端并运行服务器
 	@rm -rf cmd/gpt-load/dist
 	@cp -r web/dist cmd/gpt-load/dist
 	@echo "--- Starting backend... ---"
-	go run $(MAIN_PATH)
+	go run $(MAIN_PATH)/main.go
 
 .PHONY: dev
 dev: ## 以开发模式运行（带竞态检测）
 	@echo "🔧 开发模式启动..."
-	go run -race $(MAIN_PATH)
+	go run -race $(MAIN_PATH)/main.go
 
 # ==============================================================================
 # 测试与代码质量

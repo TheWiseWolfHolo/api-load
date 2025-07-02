@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
+
+//go:embed dist
+var buildFS embed.FS
+
+//go:embed dist/index.html
+var indexPage []byte
 
 func main() {
 	// Load configuration
@@ -62,7 +69,7 @@ func main() {
 	serverHandler := handler.NewServer(database, configManager)
 
 	// Setup routes using the new router package
-	appRouter := router.New(serverHandler, proxyServer, configManager, WebUI)
+	appRouter := router.New(serverHandler, proxyServer, configManager, buildFS, indexPage)
 
 	// Create HTTP server with optimized timeout configuration
 	serverConfig := configManager.GetServerConfig()
