@@ -8,7 +8,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, h, computed } from 'vue'
+import type { MenuOption } from 'naive-ui'
+import { h, computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 const menuOptions: MenuOption[] = [
