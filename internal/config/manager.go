@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -70,18 +69,23 @@ func (m *Manager) ReloadConfig() error {
 
 	config := &Config{
 		Server: types.ServerConfig{
-			Port:                    parseInteger(os.Getenv("PORT"), 3000),
-			Host:                    getEnvOrDefault("HOST", "0.0.0.0"),
-			ReadTimeout:             parseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 120),
-			WriteTimeout:            parseInteger(os.Getenv("SERVER_WRITE_TIMEOUT"), 1800),
-			IdleTimeout:             parseInteger(os.Getenv("SERVER_IDLE_TIMEOUT"), 120),
-			GracefulShutdownTimeout: parseInteger(os.Getenv("SERVER_GRACEFUL_SHUTDOWN_TIMEOUT"), 60),
+			Port: parseInteger(os.Getenv("PORT"), 3000),
+			Host: getEnvOrDefault("HOST", "0.0.0.0"),
+			// Server timeout configs now come from system settings, not environment
+			// Using defaults here, will be overridden by system settings
+			ReadTimeout:             120,
+			WriteTimeout:            1800,
+			IdleTimeout:             120,
+			GracefulShutdownTimeout: 60,
 		},
 		OpenAI: types.OpenAIConfig{
-			BaseURLs:        parseArray(os.Getenv("OPENAI_BASE_URL"), []string{"https://api.openai.com"}),
-			RequestTimeout:  parseInteger(os.Getenv("REQUEST_TIMEOUT"), DefaultConstants.DefaultTimeout),
-			ResponseTimeout: parseInteger(os.Getenv("RESPONSE_TIMEOUT"), 30),
-			IdleConnTimeout: parseInteger(os.Getenv("IDLE_CONN_TIMEOUT"), 120),
+			// OPENAI_BASE_URL is removed from environment config
+			// Base URLs will be configured per group
+			BaseURLs: []string{}, // Will be set per group
+			// Timeout configs now come from system settings
+			RequestTimeout:  30,
+			ResponseTimeout: 30,
+			IdleConnTimeout: 120,
 		},
 		Auth: types.AuthConfig{
 			Key:     os.Getenv("AUTH_KEY"),
@@ -113,29 +117,28 @@ func (m *Manager) ReloadConfig() error {
 		return err
 	}
 
-	logrus.Info("Configuration reloaded successfully")
-	m.DisplayConfig()
+	logrus.Info("Environment configuration reloaded successfully")
 
 	return nil
 }
 
 // GetServerConfig returns server configuration
-func (m *Manager) GetServerConfig() types.ServerConfig {
-	return m.config.Server
-}
+// func (m *Manager) GetServerConfig() types.ServerConfig {
+// 	return m.config.Server
+// }
 
 // GetOpenAIConfig returns OpenAI configuration
-func (m *Manager) GetOpenAIConfig() types.OpenAIConfig {
-	config := m.config.OpenAI
-	if len(config.BaseURLs) > 1 {
-		// Use atomic counter for thread-safe round-robin
-		index := atomic.AddUint64(&m.roundRobinCounter, 1) - 1
-		config.BaseURL = config.BaseURLs[index%uint64(len(config.BaseURLs))]
-	} else if len(config.BaseURLs) == 1 {
-		config.BaseURL = config.BaseURLs[0]
-	}
-	return config
-}
+// func (m *Manager) GetOpenAIConfig() types.OpenAIConfig {
+// 	config := m.config.OpenAI
+// 	if len(config.BaseURLs) > 1 {
+// 		// Use atomic counter for thread-safe round-robin
+// 		index := atomic.AddUint64(&m.roundRobinCounter, 1) - 1
+// 		config.BaseURL = config.BaseURLs[index%uint64(len(config.BaseURLs))]
+// 	} else if len(config.BaseURLs) == 1 {
+// 		config.BaseURL = config.BaseURLs[0]
+// 	}
+// 	return config
+// }
 
 // GetAuthConfig returns authentication configuration
 func (m *Manager) GetAuthConfig() types.AuthConfig {
@@ -157,6 +160,51 @@ func (m *Manager) GetLogConfig() types.LogConfig {
 	return m.config.Log
 }
 
+// GetEffectiveServerConfig returns server configuration merged with system settings
+func (m *Manager) GetEffectiveServerConfig() types.ServerConfig {
+	config := m.config.Server
+
+	// Merge with system settings
+	settingsManager := GetSystemSettingsManager()
+	systemSettings := settingsManager.GetSettings()
+
+	config.ReadTimeout = systemSettings.ServerReadTimeout
+	config.WriteTimeout = systemSettings.ServerWriteTimeout
+	config.IdleTimeout = systemSettings.ServerIdleTimeout
+	config.GracefulShutdownTimeout = systemSettings.ServerGracefulShutdownTimeout
+
+	return config
+}
+
+// GetEffectiveOpenAIConfig returns OpenAI configuration merged with system settings and group config
+func (m *Manager) GetEffectiveOpenAIConfig(groupConfig map[string]any) types.OpenAIConfig {
+	config := m.config.OpenAI
+
+	// Merge with system settings
+	settingsManager := GetSystemSettingsManager()
+	effectiveSettings := settingsManager.GetEffectiveConfig(groupConfig)
+
+	config.RequestTimeout = effectiveSettings.RequestTimeout
+	config.ResponseTimeout = effectiveSettings.ResponseTimeout
+	config.IdleConnTimeout = effectiveSettings.IdleConnTimeout
+
+	// Apply round-robin for multiple URLs if configured
+	if len(config.BaseURLs) > 1 {
+		index := atomic.AddUint64(&m.roundRobinCounter, 1) - 1
+		config.BaseURL = config.BaseURLs[index%uint64(len(config.BaseURLs))]
+	} else if len(config.BaseURLs) == 1 {
+		config.BaseURL = config.BaseURLs[0]
+	}
+
+	return config
+}
+
+// GetEffectiveLogConfig returns log configuration (now uses environment config only)
+// func (m *Manager) GetEffectiveLogConfig() types.LogConfig {
+// 	// Log configuration is now managed via environment variables only
+// 	return m.config.Log
+// }
+
 // Validate validates the configuration
 func (m *Manager) Validate() error {
 	var validationErrors []string
@@ -166,22 +214,6 @@ func (m *Manager) Validate() error {
 		validationErrors = append(validationErrors, fmt.Sprintf("port must be between %d-%d", DefaultConstants.MinPort, DefaultConstants.MaxPort))
 	}
 
-	// Validate timeout
-	if m.config.OpenAI.RequestTimeout < DefaultConstants.MinTimeout {
-		validationErrors = append(validationErrors, fmt.Sprintf("request timeout cannot be less than %ds", DefaultConstants.MinTimeout))
-	}
-
-	// Validate upstream URL format
-	if len(m.config.OpenAI.BaseURLs) == 0 {
-		validationErrors = append(validationErrors, "at least one upstream API URL is required")
-	}
-	for _, baseURL := range m.config.OpenAI.BaseURLs {
-		if _, err := url.Parse(baseURL); err != nil {
-			validationErrors = append(validationErrors, fmt.Sprintf("invalid upstream API URL format: %s", baseURL))
-		}
-	}
-
-	// Validate performance configuration
 	if m.config.Performance.MaxConcurrentRequests < 1 {
 		validationErrors = append(validationErrors, "max concurrent requests cannot be less than 1")
 	}
@@ -199,34 +231,37 @@ func (m *Manager) Validate() error {
 
 // DisplayConfig displays current configuration information
 func (m *Manager) DisplayConfig() {
+	serverConfig := m.GetEffectiveServerConfig()
+	// openaiConfig := m.GetOpenAIConfig()
+	authConfig := m.GetAuthConfig()
+	corsConfig := m.GetCORSConfig()
+	perfConfig := m.GetPerformanceConfig()
+	logConfig := m.GetLogConfig()
+
 	logrus.Info("Current Configuration:")
-	logrus.Infof("   Server: %s:%d", m.config.Server.Host, m.config.Server.Port)
-	logrus.Infof("   Upstream URLs: %s", strings.Join(m.config.OpenAI.BaseURLs, ", "))
-	logrus.Infof("   Request timeout: %ds", m.config.OpenAI.RequestTimeout)
-	logrus.Infof("   Response timeout: %ds", m.config.OpenAI.ResponseTimeout)
-	logrus.Infof("   Idle connection timeout: %ds", m.config.OpenAI.IdleConnTimeout)
+	logrus.Infof("   Server: %s:%d", serverConfig.Host, serverConfig.Port)
 
 	authStatus := "disabled"
-	if m.config.Auth.Enabled {
+	if authConfig.Enabled {
 		authStatus = "enabled"
 	}
 	logrus.Infof("   Authentication: %s", authStatus)
 
 	corsStatus := "disabled"
-	if m.config.CORS.Enabled {
+	if corsConfig.Enabled {
 		corsStatus = "enabled"
 	}
 	logrus.Infof("   CORS: %s", corsStatus)
-	logrus.Infof("   Max concurrent requests: %d", m.config.Performance.MaxConcurrentRequests)
+	logrus.Infof("   Max concurrent requests: %d", perfConfig.MaxConcurrentRequests)
 
 	gzipStatus := "disabled"
-	if m.config.Performance.EnableGzip {
+	if perfConfig.EnableGzip {
 		gzipStatus = "enabled"
 	}
 	logrus.Infof("   Gzip compression: %s", gzipStatus)
 
 	requestLogStatus := "enabled"
-	if !m.config.Log.EnableRequest {
+	if !logConfig.EnableRequest {
 		requestLogStatus = "disabled"
 	}
 	logrus.Infof("   Request logging: %s", requestLogStatus)

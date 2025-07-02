@@ -7,12 +7,19 @@ import (
 
 // ConfigManager defines the interface for configuration management
 type ConfigManager interface {
-	GetServerConfig() ServerConfig
-	GetOpenAIConfig() OpenAIConfig
+	// GetServerConfig() ServerConfig
+	// GetOpenAIConfig() OpenAIConfig
 	GetAuthConfig() AuthConfig
 	GetCORSConfig() CORSConfig
 	GetPerformanceConfig() PerformanceConfig
 	GetLogConfig() LogConfig
+
+	// Effective configuration methods that merge system settings
+	GetEffectiveServerConfig() ServerConfig
+	GetEffectiveOpenAIConfig(groupConfig map[string]any) OpenAIConfig
+	// GetEffectivePerformanceConfig() PerformanceConfig
+	// GetEffectiveLogConfig() LogConfig
+
 	Validate() error
 	DisplayConfig()
 	ReloadConfig() error

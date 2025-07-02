@@ -49,7 +49,7 @@ func (s *Server) Login(c *gin.Context) {
 	}
 
 	authConfig := s.config.GetAuthConfig()
-	
+
 	if !authConfig.Enabled {
 		c.JSON(http.StatusOK, LoginResponse{
 			Success: true,
@@ -101,71 +101,4 @@ func (s *Server) Health(c *gin.Context) {
 		"total_keys":   totalKeys,
 		"uptime":       uptime,
 	})
-}
-
-
-// GetConfig returns configuration information (for debugging)
-func (s *Server) GetConfig(c *gin.Context) {
-	// Only allow in development mode or with special header
-	if c.GetHeader("X-Debug-Config") != "true" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Access denied",
-		})
-		return
-	}
-
-	serverConfig := s.config.GetServerConfig()
-	openaiConfig := s.config.GetOpenAIConfig()
-	authConfig := s.config.GetAuthConfig()
-	corsConfig := s.config.GetCORSConfig()
-	perfConfig := s.config.GetPerformanceConfig()
-	logConfig := s.config.GetLogConfig()
-
-	// Sanitize sensitive information
-	sanitizedConfig := gin.H{
-		"server": gin.H{
-			"host": serverConfig.Host,
-			"port": serverConfig.Port,
-		},
-		"openai": gin.H{
-			"base_url":          openaiConfig.BaseURL,
-			"request_timeout":   openaiConfig.RequestTimeout,
-			"response_timeout":  openaiConfig.ResponseTimeout,
-			"idle_conn_timeout": openaiConfig.IdleConnTimeout,
-		},
-		"auth": gin.H{
-			"enabled": authConfig.Enabled,
-			// Don't expose the actual key
-		},
-		"cors": gin.H{
-			"enabled":           corsConfig.Enabled,
-			"allowed_origins":   corsConfig.AllowedOrigins,
-			"allowed_methods":   corsConfig.AllowedMethods,
-			"allowed_headers":   corsConfig.AllowedHeaders,
-			"allow_credentials": corsConfig.AllowCredentials,
-		},
-		"performance": gin.H{
-			"max_concurrent_requests": perfConfig.MaxConcurrentRequests,
-			"enable_gzip":             perfConfig.EnableGzip,
-		},
-		"timeout_config": gin.H{
-			"request_timeout_s":           openaiConfig.RequestTimeout,
-			"response_timeout_s":          openaiConfig.ResponseTimeout,
-			"idle_conn_timeout_s":         openaiConfig.IdleConnTimeout,
-			"server_read_timeout_s":       serverConfig.ReadTimeout,
-			"server_write_timeout_s":      serverConfig.WriteTimeout,
-			"server_idle_timeout_s":       serverConfig.IdleTimeout,
-			"graceful_shutdown_timeout_s": serverConfig.GracefulShutdownTimeout,
-		},
-		"log": gin.H{
-			"level":          logConfig.Level,
-			"format":         logConfig.Format,
-			"enable_file":    logConfig.EnableFile,
-			"file_path":      logConfig.FilePath,
-			"enable_request": logConfig.EnableRequest,
-		},
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	c.JSON(http.StatusOK, sanitizedConfig)
 }

@@ -1,33 +1,28 @@
 package handler
 
 import (
-	"gpt-load/internal/db"
-	"gpt-load/internal/models"
+	"gpt-load/internal/config"
 	"gpt-load/internal/response"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm/clause"
+	"github.com/sirupsen/logrus"
 )
 
 // GetSettings handles the GET /api/settings request.
-// It retrieves all system settings from the database and returns them as a key-value map.
+// It retrieves all system settings and returns them with detailed information.
 func GetSettings(c *gin.Context) {
-	var settings []models.SystemSetting
-	if err := db.DB.Find(&settings).Error; err != nil {
-		response.InternalError(c, "Failed to retrieve settings")
-		return
-	}
+	settingsManager := config.GetSystemSettingsManager()
+	currentSettings := settingsManager.GetSettings()
 
-	settingsMap := make(map[string]string)
-	for _, s := range settings {
-		settingsMap[s.SettingKey] = s.SettingValue
-	}
+	// 使用新的动态元数据生成器
+	settingsInfo := config.GenerateSettingsMetadata(&currentSettings)
 
-	response.Success(c, settingsMap)
+	response.Success(c, settingsInfo)
 }
 
 // UpdateSettings handles the PUT /api/settings request.
-// It receives a key-value JSON object and updates or creates settings in the database.
+// It receives a key-value JSON object and updates system settings.
+// After updating, it triggers a configuration reload.
 func UpdateSettings(c *gin.Context) {
 	var settingsMap map[string]string
 	if err := c.ShouldBindJSON(&settingsMap); err != nil {
@@ -35,28 +30,37 @@ func UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	var settingsToUpdate []models.SystemSetting
-	for key, value := range settingsMap {
-		settingsToUpdate = append(settingsToUpdate, models.SystemSetting{
-			SettingKey:   key,
-			SettingValue: value,
-		})
-	}
-
-	if len(settingsToUpdate) == 0 {
+	if len(settingsMap) == 0 {
 		response.Success(c, nil)
 		return
 	}
 
-	// Using OnConflict to perform an "upsert" operation.
-	// If a setting with the same key exists, it will be updated. Otherwise, a new one will be created.
-	if err := db.DB.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "setting_key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"setting_value"}),
-	}).Create(&settingsToUpdate).Error; err != nil {
-		response.InternalError(c, "Failed to update settings")
+	settingsManager := config.GetSystemSettingsManager()
+
+	// 更新配置
+	if err := settingsManager.UpdateSettings(settingsMap); err != nil {
+		response.InternalError(c, "Failed to update settings: "+err.Error())
 		return
 	}
 
-	response.Success(c, nil)
+	// 重载系统配置
+	if err := settingsManager.LoadFromDatabase(); err != nil {
+		logrus.Errorf("Failed to reload system settings: %v", err)
+		response.InternalError(c, "Failed to reload system settings")
+		return
+	}
+
+	settingsManager.DisplayCurrentSettings()
+
+	logrus.Info("Configuration reloaded successfully via API")
+	response.Success(c, gin.H{
+		"message": "Configuration reloaded successfully",
+		"timestamp": gin.H{
+			"reloaded_at": "now",
+		},
+	})
+
+	response.Success(c, gin.H{
+		"message": "Settings updated successfully. Configuration reloaded.",
+	})
 }

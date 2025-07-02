@@ -19,7 +19,8 @@ import (
 	"gpt-load/internal/handler"
 	"gpt-load/internal/models"
 	"gpt-load/internal/proxy"
-	"gpt-load/internal/router" // <-- 引入新的 router 包
+	"gpt-load/internal/router"
+	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 
 	"github.com/sirupsen/logrus"
@@ -48,8 +49,23 @@ func main() {
 		logrus.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Initialize system settings after database is ready
+	settingsManager := config.GetSystemSettingsManager()
+	if err := settingsManager.InitializeSystemSettings(); err != nil {
+		logrus.Fatalf("Failed to initialize system settings: %v", err)
+	}
+	logrus.Info("System settings initialized")
+
+	// Display current system settings
+	settingsManager.DisplayCurrentSettings()
+
 	// Display startup information
-	displayStartupInfo(configManager)
+	configManager.DisplayConfig()
+
+	// Start log cleanup service
+	logCleanupService := services.NewLogCleanupService()
+	logCleanupService.Start()
+	defer logCleanupService.Stop()
 
 	// --- Asynchronous Request Logging Setup ---
 	requestLogChan := make(chan models.RequestLog, 1000)
@@ -67,12 +83,13 @@ func main() {
 
 	// Create handlers
 	serverHandler := handler.NewServer(database, configManager)
+	logCleanupHandler := handler.NewLogCleanupHandler(logCleanupService)
 
 	// Setup routes using the new router package
-	appRouter := router.New(serverHandler, proxyServer, configManager, buildFS, indexPage)
+	appRouter := router.New(serverHandler, proxyServer, logCleanupHandler, configManager, buildFS, indexPage)
 
 	// Create HTTP server with optimized timeout configuration
-	serverConfig := configManager.GetServerConfig()
+	serverConfig := configManager.GetEffectiveServerConfig()
 	server := &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port),
 		Handler:        appRouter,
@@ -164,48 +181,6 @@ func setupLogger(configManager types.ConfigManager) {
 			}
 		}
 	}
-}
-
-// displayStartupInfo shows startup information
-func displayStartupInfo(configManager types.ConfigManager) {
-	serverConfig := configManager.GetServerConfig()
-	openaiConfig := configManager.GetOpenAIConfig()
-	authConfig := configManager.GetAuthConfig()
-	corsConfig := configManager.GetCORSConfig()
-	perfConfig := configManager.GetPerformanceConfig()
-	logConfig := configManager.GetLogConfig()
-
-	logrus.Info("Current Configuration:")
-	logrus.Infof("   Server: %s:%d", serverConfig.Host, serverConfig.Port)
-	logrus.Infof("   Upstream URL: %s", openaiConfig.BaseURL)
-	logrus.Infof("   Request timeout: %ds", openaiConfig.RequestTimeout)
-	logrus.Infof("   Response timeout: %ds", openaiConfig.ResponseTimeout)
-	logrus.Infof("   Idle connection timeout: %ds", openaiConfig.IdleConnTimeout)
-
-	authStatus := "disabled"
-	if authConfig.Enabled {
-		authStatus = "enabled"
-	}
-	logrus.Infof("   Authentication: %s", authStatus)
-
-	corsStatus := "disabled"
-	if corsConfig.Enabled {
-		corsStatus = "enabled"
-	}
-	logrus.Infof("   CORS: %s", corsStatus)
-	logrus.Infof("   Max concurrent requests: %d", perfConfig.MaxConcurrentRequests)
-
-	gzipStatus := "disabled"
-	if perfConfig.EnableGzip {
-		gzipStatus = "enabled"
-	}
-	logrus.Infof("   Gzip compression: %s", gzipStatus)
-
-	requestLogStatus := "enabled"
-	if !logConfig.EnableRequest {
-		requestLogStatus = "disabled"
-	}
-	logrus.Infof("   Request logging: %s", requestLogStatus)
 }
 
 // startRequestLogger runs a background goroutine to batch-insert request logs.

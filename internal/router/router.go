@@ -39,6 +39,7 @@ func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
 func New(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
+	logCleanupHandler *handler.LogCleanupHandler,
 	configManager types.ConfigManager,
 	buildFS embed.FS,
 	indexPage []byte,
@@ -60,7 +61,7 @@ func New(
 
 	// 注册路由
 	registerSystemRoutes(router, serverHandler)
-	registerAPIRoutes(router, serverHandler, configManager)
+	registerAPIRoutes(router, serverHandler, logCleanupHandler, configManager)
 	registerProxyRoutes(router, proxyServer, configManager)
 	registerFrontendRoutes(router, buildFS, indexPage)
 
@@ -71,11 +72,10 @@ func New(
 func registerSystemRoutes(router *gin.Engine, serverHandler *handler.Server) {
 	router.GET("/health", serverHandler.Health)
 	router.GET("/stats", serverHandler.Stats)
-	// router.GET("/config", serverHandler.GetConfig)
 }
 
 // registerAPIRoutes 注册API路由
-func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, configManager types.ConfigManager) {
+func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, logCleanupHandler *handler.LogCleanupHandler, configManager types.ConfigManager) {
 	api := router.Group("/api")
 	authConfig := configManager.GetAuthConfig()
 
@@ -86,9 +86,9 @@ func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, config
 	if authConfig.Enabled {
 		protectedAPI := api.Group("")
 		protectedAPI.Use(middleware.Auth(authConfig))
-		registerProtectedAPIRoutes(protectedAPI, serverHandler)
+		registerProtectedAPIRoutes(protectedAPI, serverHandler, logCleanupHandler)
 	} else {
-		registerProtectedAPIRoutes(api, serverHandler)
+		registerProtectedAPIRoutes(api, serverHandler, logCleanupHandler)
 	}
 }
 
@@ -98,7 +98,7 @@ func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server
 }
 
 // registerProtectedAPIRoutes 认证API路由
-func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
+func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server, logCleanupHandler *handler.LogCleanupHandler) {
 	groups := api.Group("/groups")
 	{
 		groups.POST("", serverHandler.CreateGroup)
@@ -123,7 +123,11 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	}
 
 	// 日志
-	api.GET("/logs", handler.GetLogs)
+	logs := api.Group("/logs")
+	{
+		logs.GET("", handler.GetLogs)
+		logs.POST("/cleanup", logCleanupHandler.CleanupLogsNow)
+	}
 
 	// 设置
 	settings := api.Group("/settings")
@@ -131,9 +135,6 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		settings.GET("", handler.GetSettings)
 		settings.PUT("", handler.UpdateSettings)
 	}
-
-	// 重载配置
-	api.POST("/reload", serverHandler.ReloadConfig)
 }
 
 // registerProxyRoutes 注册代理路由
