@@ -2,17 +2,15 @@ package channel
 
 import (
 	"encoding/json"
+	"fmt"
 	"gpt-load/internal/models"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
-
 type OpenAIChannel struct {
-	BaseURL *url.URL
+	BaseChannel
 }
 
 type OpenAIChannelConfig struct {
@@ -22,34 +20,29 @@ type OpenAIChannelConfig struct {
 func NewOpenAIChannel(group *models.Group) (*OpenAIChannel, error) {
 	var config OpenAIChannelConfig
 	if err := json.Unmarshal([]byte(group.Config), &config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal channel config: %w", err)
 	}
+	if config.BaseURL == "" {
+		return nil, fmt.Errorf("base_url is required for openai channel")
+	}
+
 	baseURL, err := url.Parse(config.BaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse base_url: %w", err)
 	}
-	return &OpenAIChannel{BaseURL: baseURL}, nil
+
+	return &OpenAIChannel{
+		BaseChannel: BaseChannel{
+			Name:       "openai",
+			BaseURL:    baseURL,
+			HTTPClient: &http.Client{},
+		},
+	}, nil
 }
 
-func (ch *OpenAIChannel) Handle(c *gin.Context, apiKey *models.APIKey, group *models.Group) {
-	proxy := httputil.NewSingleHostReverseProxy(ch.BaseURL)
-	proxy.Director = func(req *http.Request) {
-		req.URL.Scheme = ch.BaseURL.Scheme
-		req.URL.Host = ch.BaseURL.Host
-		req.URL.Path = c.Param("path")
-		req.Host = ch.BaseURL.Host
-		req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+func (ch *OpenAIChannel) Handle(c *gin.Context, apiKey *models.APIKey, group *models.Group) error {
+	modifier := func(req *http.Request, key *models.APIKey) {
+		req.Header.Set("Authorization", "Bearer "+key.KeyValue)
 	}
-
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		// Log the response, etc.
-		return nil
-	}
-
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		logrus.Errorf("Proxy error: %v", err)
-		// Handle error, maybe update key status
-	}
-
-	proxy.ServeHTTP(c.Writer, c.Request)
+	return ch.ProcessRequest(c, apiKey, modifier)
 }

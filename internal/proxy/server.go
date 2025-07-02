@@ -59,10 +59,18 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	}
 
 	// 4. Forward the request using the channel handler
-	channelHandler.Handle(c, apiKey, &group)
+	err = channelHandler.Handle(c, apiKey, &group)
 
 	// 5. Log the request asynchronously
-	go ps.logRequest(c, &group, apiKey, startTime)
+	isSuccess := err == nil
+	if !isSuccess {
+		logrus.WithFields(logrus.Fields{
+			"group": group.Name,
+			"key_id": apiKey.ID,
+			"error": err.Error(),
+		}).Error("Channel handler failed")
+	}
+	go ps.logRequest(c, &group, apiKey, startTime, isSuccess)
 }
 
 // selectAPIKey selects an API key from a group using round-robin
@@ -89,9 +97,8 @@ func (ps *ProxyServer) selectAPIKey(group *models.Group) (*models.APIKey, error)
 	return &selectedKey, nil
 }
 
-func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *models.APIKey, startTime time.Time) {
+func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *models.APIKey, startTime time.Time, isSuccess bool) {
 	// Update key stats based on request success
-	isSuccess := c.Writer.Status() < 400
 	go ps.updateKeyStats(key.ID, isSuccess)
 
 	logEntry := models.RequestLog{
