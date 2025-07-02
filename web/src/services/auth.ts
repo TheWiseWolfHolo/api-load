@@ -1,33 +1,47 @@
 import http from "@/utils/http";
+import { useState } from "@/utils/state";
 
 const AUTH_KEY = "authKey";
 
-const login = async (authKey: string): Promise<boolean> => {
-  try {
-    await http.post("/auth/login", { auth_key: authKey });
-    localStorage.setItem(AUTH_KEY, authKey);
-    return true;
-  } catch (error) {
-    console.error("Login failed:", error);
-    return false;
-  }
+export const useAuthKey = () => {
+  return useState<string | null>(AUTH_KEY, () => null);
 };
 
-const logout = (): void => {
-  localStorage.removeItem(AUTH_KEY);
-};
+export function useAuthService() {
+  const authKey = useAuthKey();
 
-const getAuthKey = (): string | null => {
-  return localStorage.getItem(AUTH_KEY);
-};
+  const login = async (key: string): Promise<boolean> => {
+    try {
+      await http.post("/auth/login", { auth_key: key });
+      localStorage.setItem(AUTH_KEY, key);
+      authKey.value = key;
+      return true;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
+    }
+  };
 
-const isLoggedIn = (): boolean => {
-  return !!localStorage.getItem(AUTH_KEY);
-};
+  const logout = (): void => {
+    localStorage.removeItem(AUTH_KEY);
+    authKey.value = null;
+  };
 
-export const authService = {
-  login,
-  logout,
-  getAuthKey,
-  isLoggedIn,
-};
+  const checkLogin = (): boolean => {
+    if (authKey.value) {
+      return true;
+    }
+
+    const key = localStorage.getItem(AUTH_KEY);
+    if (key) {
+      authKey.value = key;
+    }
+    return !!authKey.value;
+  };
+
+  return {
+    login,
+    logout,
+    checkLogin,
+  };
+}

@@ -52,6 +52,7 @@ export default [
       "vue/multiline-html-element-content-newline": "off",
       "vue/html-indent": ["error", 2],
       "vue/script-indent": ["error", 2],
+      "vue/component-tags-order": ["error", { order: ["script", "template", "style"] }],
 
       // Vue 3 Composition API 规则
       "vue/no-setup-props-destructure": "error",

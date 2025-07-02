@@ -1,10 +1,6 @@
-<template>
-  <n-menu mode="horizontal" :options="menuOptions" :value="activeMenu" responsive />
-</template>
-
 <script setup lang="ts">
 import type { MenuOption } from "naive-ui";
-import { h, computed } from "vue";
+import { computed, h } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 const menuOptions: MenuOption[] = [
@@ -33,3 +29,7 @@ function renderMenuItem(key: string, label: string): MenuOption {
   };
 }
 </script>
+
+<template>
+  <n-menu mode="horizontal" :options="menuOptions" :value="activeMenu" responsive />
+</template>

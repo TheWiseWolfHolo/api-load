@@ -1,5 +1,10 @@
+<script setup lang="ts">
+import Logout from "@/components/Logout.vue";
+import NavBar from "@/components/NavBar.vue";
+</script>
+
 <template>
-  <n-layout v-if="authService.isLoggedIn()">
+  <n-layout>
     <n-layout-header class="flex items-center">
       <h1 class="layout-header-title">T.COM</h1>
       <nav-bar />
@@ -9,14 +14,7 @@
       <router-view />
     </n-layout-content>
   </n-layout>
-  <router-view v-else />
 </template>
-
-<script setup lang="ts">
-import NavBar from "@/components/NavBar.vue";
-import Logout from "@/components/Logout.vue";
-import { authService } from "@/services/auth";
-</script>
 
 <style scoped>
 .layout-header-title {

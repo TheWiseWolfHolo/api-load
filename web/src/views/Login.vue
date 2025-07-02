@@ -1,21 +1,5 @@
-<template>
-  <div class="login-container">
-    <n-card class="login-card" title="Login">
-      <n-space vertical>
-        <n-input
-          v-model:value="authKey"
-          type="password"
-          placeholder="Auth Key"
-          @keyup.enter="handleLogin"
-        />
-        <n-button type="primary" block @click="handleLogin" :loading="loading">Login</n-button>
-      </n-space>
-    </n-card>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { authService } from "@/services/auth";
+import { useAuthService } from "@/services/auth";
 import { NButton, NCard, NInput, NSpace, useMessage } from "naive-ui";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
@@ -24,6 +8,7 @@ const authKey = ref("");
 const loading = ref(false);
 const router = useRouter();
 const message = useMessage();
+const { login } = useAuthService();
 
 const handleLogin = async () => {
   if (!authKey.value) {
@@ -31,7 +16,7 @@ const handleLogin = async () => {
     return;
   }
   loading.value = true;
-  const success = await authService.login(authKey.value);
+  const success = await login(authKey.value);
   loading.value = false;
   if (success) {
     router.push("/");
@@ -41,16 +26,38 @@ const handleLogin = async () => {
 };
 </script>
 
+<template>
+  <div class="login-container">
+    <n-card class="login-card" title="登录">
+      <div>auth: {{ authKey }}</div>
+      <n-space vertical>
+        <n-input
+          v-model:value="authKey"
+          type="password"
+          placeholder="Auth Key"
+          @keyup.enter="handleLogin"
+        />
+        <n-button class="login-btn" type="primary" block @click="handleLogin" :loading="loading">
+          Login
+        </n-button>
+      </n-space>
+    </n-card>
+  </div>
+</template>
+
 <style scoped>
 .login-container {
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background-color: #f0f2f5;
 }
 
 .login-card {
-  width: 400px;
+  max-width: 400px;
+}
+
+.login-btn {
+  margin-top: 10px;
 }
 </style>
