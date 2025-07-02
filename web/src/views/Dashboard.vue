@@ -4,8 +4,8 @@
 </template>
 
 <script setup lang="ts">
-import BaseInfoCard from '@/components/BaseInfoCard.vue'
-import LineChart from '@/components/LineChart.vue'
+import BaseInfoCard from "@/components/BaseInfoCard.vue";
+import LineChart from "@/components/LineChart.vue";
 </script>
 
 <style scoped>

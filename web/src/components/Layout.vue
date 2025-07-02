@@ -12,8 +12,8 @@
 </template>
 
 <script setup lang="ts">
-import NavBar from '@/components/NavBar.vue'
-import Logout from '@/components/Logout.vue'
+import NavBar from "@/components/NavBar.vue";
+import Logout from "@/components/Logout.vue";
 </script>
 
 <style scoped>

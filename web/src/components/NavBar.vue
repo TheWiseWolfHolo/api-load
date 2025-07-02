@@ -3,19 +3,19 @@
 </template>
 
 <script setup lang="ts">
-import type { MenuOption } from 'naive-ui'
-import { h, computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import type { MenuOption } from "naive-ui";
+import { h, computed } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 
 const menuOptions: MenuOption[] = [
-  renderMenuItem('dashboard', '仪表盘'),
-  renderMenuItem('keys', '密钥管理'),
-  renderMenuItem('logs', '日志'),
-  renderMenuItem('settings', '系统设置'),
-]
+  renderMenuItem("dashboard", "仪表盘"),
+  renderMenuItem("keys", "密钥管理"),
+  renderMenuItem("logs", "日志"),
+  renderMenuItem("settings", "系统设置"),
+];
 
-const route = useRoute()
-const activeMenu = computed(() => route.name)
+const route = useRoute();
+const activeMenu = computed(() => route.name);
 
 function renderMenuItem(key: string, label: string): MenuOption {
   return {
@@ -30,6 +30,6 @@ function renderMenuItem(key: string, label: string): MenuOption {
         { default: () => label }
       ),
     key,
-  }
+  };
 }
 </script>
