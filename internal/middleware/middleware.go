@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"gpt-load/internal/errors"
+	"gpt-load/internal/response"
 	"gpt-load/internal/types"
+
+	app_errors "gpt-load/internal/errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -140,20 +142,14 @@ func Auth(config types.AuthConfig) gin.HandlerFunc {
 		// Extract key from multiple sources
 		key := extractKey(c)
 		if key == "" {
-			c.JSON(401, gin.H{
-				"error": "Authorization required",
-				"code":  errors.ErrAuthMissing,
-			})
+			response.Error(c, app_errors.ErrUnauthorized)
 			c.Abort()
 			return
 		}
 
 		// Validate key
 		if key != config.Key {
-			c.JSON(401, gin.H{
-				"error": "Invalid authentication token",
-				"code":  errors.ErrAuthInvalid,
-			})
+			response.Error(c, app_errors.ErrUnauthorized)
 			c.Abort()
 			return
 		}
@@ -165,19 +161,8 @@ func Auth(config types.AuthConfig) gin.HandlerFunc {
 // Recovery creates a recovery middleware with custom error handling
 func Recovery() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
-		if err, ok := recovered.(string); ok {
-			logrus.Errorf("Panic recovered: %s", err)
-			c.JSON(500, gin.H{
-				"error": "Internal server error",
-				"code":  errors.ErrServerInternal,
-			})
-		} else {
-			logrus.Errorf("Panic recovered: %v", recovered)
-			c.JSON(500, gin.H{
-				"error": "Internal server error",
-				"code":  errors.ErrServerInternal,
-			})
-		}
+		logrus.Errorf("Panic recovered: %v", recovered)
+		response.Error(c, app_errors.ErrInternalServer)
 		c.Abort()
 	})
 }
@@ -193,10 +178,7 @@ func RateLimiter(config types.PerformanceConfig) gin.HandlerFunc {
 			defer func() { <-semaphore }()
 			c.Next()
 		default:
-			c.JSON(429, gin.H{
-				"error": "Too many concurrent requests",
-				"code":  errors.ErrServerUnavailable,
-			})
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Too many concurrent requests"))
 			c.Abort()
 		}
 	}
@@ -212,20 +194,14 @@ func ErrorHandler() gin.HandlerFunc {
 			err := c.Errors.Last().Err
 
 			// Check if it's our custom error type
-			if appErr, ok := err.(*errors.AppError); ok {
-				c.JSON(appErr.HTTPStatus, gin.H{
-					"error": appErr.Message,
-					"code":  appErr.Code,
-				})
+			if apiErr, ok := err.(*app_errors.APIError); ok {
+				response.Error(c, apiErr)
 				return
 			}
 
 			// Handle other errors
 			logrus.Errorf("Unhandled error: %v", err)
-			c.JSON(500, gin.H{
-				"error": "Internal server error",
-				"code":  errors.ErrServerInternal,
-			})
+			response.Error(c, app_errors.ErrInternalServer)
 		}
 	}
 }

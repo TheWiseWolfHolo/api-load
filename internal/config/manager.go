@@ -176,7 +176,7 @@ func (m *Manager) Validate() error {
 		for _, err := range validationErrors {
 			logrus.Errorf("   - %s", err)
 		}
-		return errors.NewAppErrorWithDetails(errors.ErrConfigValidation, "Configuration validation failed", strings.Join(validationErrors, "; "))
+		return errors.NewAPIError(errors.ErrValidation, strings.Join(validationErrors, "; "))
 	}
 
 	return nil

@@ -3,9 +3,9 @@ package handler
 
 import (
 	"encoding/json"
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
-	"net/http"
 	"regexp"
 	"strconv"
 
@@ -26,26 +26,26 @@ func isValidGroupName(name string) bool {
 func (s *Server) CreateGroup(c *gin.Context) {
 	var group models.Group
 	if err := c.ShouldBindJSON(&group); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
 	// Validation
 	if !isValidGroupName(group.Name) {
-		response.Error(c, http.StatusBadRequest, "Invalid group name format. Use lowercase letters and underscores, and do not start with an underscore.")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format. Use 3-30 lowercase letters, numbers, and underscores."))
 		return
 	}
 	if len(group.Upstreams) == 0 {
-		response.Error(c, http.StatusBadRequest, "At least one upstream is required")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "At least one upstream is required"))
 		return
 	}
 	if group.ChannelType == "" {
-		response.Error(c, http.StatusBadRequest, "Channel type is required")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Channel type is required"))
 		return
 	}
 
 	if err := s.DB.Create(&group).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to create group")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -56,7 +56,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 func (s *Server) ListGroups(c *gin.Context) {
 	var groups []models.Group
 	if err := s.DB.Order("sort asc, id desc").Find(&groups).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to list groups")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 	response.Success(c, groups)
@@ -66,32 +66,32 @@ func (s *Server) ListGroups(c *gin.Context) {
 func (s *Server) UpdateGroup(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	var group models.Group
 	if err := s.DB.First(&group, id).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Group not found")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
 	var updateData models.Group
 	if err := c.ShouldBindJSON(&updateData); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
 	// Validate group name if it's being updated
 	if updateData.Name != "" && !isValidGroupName(updateData.Name) {
-		response.Error(c, http.StatusBadRequest, "Invalid group name format. Use lowercase letters and underscores, and do not start with an underscore.")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format. Use 3-30 lowercase letters, numbers, and underscores."))
 		return
 	}
 
 	// Use a transaction to ensure atomicity
 	tx := s.DB.Begin()
 	if tx.Error != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
+		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 
@@ -99,7 +99,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	var updateMap map[string]interface{}
 	updateBytes, _ := json.Marshal(updateData)
 	if err := json.Unmarshal(updateBytes, &updateMap); err != nil {
-		response.Error(c, http.StatusBadRequest, "Failed to process update data")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process update data"))
 		return
 	}
 
@@ -108,7 +108,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		if configMap, isMap := config.(map[string]interface{}); isMap {
 			configJSON, err := json.Marshal(configMap)
 			if err != nil {
-				response.Error(c, http.StatusBadRequest, "Failed to process config data")
+				response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process config data"))
 				return
 			}
 			updateMap["config"] = string(configJSON)
@@ -120,7 +120,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		if upstreamsSlice, isSlice := upstreams.([]interface{}); isSlice {
 			upstreamsJSON, err := json.Marshal(upstreamsSlice)
 			if err != nil {
-				response.Error(c, http.StatusBadRequest, "Failed to process upstreams data")
+				response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process upstreams data"))
 				return
 			}
 			updateMap["upstreams"] = string(upstreamsJSON)
@@ -136,20 +136,20 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	// Use Updates with a map to only update provided fields, including zero values
 	if err := tx.Model(&group).Updates(updateMap).Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to update group")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to commit transaction")
+		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 
 	// Re-fetch the group to return the updated data
 	var updatedGroup models.Group
 	if err := s.DB.First(&updatedGroup, id).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Failed to fetch updated group data")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -160,14 +160,14 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 func (s *Server) DeleteGroup(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	// Use a transaction to ensure atomicity
 	tx := s.DB.Begin()
 	if tx.Error != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
+		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 	defer func() {
@@ -179,23 +179,23 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 	// Also delete associated API keys
 	if err := tx.Where("group_id = ?", id).Delete(&models.APIKey{}).Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to delete associated API keys")
+		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 
 	if result := tx.Delete(&models.Group{}, id); result.Error != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to delete group")
+		response.Error(c, app_errors.ParseDBError(result.Error))
 		return
 	} else if result.RowsAffected == 0 {
 		tx.Rollback()
-		response.Error(c, http.StatusNotFound, "Group not found")
+		response.Error(c, app_errors.ErrResourceNotFound)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to commit transaction")
+		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 

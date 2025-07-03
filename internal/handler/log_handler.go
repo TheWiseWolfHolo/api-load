@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gpt-load/internal/db"
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 )
@@ -66,7 +67,7 @@ func GetLogs(c *gin.Context) {
 	query.Count(&total)
 	err := query.Order("timestamp desc").Offset(offset).Limit(size).Find(&logs).Error
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get logs")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 

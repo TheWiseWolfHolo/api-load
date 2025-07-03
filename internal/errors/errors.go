@@ -1,129 +1,67 @@
-// Package errors defines custom error types for the application
 package errors
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
+
+	"github.com/go-sql-driver/mysql"
+	"gorm.io/gorm"
 )
 
-// ErrorCode represents different types of errors
-type ErrorCode int
+// APIError defines a standard error structure for API responses.
+type APIError struct {
+	HTTPStatus int
+	Code       string
+	Message    string
+}
 
-const (
-	// Configuration errors
-	ErrConfigInvalid ErrorCode = iota + 1000
-	ErrConfigMissing
-	ErrConfigValidation
+// Error implements the error interface.
+func (e *APIError) Error() string {
+	return e.Message
+}
 
-	// Key management errors
-	ErrNoKeysAvailable ErrorCode = iota + 2000
-	ErrKeyFileNotFound
-	ErrKeyFileInvalid
-	ErrAllKeysBlacklisted
-
-	// Proxy errors
-	ErrProxyRequest ErrorCode = iota + 3000
-	ErrProxyResponse
-	ErrProxyTimeout
-	ErrProxyRetryExhausted
-
-	// Authentication errors
-	ErrAuthInvalid ErrorCode = iota + 4000
-	ErrAuthMissing
-	ErrAuthExpired
-
-	// Server errors
-	ErrServerInternal ErrorCode = iota + 5000
-	ErrServerUnavailable
+// Predefined API errors
+var (
+	ErrBadRequest          = &APIError{HTTPStatus: http.StatusBadRequest, Code: "BAD_REQUEST", Message: "Invalid request parameters"}
+	ErrInvalidJSON         = &APIError{HTTPStatus: http.StatusBadRequest, Code: "INVALID_JSON", Message: "Invalid JSON format"}
+	ErrValidation          = &APIError{HTTPStatus: http.StatusBadRequest, Code: "VALIDATION_FAILED", Message: "Input validation failed"}
+	ErrDuplicateResource   = &APIError{HTTPStatus: http.StatusConflict, Code: "DUPLICATE_RESOURCE", Message: "Resource already exists"}
+	ErrResourceNotFound    = &APIError{HTTPStatus: http.StatusNotFound, Code: "NOT_FOUND", Message: "Resource not found"}
+	ErrInternalServer      = &APIError{HTTPStatus: http.StatusInternalServerError, Code: "INTERNAL_SERVER_ERROR", Message: "An unexpected error occurred"}
+	ErrDatabase            = &APIError{HTTPStatus: http.StatusInternalServerError, Code: "DATABASE_ERROR", Message: "Database operation failed"}
+	ErrUnauthorized        = &APIError{HTTPStatus: http.StatusUnauthorized, Code: "UNAUTHORIZED", Message: "Authentication failed"}
+	ErrForbidden           = &APIError{HTTPStatus: http.StatusForbidden, Code: "FORBIDDEN", Message: "You do not have permission to access this resource"}
 )
 
-// AppError represents a custom application error
-type AppError struct {
-	Code       ErrorCode `json:"code"`
-	Message    string    `json:"message"`
-	Details    string    `json:"details,omitempty"`
-	HTTPStatus int       `json:"-"`
-	Cause      error     `json:"-"`
-}
-
-// Error implements the error interface
-func (e *AppError) Error() string {
-	if e.Details != "" {
-		return fmt.Sprintf("[%d] %s: %s", e.Code, e.Message, e.Details)
-	}
-	return fmt.Sprintf("[%d] %s", e.Code, e.Message)
-}
-
-// Unwrap returns the underlying error
-func (e *AppError) Unwrap() error {
-	return e.Cause
-}
-
-// NewAppError creates a new application error
-func NewAppError(code ErrorCode, message string) *AppError {
-	return &AppError{
-		Code:       code,
+// NewAPIError creates a new APIError with a custom message.
+func NewAPIError(base *APIError, message string) *APIError {
+	return &APIError{
+		HTTPStatus: base.HTTPStatus,
+		Code:       base.Code,
 		Message:    message,
-		HTTPStatus: getHTTPStatusForCode(code),
 	}
 }
 
-// NewAppErrorWithDetails creates a new application error with details
-func NewAppErrorWithDetails(code ErrorCode, message, details string) *AppError {
-	return &AppError{
-		Code:       code,
-		Message:    message,
-		Details:    details,
-		HTTPStatus: getHTTPStatusForCode(code),
+// ParseDBError intelligently converts a GORM error into a standard APIError.
+func ParseDBError(err error) *APIError {
+	if err == nil {
+		return nil
 	}
-}
 
-// NewAppErrorWithCause creates a new application error with underlying cause
-func NewAppErrorWithCause(code ErrorCode, message string, cause error) *AppError {
-	return &AppError{
-		Code:       code,
-		Message:    message,
-		HTTPStatus: getHTTPStatusForCode(code),
-		Cause:      cause,
+	// Handle record not found error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrResourceNotFound
 	}
-}
 
-// getHTTPStatusForCode maps error codes to HTTP status codes
-func getHTTPStatusForCode(code ErrorCode) int {
-	switch {
-	case code >= 1000 && code < 2000: // Configuration errors
-		return http.StatusInternalServerError
-	case code >= 2000 && code < 3000: // Key management errors
-		return http.StatusServiceUnavailable
-	case code >= 3000 && code < 4000: // Proxy errors
-		return http.StatusBadGateway
-	case code >= 4000 && code < 5000: // Authentication errors
-		return http.StatusUnauthorized
-	case code >= 5000 && code < 6000: // Server errors
-		return http.StatusInternalServerError
-	default:
-		return http.StatusInternalServerError
-	}
-}
-
-// IsRetryable determines if an error is retryable
-func IsRetryable(err error) bool {
-	if appErr, ok := err.(*AppError); ok {
-		switch appErr.Code {
-		case ErrProxyTimeout, ErrServerUnavailable:
-			return true
-		default:
-			return false
+	// Handle MySQL specific errors
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		switch mysqlErr.Number {
+		case 1062: // Duplicate entry for unique key
+			return ErrDuplicateResource
 		}
 	}
-	return false
-}
 
-// Common error instances
-var (
-	ErrNoAPIKeysAvailable     = NewAppError(ErrNoKeysAvailable, "No API keys available")
-	ErrAllAPIKeysBlacklisted  = NewAppError(ErrAllKeysBlacklisted, "All API keys are blacklisted")
-	ErrInvalidConfiguration   = NewAppError(ErrConfigInvalid, "Invalid configuration")
-	ErrAuthenticationRequired = NewAppError(ErrAuthMissing, "Authentication required")
-	ErrInvalidAuthToken       = NewAppError(ErrAuthInvalid, "Invalid authentication token")
-)
+	// Default to a generic database error
+	return ErrDatabase
+}

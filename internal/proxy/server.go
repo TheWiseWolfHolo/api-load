@@ -4,9 +4,9 @@ package proxy
 import (
 	"fmt"
 	"gpt-load/internal/channel"
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,21 +40,21 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	// 1. Find the group by name
 	var group models.Group
 	if err := ps.DB.Preload("APIKeys").Where("name = ?", groupName).First(&group).Error; err != nil {
-		response.Error(c, http.StatusNotFound, fmt.Sprintf("Group '%s' not found", groupName))
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
 	// 2. Select an available API key from the group
 	apiKey, err := ps.selectAPIKey(&group)
 	if err != nil {
-		response.Error(c, http.StatusServiceUnavailable, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error()))
 		return
 	}
 
 	// 3. Get the appropriate channel handler from the factory
 	channelHandler, err := channel.GetChannel(&group)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, fmt.Sprintf("Failed to get channel for group '%s': %v", groupName, err))
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, fmt.Sprintf("Failed to get channel for group '%s': %v", groupName, err)))
 		return
 	}
 

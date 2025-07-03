@@ -2,6 +2,7 @@ package handler
 
 import (
 	"gpt-load/internal/config"
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 
@@ -40,7 +41,7 @@ func GetSettings(c *gin.Context) {
 func UpdateSettings(c *gin.Context) {
 	var settingsMap map[string]any
 	if err := c.ShouldBindJSON(&settingsMap); err != nil {
-		response.BadRequest(c, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
@@ -53,14 +54,14 @@ func UpdateSettings(c *gin.Context) {
 
 	// 更新配置
 	if err := settingsManager.UpdateSettings(settingsMap); err != nil {
-		response.InternalError(c, "Failed to update settings: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, err.Error()))
 		return
 	}
 
 	// 重载系统配置
 	if err := settingsManager.LoadFromDatabase(); err != nil {
 		logrus.Errorf("Failed to reload system settings: %v", err)
-		response.InternalError(c, "Failed to reload system settings")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Failed to reload system settings after update"))
 		return
 	}
 

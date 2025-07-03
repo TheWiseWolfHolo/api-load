@@ -2,9 +2,9 @@
 package handler
 
 import (
+	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -18,13 +18,13 @@ type CreateKeysRequest struct {
 func (s *Server) CreateKeysInGroup(c *gin.Context) {
 	groupID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	var req CreateKeysRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
@@ -38,7 +38,7 @@ func (s *Server) CreateKeysInGroup(c *gin.Context) {
 	}
 
 	if err := s.DB.Create(&newKeys).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to create keys")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -49,13 +49,13 @@ func (s *Server) CreateKeysInGroup(c *gin.Context) {
 func (s *Server) ListKeysInGroup(c *gin.Context) {
 	groupID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	var keys []models.APIKey
 	if err := s.DB.Where("group_id = ?", groupID).Find(&keys).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to list keys")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -66,19 +66,19 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 func (s *Server) UpdateKey(c *gin.Context) {
 	groupID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	keyID, err := strconv.Atoi(c.Param("key_id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid key ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid key ID format"))
 		return
 	}
 
 	var key models.APIKey
 	if err := s.DB.Where("group_id = ? AND id = ?", groupID, keyID).First(&key).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Key not found in this group")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -86,13 +86,13 @@ func (s *Server) UpdateKey(c *gin.Context) {
 		Status string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&updateData); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
 	key.Status = updateData.Status
 	if err := s.DB.Save(&key).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to update key")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -107,18 +107,18 @@ type DeleteKeysRequest struct {
 func (s *Server) DeleteKeys(c *gin.Context) {
 	groupID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
 	}
 
 	var req DeleteKeysRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
 	if len(req.KeyIDs) == 0 {
-		response.Error(c, http.StatusBadRequest, "No key IDs provided")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "No key IDs provided"))
 		return
 	}
 
@@ -129,20 +129,20 @@ func (s *Server) DeleteKeys(c *gin.Context) {
 	var count int64
 	if err := tx.Model(&models.APIKey{}).Where("id IN ? AND group_id = ?", req.KeyIDs, groupID).Count(&count).Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to verify keys")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
 	if count != int64(len(req.KeyIDs)) {
 		tx.Rollback()
-		response.Error(c, http.StatusForbidden, "One or more keys do not belong to the specified group")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrForbidden, "One or more keys do not belong to the specified group"))
 		return
 	}
 
 	// Delete the keys
 	if err := tx.Where("id IN ?", req.KeyIDs).Delete(&models.APIKey{}).Error; err != nil {
 		tx.Rollback()
-		response.Error(c, http.StatusInternalServerError, "Failed to delete keys")
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 

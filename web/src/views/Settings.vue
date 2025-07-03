@@ -55,7 +55,7 @@ function handleSubmit() {
 
     try {
       loading.value = true;
-      await http.post("/settings", form.value);
+      await http.put("/settings", form.value);
       fetchSettings();
     } finally {
       loading.value = false;
