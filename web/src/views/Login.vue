@@ -29,7 +29,6 @@ const handleLogin = async () => {
 <template>
   <div class="login-container">
     <n-card class="login-card" title="登录">
-      <div>auth: {{ authKey }}</div>
       <n-space vertical>
         <n-input
           v-model:value="authKey"
