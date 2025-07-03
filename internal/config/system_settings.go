@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
 	"gorm.io/gorm/clause"
 )
 
@@ -220,7 +221,7 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]string) e
 }
 
 // GetEffectiveConfig 获取有效配置 (系统配置 + 分组覆盖)
-func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig map[string]any) SystemSettings {
+func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMap) SystemSettings {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
@@ -244,8 +245,19 @@ func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig map[string]any) 
 		if fieldName, ok := jsonToField[key]; ok {
 			fieldValue := v.FieldByName(fieldName)
 			if fieldValue.IsValid() && fieldValue.CanSet() {
-				if intVal, err := interfaceToInt(val); err == nil {
-					fieldValue.SetInt(int64(intVal))
+				switch fieldValue.Kind() {
+				case reflect.Int:
+					if intVal, err := interfaceToInt(val); err == nil {
+						fieldValue.SetInt(int64(intVal))
+					}
+				case reflect.String:
+					if strVal, ok := interfaceToString(val); ok {
+						fieldValue.SetString(strVal)
+					}
+				case reflect.Bool:
+					if boolVal, ok := interfaceToBool(val); ok {
+						fieldValue.SetBool(boolVal)
+					}
 				}
 			}
 		}
@@ -359,4 +371,25 @@ func interfaceToInt(val interface{}) (int, error) {
 	default:
 		return 0, fmt.Errorf("cannot convert to int: %v", val)
 	}
+}
+
+func interfaceToString(val interface{}) (string, bool) {
+	s, ok := val.(string)
+	return s, ok
+}
+
+func interfaceToBool(val interface{}) (bool, bool) {
+	switch v := val.(type) {
+	case bool:
+		return v, true
+	case string:
+		lowerV := strings.ToLower(v)
+		if lowerV == "true" || lowerV == "1" || lowerV == "on" {
+			return true, true
+		}
+		if lowerV == "false" || lowerV == "0" || lowerV == "off" {
+			return false, true
+		}
+	}
+	return false, false
 }

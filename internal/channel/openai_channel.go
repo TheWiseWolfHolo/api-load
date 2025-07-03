@@ -5,14 +5,15 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 )
 
 type OpenAIChannel struct {
 	BaseChannel
 }
 
-func NewOpenAIChannel(upstreams []string) (*OpenAIChannel, error) {
-	base, err := newBaseChannelWithUpstreams("openai", upstreams)
+func NewOpenAIChannel(upstreams []string, config datatypes.JSONMap) (*OpenAIChannel, error) {
+	base, err := newBaseChannelWithUpstreams("openai", upstreams, config)
 	if err != nil {
 		return nil, err
 	}

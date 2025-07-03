@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"gpt-load/internal/errors"
 	"gpt-load/internal/types"
@@ -37,8 +36,7 @@ var DefaultConstants = Constants{
 
 // Manager implements the ConfigManager interface
 type Manager struct {
-	config            *Config
-	roundRobinCounter uint64
+	config *Config
 }
 
 // Config represents the application configuration
@@ -67,25 +65,27 @@ func (m *Manager) ReloadConfig() error {
 		logrus.Info("Info: Create .env file to support environment variable configuration")
 	}
 
+	// Get business logic defaults from the single source of truth
+	defaultSettings := DefaultSystemSettings()
+
 	config := &Config{
 		Server: types.ServerConfig{
 			Port: parseInteger(os.Getenv("PORT"), 3000),
 			Host: getEnvOrDefault("HOST", "0.0.0.0"),
 			// Server timeout configs now come from system settings, not environment
-			// Using defaults here, will be overridden by system settings
-			ReadTimeout:             120,
-			WriteTimeout:            1800,
-			IdleTimeout:             120,
-			GracefulShutdownTimeout: 60,
+			// Using defaults from SystemSettings struct as the initial value
+			ReadTimeout:             defaultSettings.ServerReadTimeout,
+			WriteTimeout:            defaultSettings.ServerWriteTimeout,
+			IdleTimeout:             defaultSettings.ServerIdleTimeout,
+			GracefulShutdownTimeout: defaultSettings.ServerGracefulShutdownTimeout,
 		},
 		OpenAI: types.OpenAIConfig{
-			// OPENAI_BASE_URL is removed from environment config
-			// Base URLs will be configured per group
-			BaseURLs: []string{}, // Will be set per group
+			// BaseURLs will be configured per group
+			BaseURLs: []string{},
 			// Timeout configs now come from system settings
-			RequestTimeout:  30,
-			ResponseTimeout: 30,
-			IdleConnTimeout: 120,
+			RequestTimeout:  defaultSettings.RequestTimeout,
+			ResponseTimeout: defaultSettings.ResponseTimeout,
+			IdleConnTimeout: defaultSettings.IdleConnTimeout,
 		},
 		Auth: types.AuthConfig{
 			Key:     os.Getenv("AUTH_KEY"),
@@ -122,24 +122,6 @@ func (m *Manager) ReloadConfig() error {
 	return nil
 }
 
-// GetServerConfig returns server configuration
-// func (m *Manager) GetServerConfig() types.ServerConfig {
-// 	return m.config.Server
-// }
-
-// GetOpenAIConfig returns OpenAI configuration
-// func (m *Manager) GetOpenAIConfig() types.OpenAIConfig {
-// 	config := m.config.OpenAI
-// 	if len(config.BaseURLs) > 1 {
-// 		// Use atomic counter for thread-safe round-robin
-// 		index := atomic.AddUint64(&m.roundRobinCounter, 1) - 1
-// 		config.BaseURL = config.BaseURLs[index%uint64(len(config.BaseURLs))]
-// 	} else if len(config.BaseURLs) == 1 {
-// 		config.BaseURL = config.BaseURLs[0]
-// 	}
-// 	return config
-// }
-
 // GetAuthConfig returns authentication configuration
 func (m *Manager) GetAuthConfig() types.AuthConfig {
 	return m.config.Auth
@@ -164,7 +146,7 @@ func (m *Manager) GetLogConfig() types.LogConfig {
 func (m *Manager) GetEffectiveServerConfig() types.ServerConfig {
 	config := m.config.Server
 
-	// Merge with system settings
+	// Merge with system settings from database
 	settingsManager := GetSystemSettingsManager()
 	systemSettings := settingsManager.GetSettings()
 
@@ -175,35 +157,6 @@ func (m *Manager) GetEffectiveServerConfig() types.ServerConfig {
 
 	return config
 }
-
-// GetEffectiveOpenAIConfig returns OpenAI configuration merged with system settings and group config
-func (m *Manager) GetEffectiveOpenAIConfig(groupConfig map[string]any) types.OpenAIConfig {
-	config := m.config.OpenAI
-
-	// Merge with system settings
-	settingsManager := GetSystemSettingsManager()
-	effectiveSettings := settingsManager.GetEffectiveConfig(groupConfig)
-
-	config.RequestTimeout = effectiveSettings.RequestTimeout
-	config.ResponseTimeout = effectiveSettings.ResponseTimeout
-	config.IdleConnTimeout = effectiveSettings.IdleConnTimeout
-
-	// Apply round-robin for multiple URLs if configured
-	if len(config.BaseURLs) > 1 {
-		index := atomic.AddUint64(&m.roundRobinCounter, 1) - 1
-		config.BaseURL = config.BaseURLs[index%uint64(len(config.BaseURLs))]
-	} else if len(config.BaseURLs) == 1 {
-		config.BaseURL = config.BaseURLs[0]
-	}
-
-	return config
-}
-
-// GetEffectiveLogConfig returns log configuration (now uses environment config only)
-// func (m *Manager) GetEffectiveLogConfig() types.LogConfig {
-// 	// Log configuration is now managed via environment variables only
-// 	return m.config.Log
-// }
 
 // Validate validates the configuration
 func (m *Manager) Validate() error {
@@ -232,7 +185,6 @@ func (m *Manager) Validate() error {
 // DisplayConfig displays current configuration information
 func (m *Manager) DisplayConfig() {
 	serverConfig := m.GetEffectiveServerConfig()
-	// openaiConfig := m.GetOpenAIConfig()
 	authConfig := m.GetAuthConfig()
 	corsConfig := m.GetCORSConfig()
 	perfConfig := m.GetPerformanceConfig()

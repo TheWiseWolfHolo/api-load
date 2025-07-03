@@ -5,14 +5,15 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 )
 
 type GeminiChannel struct {
 	BaseChannel
 }
 
-func NewGeminiChannel(upstreams []string) (*GeminiChannel, error) {
-	base, err := newBaseChannelWithUpstreams("gemini", upstreams)
+func NewGeminiChannel(upstreams []string, config datatypes.JSONMap) (*GeminiChannel, error) {
+	base, err := newBaseChannelWithUpstreams("gemini", upstreams, config)
 	if err != nil {
 		return nil, err
 	}
