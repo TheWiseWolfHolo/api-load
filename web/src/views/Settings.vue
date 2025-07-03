@@ -1,37 +1,19 @@
 <script setup lang="ts">
-import http from "@/utils/http";
-import type { FormValidationError } from "naive-ui";
+import { settingsApi, type SettingCategory } from "@/api/settings";
+import { NTooltip } from "naive-ui";
 import { ref } from "vue";
 
-interface Setting {
-  key: string;
-  name: string;
-  value: string | number;
-  type: "int" | "string";
-  min_value?: number;
-}
-
-interface SettingCategory {
-  category_name: string;
-  settings: Setting[];
-}
-
 const settingList = ref<SettingCategory[]>([]);
-const loading = ref(false);
 const formRef = ref();
 const form = ref<Record<string, string | number>>({});
+const isSaving = ref(false);
 
 fetchSettings();
 
 async function fetchSettings() {
-  loading.value = true;
-  try {
-    const response = await http.get("/settings");
-    settingList.value = response.data || [];
-    initForm();
-  } finally {
-    loading.value = false;
-  }
+  const data = await settingsApi.getSettings();
+  settingList.value = data || [];
+  initForm();
 }
 
 function initForm() {
@@ -43,36 +25,25 @@ function initForm() {
   }, {});
 }
 
-function handleSubmit() {
-  if (loading.value) {
+async function handleSubmit() {
+  if (isSaving.value) {
     return;
   }
 
-  formRef.value.validate(async (errors: Array<FormValidationError> | undefined) => {
-    if (errors) {
-      return;
-    }
-
-    try {
-      loading.value = true;
-      await http.put("/settings", form.value);
-      fetchSettings();
-    } finally {
-      loading.value = false;
-    }
-  });
+  try {
+    await formRef.value.validate();
+    isSaving.value = true;
+    await settingsApi.updateSettings(form.value);
+    await fetchSettings();
+  } finally {
+    isSaving.value = false;
+  }
 }
 </script>
 
 <template>
-  <n-spin :show="loading">
-    <n-form
-      ref="formRef"
-      :model="form"
-      label-placement="left"
-      label-width="110"
-      :disabled="loading"
-    >
+  <div>
+    <n-form ref="formRef" :model="form" label-placement="left" label-width="110">
       <n-card
         v-for="(category, cIndex) in settingList"
         :key="cIndex"
@@ -83,7 +54,6 @@ function handleSubmit() {
           <n-form-item
             v-for="item in category.settings"
             :key="item.key"
-            :label="item.name"
             :path="item.key"
             style="margin-right: 10px"
             :rule="{
@@ -91,6 +61,14 @@ function handleSubmit() {
               message: `请输入${item.name}`,
             }"
           >
+            <template #label>
+              <n-tooltip trigger="hover">
+                <template #trigger>
+                  <span>{{ item.name }}</span>
+                </template>
+                <span>{{ item.description }}</span>
+              </n-tooltip>
+            </template>
             <n-input-number
               v-if="item.type === 'int'"
               v-model:value="form[item.key]"
@@ -110,13 +88,14 @@ function handleSubmit() {
         </n-space>
       </n-card>
     </n-form>
-  </n-spin>
+  </div>
   <n-flex justify="center">
     <n-button
       v-show="settingList.length > 0"
       type="primary"
       style="width: 200px"
-      :loading="loading"
+      :loading="isSaving"
+      :disabled="isSaving"
       @click="handleSubmit"
     >
       保存设置

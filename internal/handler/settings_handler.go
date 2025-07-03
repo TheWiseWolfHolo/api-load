@@ -17,18 +17,22 @@ func GetSettings(c *gin.Context) {
 	currentSettings := settingsManager.GetSettings()
 	settingsInfo := config.GenerateSettingsMetadata(&currentSettings)
 
-	// Group settings by category
+	// Group settings by category while preserving order
 	categorized := make(map[string][]models.SystemSettingInfo)
+	var categoryOrder []string
 	for _, s := range settingsInfo {
+		if _, exists := categorized[s.Category]; !exists {
+			categoryOrder = append(categoryOrder, s.Category)
+		}
 		categorized[s.Category] = append(categorized[s.Category], s)
 	}
 
-	// Create the response structure
+	// Create the response structure in the correct order
 	var responseData []models.CategorizedSettings
-	for categoryName, settings := range categorized {
+	for _, categoryName := range categoryOrder {
 		responseData = append(responseData, models.CategorizedSettings{
 			CategoryName: categoryName,
-			Settings:     settings,
+			Settings:     categorized[categoryName],
 		})
 	}
 
