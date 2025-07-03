@@ -10,7 +10,34 @@ const isLoggedIn = computed(() => !!authKey.value);
 
 <template>
   <global-providers>
-    <layout v-if="isLoggedIn" />
-    <router-view v-else />
+    <div id="app-root">
+      <transition name="app-transition" mode="out-in">
+        <layout v-if="isLoggedIn" key="layout" />
+        <router-view v-else key="auth" />
+      </transition>
+    </div>
   </global-providers>
 </template>
+
+<style>
+#app-root {
+  width: 100%;
+  /* height: 100vh; */
+  overflow: hidden;
+}
+
+.app-transition-enter-active,
+.app-transition-leave-active {
+  transition: all 0.4s ease;
+}
+
+.app-transition-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.app-transition-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+</style>

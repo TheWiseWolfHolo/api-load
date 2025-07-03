@@ -12,7 +12,7 @@ const { login } = useAuthService();
 
 const handleLogin = async () => {
   if (!authKey.value) {
-    message.error("Please enter Auth Key");
+    message.error("请输入授权密钥");
     return;
   }
   loading.value = true;
@@ -21,42 +21,224 @@ const handleLogin = async () => {
   if (success) {
     router.push("/");
   } else {
-    message.error("Login failed, please check your Auth Key");
+    message.error("登录失败，请检查您的授权密钥");
   }
 };
 </script>
 
 <template>
   <div class="login-container">
-    <n-card class="login-card" title="登录">
-      <n-space vertical>
-        <n-input
-          v-model:value="authKey"
-          type="password"
-          placeholder="Auth Key"
-          @keyup.enter="handleLogin"
-        />
-        <n-button class="login-btn" type="primary" block @click="handleLogin" :loading="loading">
-          Login
-        </n-button>
-      </n-space>
-    </n-card>
+    <div class="login-background">
+      <div class="login-decoration" />
+      <div class="login-decoration-2" />
+    </div>
+
+    <div class="login-content">
+      <div class="login-header">
+        <h1 class="login-title">GPT Load</h1>
+        <p class="login-subtitle">智能负载均衡管理平台</p>
+      </div>
+
+      <n-card class="login-card modern-card" :bordered="false">
+        <template #header>
+          <div class="card-header">
+            <h2 class="card-title">欢迎回来</h2>
+            <p class="card-subtitle">请输入您的授权密钥以继续</p>
+          </div>
+        </template>
+
+        <n-space vertical size="large">
+          <n-input
+            v-model:value="authKey"
+            type="password"
+            size="large"
+            placeholder="请输入授权密钥"
+            class="modern-input"
+            @keyup.enter="handleLogin"
+          >
+            <template #prefix>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M6 10v-4a6 6 0 1 1 12 0v4h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm6-6a4 4 0 0 0-4 4v4h8v-4a4 4 0 0 0-4-4z"
+                />
+              </svg>
+            </template>
+          </n-input>
+
+          <n-button
+            class="login-btn modern-button"
+            type="primary"
+            size="large"
+            block
+            @click="handleLogin"
+            :loading="loading"
+            :disabled="loading"
+          >
+            <template v-if="!loading">
+              <span>立即登录</span>
+            </template>
+          </n-button>
+        </n-space>
+      </n-card>
+
+      <div class="login-footer">
+        <p class="footer-text">© 2024 GPT Load. All rights reserved.</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .login-container {
-  height: 100%;
+  height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.login-decoration {
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 800px;
+  height: 800px;
+  background: var(--primary-gradient);
+  border-radius: 50%;
+  opacity: 0.1;
+  animation: float 6s ease-in-out infinite;
+}
+
+.login-decoration-2 {
+  position: absolute;
+  bottom: -50%;
+  left: -20%;
+  width: 600px;
+  height: 600px;
+  background: var(--secondary-gradient);
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 8s ease-in-out infinite reverse;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+.login-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.login-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+
+.login-subtitle {
+  font-size: 1.1rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
 }
 
 .login-card {
-  max-width: 400px;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.card-header {
+  text-align: center;
+  padding-bottom: 8px;
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.card-subtitle {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0;
 }
 
 .login-btn {
-  margin-top: 10px;
+  background: var(--primary-gradient);
+  border: none;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  height: 48px;
+  font-size: 1rem;
+}
+
+.login-btn:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 32px;
+}
+
+.footer-text {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+:deep(.n-input) {
+  --n-border-radius: 12px;
+  --n-height: 48px;
+}
+
+:deep(.n-input__input-el) {
+  font-size: 1rem;
+}
+
+:deep(.n-input__prefix) {
+  color: #64748b;
+}
+
+:deep(.n-card-header) {
+  padding-bottom: 16px;
+}
+
+:deep(.n-card__content) {
+  padding-top: 0;
 }
 </style>
