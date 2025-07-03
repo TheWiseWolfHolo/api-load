@@ -14,6 +14,7 @@ export interface APIKey {
 export interface Group {
   id: number;
   name: string;
+  nickname: string;
   description: string;
   channel_type: "openai" | "gemini";
   config: string;
@@ -58,6 +59,6 @@ export interface DashboardStats {
 }
 
 export interface GroupRequestStat {
-  group_name: string;
+  group_nickname: string;
   request_count: number;
 }

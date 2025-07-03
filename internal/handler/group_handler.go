@@ -6,10 +6,21 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
+
+// isValidGroupName checks if the group name is valid.
+func isValidGroupName(name string) bool {
+	if name == "" {
+		return false
+	}
+	// 允许使用小写字母、数字和下划线，长度在 3 到 30 个字符之间
+	match, _ := regexp.MatchString("^[a-z0-9_]{3,30}$", name)
+	return match
+}
 
 // CreateGroup handles the creation of a new group.
 func (s *Server) CreateGroup(c *gin.Context) {
@@ -20,8 +31,8 @@ func (s *Server) CreateGroup(c *gin.Context) {
 	}
 
 	// Validation
-	if group.Name == "" {
-		response.Error(c, http.StatusBadRequest, "Group name is required")
+	if !isValidGroupName(group.Name) {
+		response.Error(c, http.StatusBadRequest, "Invalid group name format. Use lowercase letters and underscores, and do not start with an underscore.")
 		return
 	}
 	if len(group.Upstreams) == 0 {
@@ -51,23 +62,6 @@ func (s *Server) ListGroups(c *gin.Context) {
 	response.Success(c, groups)
 }
 
-// GetGroup handles getting a single group by its ID.
-func (s *Server) GetGroup(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid group ID")
-		return
-	}
-
-	var group models.Group
-	if err := s.DB.Preload("APIKeys").First(&group, id).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Group not found")
-		return
-	}
-
-	response.Success(c, group)
-}
-
 // UpdateGroup handles updating an existing group.
 func (s *Server) UpdateGroup(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -88,6 +82,12 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
+	// Validate group name if it's being updated
+	if updateData.Name != "" && !isValidGroupName(updateData.Name) {
+		response.Error(c, http.StatusBadRequest, "Invalid group name format. Use lowercase letters and underscores, and do not start with an underscore.")
+		return
+	}
+
 	// Use a transaction to ensure atomicity
 	tx := s.DB.Begin()
 	if tx.Error != nil {
@@ -102,6 +102,36 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Failed to process update data")
 		return
 	}
+
+	// If config is being updated, it needs to be marshalled to JSON string for GORM
+	if config, ok := updateMap["config"]; ok {
+		if configMap, isMap := config.(map[string]interface{}); isMap {
+			configJSON, err := json.Marshal(configMap)
+			if err != nil {
+				response.Error(c, http.StatusBadRequest, "Failed to process config data")
+				return
+			}
+			updateMap["config"] = string(configJSON)
+		}
+	}
+
+	// Handle upstreams field specifically
+	if upstreams, ok := updateMap["upstreams"]; ok {
+		if upstreamsSlice, isSlice := upstreams.([]interface{}); isSlice {
+			upstreamsJSON, err := json.Marshal(upstreamsSlice)
+			if err != nil {
+				response.Error(c, http.StatusBadRequest, "Failed to process upstreams data")
+				return
+			}
+			updateMap["upstreams"] = string(upstreamsJSON)
+		}
+	}
+
+	// Remove fields that are not actual columns or should not be updated from the map
+	delete(updateMap, "id")
+	delete(updateMap, "api_keys")
+	delete(updateMap, "created_at")
+	delete(updateMap, "updated_at")
 
 	// Use Updates with a map to only update provided fields, including zero values
 	if err := tx.Model(&group).Updates(updateMap).Error; err != nil {
@@ -118,7 +148,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 
 	// Re-fetch the group to return the updated data
 	var updatedGroup models.Group
-	if err := s.DB.Preload("APIKeys").First(&updatedGroup, id).Error; err != nil {
+	if err := s.DB.First(&updatedGroup, id).Error; err != nil {
 		response.Error(c, http.StatusNotFound, "Failed to fetch updated group data")
 		return
 	}
