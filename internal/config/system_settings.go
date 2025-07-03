@@ -97,10 +97,17 @@ func DefaultSystemSettings() SystemSettings {
 		if fieldValue.CanSet() {
 			switch fieldValue.Kind() {
 			case reflect.Int:
-				if val, err := strconv.ParseInt(defaultTag, 10, 64); err == nil {
-					fieldValue.SetInt(val)
+				if intVal, err := strconv.ParseInt(defaultTag, 10, 64); err == nil {
+					fieldValue.SetInt(int64(intVal))
 				}
-				// Add cases for other types like string, bool if needed
+			case reflect.String:
+				if strVal, ok := interfaceToString(defaultTag); ok {
+					fieldValue.SetString(strVal)
+				}
+			case reflect.Bool:
+				if boolVal, ok := interfaceToBool(defaultTag); ok {
+					fieldValue.SetBool(boolVal)
+				}
 			}
 		}
 	}
@@ -345,13 +352,23 @@ func (sm *SystemSettingsManager) mapToStruct(m map[string]string, s *SystemSetti
 		}
 	}
 
-	for key, valStr := range m {
+	for key, val := range m {
 		if fieldName, ok := jsonToField[key]; ok {
 			fieldValue := v.FieldByName(fieldName)
 			if fieldValue.IsValid() && fieldValue.CanSet() {
-				// 假设所有字段都是 int 类型
-				if intVal, err := strconv.Atoi(valStr); err == nil {
-					fieldValue.SetInt(int64(intVal))
+				switch fieldValue.Kind() {
+				case reflect.Int:
+					if intVal, err := interfaceToInt(val); err == nil {
+						fieldValue.SetInt(int64(intVal))
+					}
+				case reflect.String:
+					if strVal, ok := interfaceToString(val); ok {
+						fieldValue.SetString(strVal)
+					}
+				case reflect.Bool:
+					if boolVal, ok := interfaceToBool(val); ok {
+						fieldValue.SetBool(boolVal)
+					}
 				}
 			}
 		}
