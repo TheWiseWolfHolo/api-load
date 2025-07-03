@@ -2,6 +2,7 @@ package handler
 
 import (
 	"gpt-load/internal/config"
+	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 
 	"github.com/gin-gonic/gin"
@@ -9,15 +10,28 @@ import (
 )
 
 // GetSettings handles the GET /api/settings request.
-// It retrieves all system settings and returns them with detailed information.
+// It retrieves all system settings, groups them by category, and returns them.
 func GetSettings(c *gin.Context) {
 	settingsManager := config.GetSystemSettingsManager()
 	currentSettings := settingsManager.GetSettings()
-
-	// 使用新的动态元数据生成器
 	settingsInfo := config.GenerateSettingsMetadata(&currentSettings)
 
-	response.Success(c, settingsInfo)
+	// Group settings by category
+	categorized := make(map[string][]models.SystemSettingInfo)
+	for _, s := range settingsInfo {
+		categorized[s.Category] = append(categorized[s.Category], s)
+	}
+
+	// Create the response structure
+	var responseData []models.CategorizedSettings
+	for categoryName, settings := range categorized {
+		responseData = append(responseData, models.CategorizedSettings{
+			CategoryName: categoryName,
+			Settings:     settings,
+		})
+	}
+
+	response.Success(c, responseData)
 }
 
 // UpdateSettings handles the PUT /api/settings request.

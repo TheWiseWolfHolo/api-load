@@ -18,25 +18,22 @@ import (
 // 使用结构体标签作为唯一事实来源
 type SystemSettings struct {
 	// 负载均衡和重试配置
-	BlacklistThreshold int `json:"blacklist_threshold" default:"1" desc:"Error count before blacklisting a key" validate:"min=0"`
-	MaxRetries         int `json:"max_retries" default:"3" desc:"Maximum retry attempts with different keys" validate:"min=0"`
+	BlacklistThreshold int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"失败重试" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
+	MaxRetries         int `json:"max_retries" default:"3" name:"最大重试次数" category:"失败重试" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
 
 	// 服务器超时配置 (秒)
-	ServerReadTimeout             int `json:"server_read_timeout" default:"120" desc:"HTTP server read timeout in seconds" validate:"min=1"`
-	ServerWriteTimeout            int `json:"server_write_timeout" default:"1800" desc:"HTTP server write timeout in seconds" validate:"min=1"`
-	ServerIdleTimeout             int `json:"server_idle_timeout" default:"120" desc:"HTTP server idle timeout in seconds" validate:"min=1"`
-	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" desc:"Graceful shutdown timeout in seconds" validate:"min=1"`
+	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务器配置" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
+	ServerWriteTimeout            int `json:"server_write_timeout" default:"1800" name:"写入超时" category:"服务器配置" desc:"HTTP 服务器写入超时时间（秒）" validate:"min=1"`
+	ServerIdleTimeout             int `json:"server_idle_timeout" default:"120" name:"空闲超时" category:"服务器配置" desc:"HTTP 服务器空闲超时时间（秒）" validate:"min=1"`
+	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" name:"优雅关闭超时" category:"服务器配置" desc:"服务优雅关闭的等待超时时间（秒）" validate:"min=1"`
 
 	// 请求超时配置 (秒)
-	RequestTimeout  int `json:"request_timeout" default:"30" desc:"Request timeout in seconds" validate:"min=1"`
-	ResponseTimeout int `json:"response_timeout" default:"30" desc:"Response timeout in seconds (TLS handshake & response header)" validate:"min=1"`
-	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" desc:"Idle connection timeout in seconds" validate:"min=1"`
-
-	// 性能配置
-	// MaxConcurrentRequests int `json:"max_concurrent_requests" default:"100" desc:"Maximum number of concurrent requests" validate:"min=1"`
+	RequestTimeout  int `json:"request_timeout" default:"30" name:"请求超时" category:"请求配置" desc:"请求处理的总体超时时间（秒）" validate:"min=1"`
+	ResponseTimeout int `json:"response_timeout" default:"30" name:"响应超时" category:"请求配置" desc:"TLS 握手和响应头的超时时间（秒）" validate:"min=1"`
+	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求配置" desc:"空闲连接的超时时间（秒）" validate:"min=1"`
 
 	// 请求日志配置（数据库日志）
-	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" desc:"Number of days to retain request logs in database" validate:"min=1"`
+	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"日志配置" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
 }
 
 // GenerateSettingsMetadata 使用反射从 SystemSettings 结构体动态生成元数据
@@ -54,9 +51,11 @@ func GenerateSettingsMetadata(s *SystemSettings) []models.SystemSettingInfo {
 			continue
 		}
 
+		nameTag := field.Tag.Get("name")
 		descTag := field.Tag.Get("desc")
 		defaultTag := field.Tag.Get("default")
 		validateTag := field.Tag.Get("validate")
+		categoryTag := field.Tag.Get("category")
 
 		var minValue *int
 		if strings.HasPrefix(validateTag, "min=") {
@@ -68,10 +67,12 @@ func GenerateSettingsMetadata(s *SystemSettings) []models.SystemSettingInfo {
 
 		info := models.SystemSettingInfo{
 			Key:          jsonTag,
+			Name:         nameTag,
 			Value:        fieldValue.Interface(),
 			Type:         field.Type.String(),
 			DefaultValue: defaultTag,
 			Description:  descTag,
+			Category:     categoryTag,
 			MinValue:     minValue,
 		}
 		settingsInfo = append(settingsInfo, info)
@@ -325,7 +326,6 @@ func (sm *SystemSettingsManager) DisplayCurrentSettings() {
 		sm.settings.ServerIdleTimeout, sm.settings.ServerGracefulShutdownTimeout)
 	logrus.Infof("   Request timeouts: request=%ds, response=%ds, idle_conn=%ds",
 		sm.settings.RequestTimeout, sm.settings.ResponseTimeout, sm.settings.IdleConnTimeout)
-	// logrus.Infof("   Performance: max_concurrent=%d", sm.settings.MaxConcurrentRequests)
 	logrus.Infof("   Request log retention: %d days", sm.settings.RequestLogRetentionDays)
 }
 
