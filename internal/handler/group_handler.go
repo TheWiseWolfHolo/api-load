@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 	"net/http"
@@ -18,6 +19,20 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
+	// Validation
+	if group.Name == "" {
+		response.Error(c, http.StatusBadRequest, "Group name is required")
+		return
+	}
+	if len(group.Upstreams) == 0 {
+		response.Error(c, http.StatusBadRequest, "At least one upstream is required")
+		return
+	}
+	if group.ChannelType == "" {
+		response.Error(c, http.StatusBadRequest, "Channel type is required")
+		return
+	}
+
 	if err := s.DB.Create(&group).Error; err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to create group")
 		return
@@ -29,7 +44,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 // ListGroups handles listing all groups.
 func (s *Server) ListGroups(c *gin.Context) {
 	var groups []models.Group
-	if err := s.DB.Find(&groups).Error; err != nil {
+	if err := s.DB.Order("sort asc, id desc").Find(&groups).Error; err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to list groups")
 		return
 	}
@@ -73,18 +88,42 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	// We only allow updating certain fields
-	group.Name = updateData.Name
-	group.Description = updateData.Description
-	group.ChannelType = updateData.ChannelType
-	group.Config = updateData.Config
+	// Use a transaction to ensure atomicity
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
+		return
+	}
 
-	if err := s.DB.Save(&group).Error; err != nil {
+	// Convert updateData to a map to ensure zero values (like Sort: 0) are updated
+	var updateMap map[string]interface{}
+	updateBytes, _ := json.Marshal(updateData)
+	if err := json.Unmarshal(updateBytes, &updateMap); err != nil {
+		response.Error(c, http.StatusBadRequest, "Failed to process update data")
+		return
+	}
+
+	// Use Updates with a map to only update provided fields, including zero values
+	if err := tx.Model(&group).Updates(updateMap).Error; err != nil {
+		tx.Rollback()
 		response.Error(c, http.StatusInternalServerError, "Failed to update group")
 		return
 	}
 
-	response.Success(c, group)
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		response.Error(c, http.StatusInternalServerError, "Failed to commit transaction")
+		return
+	}
+
+	// Re-fetch the group to return the updated data
+	var updatedGroup models.Group
+	if err := s.DB.Preload("APIKeys").First(&updatedGroup, id).Error; err != nil {
+		response.Error(c, http.StatusNotFound, "Failed to fetch updated group data")
+		return
+	}
+
+	response.Success(c, updatedGroup)
 }
 
 // DeleteGroup handles deleting a group.
@@ -101,6 +140,11 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
 		return
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
 	// Also delete associated API keys
 	if err := tx.Where("group_id = ?", id).Delete(&models.APIKey{}).Error; err != nil {
@@ -109,9 +153,13 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if err := tx.Delete(&models.Group{}, id).Error; err != nil {
+	if result := tx.Delete(&models.Group{}, id); result.Error != nil {
 		tx.Rollback()
 		response.Error(c, http.StatusInternalServerError, "Failed to delete group")
+		return
+	} else if result.RowsAffected == 0 {
+		tx.Rollback()
+		response.Error(c, http.StatusNotFound, "Group not found")
 		return
 	}
 

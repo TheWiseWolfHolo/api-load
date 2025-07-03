@@ -1,42 +1,24 @@
 package channel
 
 import (
-	"encoding/json"
-	"fmt"
 	"gpt-load/internal/models"
 	"net/http"
-	"net/url"
 
 	"github.com/gin-gonic/gin"
 )
+
 type OpenAIChannel struct {
 	BaseChannel
 }
 
-type OpenAIChannelConfig struct {
-	BaseURL string `json:"base_url"`
-}
-
-func NewOpenAIChannel(group *models.Group) (*OpenAIChannel, error) {
-	var config OpenAIChannelConfig
-	if err := json.Unmarshal([]byte(group.Config), &config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal channel config: %w", err)
-	}
-	if config.BaseURL == "" {
-		return nil, fmt.Errorf("base_url is required for openai channel")
-	}
-
-	baseURL, err := url.Parse(config.BaseURL)
+func NewOpenAIChannel(upstreams []string) (*OpenAIChannel, error) {
+	base, err := newBaseChannelWithUpstreams("openai", upstreams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base_url: %w", err)
+		return nil, err
 	}
 
 	return &OpenAIChannel{
-		BaseChannel: BaseChannel{
-			Name:       "openai",
-			BaseURL:    baseURL,
-			HTTPClient: &http.Client{},
-		},
+		BaseChannel: base,
 	}, nil
 }
 
