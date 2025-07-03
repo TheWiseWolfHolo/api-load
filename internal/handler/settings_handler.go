@@ -38,7 +38,7 @@ func GetSettings(c *gin.Context) {
 // It receives a key-value JSON object and updates system settings.
 // After updating, it triggers a configuration reload.
 func UpdateSettings(c *gin.Context) {
-	var settingsMap map[string]string
+	var settingsMap map[string]any
 	if err := c.ShouldBindJSON(&settingsMap); err != nil {
 		response.BadRequest(c, "Invalid request body")
 		return

@@ -95,19 +95,8 @@ func DefaultSystemSettings() SystemSettings {
 
 		fieldValue := v.Field(i)
 		if fieldValue.CanSet() {
-			switch fieldValue.Kind() {
-			case reflect.Int:
-				if intVal, err := strconv.ParseInt(defaultTag, 10, 64); err == nil {
-					fieldValue.SetInt(int64(intVal))
-				}
-			case reflect.String:
-				if strVal, ok := interfaceToString(defaultTag); ok {
-					fieldValue.SetString(strVal)
-				}
-			case reflect.Bool:
-				if boolVal, ok := interfaceToBool(defaultTag); ok {
-					fieldValue.SetBool(boolVal)
-				}
+			if err := setFieldFromString(fieldValue, defaultTag); err != nil {
+				logrus.Warnf("Failed to set default value for field %s: %v", field.Name, err)
 			}
 		}
 	}
@@ -196,7 +185,7 @@ func (sm *SystemSettingsManager) GetSettings() SystemSettings {
 }
 
 // UpdateSettings 更新系统配置
-func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]string) error {
+func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) error {
 	if db.DB == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -211,7 +200,7 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]string) e
 	for key, value := range settingsMap {
 		settingsToUpdate = append(settingsToUpdate, models.SystemSetting{
 			SettingKey:   key,
-			SettingValue: value,
+			SettingValue: fmt.Sprintf("%v", value), // Convert interface{} to string
 		})
 	}
 
@@ -275,7 +264,7 @@ func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMa
 }
 
 // ValidateSettings 验证系统配置的有效性
-func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]string) error {
+func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) error {
 	tempSettings := DefaultSystemSettings()
 	v := reflect.ValueOf(&tempSettings).Elem()
 	t := v.Type()
@@ -295,22 +284,33 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]string)
 		}
 
 		validateTag := field.Tag.Get("validate")
-		if validateTag == "" {
-			continue
-		}
 
 		switch field.Type.Kind() {
 		case reflect.Int:
-			intVal, err := strconv.Atoi(value)
-			if err != nil {
-				return fmt.Errorf("invalid integer value for %s: %s", key, value)
+			// JSON numbers are decoded as float64
+			floatVal, ok := value.(float64)
+			if !ok {
+				return fmt.Errorf("invalid type for %s: expected a number, got %T", key, value)
 			}
+			intVal := int(floatVal)
+			if floatVal != float64(intVal) {
+				return fmt.Errorf("invalid value for %s: must be an integer", key)
+			}
+
 			if strings.HasPrefix(validateTag, "min=") {
 				minValStr := strings.TrimPrefix(validateTag, "min=")
 				minVal, _ := strconv.Atoi(minValStr)
 				if intVal < minVal {
 					return fmt.Errorf("value for %s (%d) is below minimum value (%d)", key, intVal, minVal)
 				}
+			}
+		case reflect.Bool:
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("invalid type for %s: expected a boolean, got %T", key, value)
+			}
+		case reflect.String:
+			if _, ok := value.(string); !ok {
+				return fmt.Errorf("invalid type for %s: expected a string, got %T", key, value)
 			}
 		default:
 			return fmt.Errorf("unsupported type for setting key validation: %s", key)
@@ -352,27 +352,43 @@ func (sm *SystemSettingsManager) mapToStruct(m map[string]string, s *SystemSetti
 		}
 	}
 
-	for key, val := range m {
+	for key, valStr := range m {
 		if fieldName, ok := jsonToField[key]; ok {
 			fieldValue := v.FieldByName(fieldName)
 			if fieldValue.IsValid() && fieldValue.CanSet() {
-				switch fieldValue.Kind() {
-				case reflect.Int:
-					if intVal, err := interfaceToInt(val); err == nil {
-						fieldValue.SetInt(int64(intVal))
-					}
-				case reflect.String:
-					if strVal, ok := interfaceToString(val); ok {
-						fieldValue.SetString(strVal)
-					}
-				case reflect.Bool:
-					if boolVal, ok := interfaceToBool(val); ok {
-						fieldValue.SetBool(boolVal)
-					}
+				if err := setFieldFromString(fieldValue, valStr); err != nil {
+					logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
 				}
 			}
 		}
 	}
+}
+
+// setFieldFromString sets a struct field's value from a string, based on the field's kind.
+func setFieldFromString(fieldValue reflect.Value, value string) error {
+	if !fieldValue.CanSet() {
+		return fmt.Errorf("field cannot be set")
+	}
+
+	switch fieldValue.Kind() {
+	case reflect.Int:
+		intVal, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid integer value '%s': %w", value, err)
+		}
+		fieldValue.SetInt(int64(intVal))
+	case reflect.Bool:
+		boolVal, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid boolean value '%s': %w", value, err)
+		}
+		fieldValue.SetBool(boolVal)
+	case reflect.String:
+		fieldValue.SetString(value)
+	default:
+		return fmt.Errorf("unsupported field kind: %s", fieldValue.Kind())
+	}
+	return nil
 }
 
 // 工具函数
@@ -382,30 +398,33 @@ func interfaceToInt(val interface{}) (int, error) {
 	case int:
 		return v, nil
 	case float64:
+		// JSON unmarshals numbers into float64
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("value is a float, not an integer: %v", v)
+		}
 		return int(v), nil
 	case string:
 		return strconv.Atoi(v)
 	default:
-		return 0, fmt.Errorf("cannot convert to int: %v", val)
+		return 0, fmt.Errorf("cannot convert %T to int", v)
 	}
 }
 
+// interfaceToString is kept for GetEffectiveConfig
 func interfaceToString(val interface{}) (string, bool) {
 	s, ok := val.(string)
 	return s, ok
 }
 
+// interfaceToBool is kept for GetEffectiveConfig
 func interfaceToBool(val interface{}) (bool, bool) {
 	switch v := val.(type) {
 	case bool:
 		return v, true
 	case string:
-		lowerV := strings.ToLower(v)
-		if lowerV == "true" || lowerV == "1" || lowerV == "on" {
-			return true, true
-		}
-		if lowerV == "false" || lowerV == "0" || lowerV == "off" {
-			return false, true
+		b, err := strconv.ParseBool(v)
+		if err == nil {
+			return b, true
 		}
 	}
 	return false, false
