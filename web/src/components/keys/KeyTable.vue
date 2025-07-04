@@ -93,8 +93,7 @@ async function loadKeys() {
     );
     keys.value = result.data;
     totalKeys.value = result.total;
-  } catch (error) {
-    console.error("加载密钥失败:", error);
+  } catch (_error) {
     window.$message.error("加载密钥失败");
   } finally {
     loading.value = false;
@@ -129,8 +128,7 @@ async function testKey(_key: APIKey) {
     } else {
       window.$message.error("密钥测试失败: 无效的API密钥");
     }
-  } catch (error) {
-    console.error("测试密钥失败:", error);
+  } catch (_error) {
     window.$message.error("测试失败");
   }
 }
@@ -150,8 +148,7 @@ async function restoreKey(key: APIKey) {
     await keysApi.toggleKeyStatus(key.id.toString(), 1);
     window.$message.success("密钥已恢复");
     await loadKeys();
-  } catch (error) {
-    console.error("恢复密钥失败:", error);
+  } catch (_error) {
     window.$message.error("恢复失败");
   }
 }
@@ -167,8 +164,7 @@ async function deleteKey(key: APIKey) {
     await keysApi.deleteKeyById(key.id.toString());
     window.$message.success("密钥已删除");
     await loadKeys();
-  } catch (error) {
-    console.error("删除密钥失败:", error);
+  } catch (_error) {
     window.$message.error("删除失败");
   }
 }
@@ -222,8 +218,8 @@ async function copyAllKeys() {
       .catch(() => {
         window.$message.error("复制失败");
       });
-  } catch (error) {
-    console.error("导出失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("导出失败");
   }
 }
@@ -244,8 +240,8 @@ async function copyValidKeys() {
       .catch(() => {
         window.$message.error("复制失败");
       });
-  } catch (error) {
-    console.error("导出失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("导出失败");
   }
 }
@@ -266,8 +262,8 @@ async function copyInvalidKeys() {
       .catch(() => {
         window.$message.error("复制失败");
       });
-  } catch (error) {
-    console.error("导出失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("导出失败");
   }
 }
@@ -286,8 +282,8 @@ async function restoreAllInvalid() {
   try {
     window.$message.success("所有无效密钥已恢复");
     await loadKeys();
-  } catch (error) {
-    console.error("恢复失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("恢复失败");
   }
 }
@@ -300,8 +296,8 @@ async function validateAllKeys() {
   try {
     const result = await keysApi.validateKeys(props.selectedGroup.id);
     window.$message.success(`验证完成: 有效${result.valid_count}个，无效${result.invalid_count}个`);
-  } catch (error) {
-    console.error("验证失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("验证失败");
   }
 }
@@ -320,8 +316,8 @@ async function clearAllInvalid() {
   try {
     window.$message.success("所有无效密钥已清除");
     await loadKeys();
-  } catch (error) {
-    console.error("清除失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("清除失败");
   }
 }

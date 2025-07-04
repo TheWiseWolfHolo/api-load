@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NCard, NGrid, NGridItem, NSpace, NTag } from "naive-ui";
 import { onMounted, ref } from "vue";
 
 // 模拟数据
@@ -51,41 +52,41 @@ onMounted(() => {
 
 <template>
   <div class="stats-container">
-    <div class="stats-grid">
-      <div
-        v-for="(stat, index) in stats"
-        :key="stat.title"
-        class="stat-card modern-card"
-        :style="{ animationDelay: `${index * 0.07}s` }"
-      >
-        <div class="stat-header">
-          <div class="stat-icon" :style="{ background: stat.color }">
-            {{ stat.icon }}
-          </div>
-          <div
-            class="stat-trend"
-            :class="{ 'trend-up': stat.trendUp, 'trend-down': !stat.trendUp }"
+    <n-space vertical size="medium">
+      <n-grid :cols="4" :x-gap="20" :y-gap="20" responsive="screen">
+        <n-grid-item v-for="(stat, index) in stats" :key="stat.title" span="1">
+          <n-card
+            :bordered="false"
+            class="stat-card"
+            :style="{ animationDelay: `${index * 0.07}s` }"
           >
-            {{ stat.trend }}
-          </div>
-        </div>
+            <div class="stat-header">
+              <div class="stat-icon" :style="{ background: stat.color }">
+                {{ stat.icon }}
+              </div>
+              <n-tag :type="stat.trendUp ? 'success' : 'error'" size="small" class="stat-trend">
+                {{ stat.trend }}
+              </n-tag>
+            </div>
 
-        <div class="stat-content">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-title">{{ stat.title }}</div>
-        </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ stat.value }}</div>
+              <div class="stat-title">{{ stat.title }}</div>
+            </div>
 
-        <div class="stat-bar">
-          <div
-            class="stat-bar-fill"
-            :style="{
-              background: stat.color,
-              width: `${animatedValues[stat.title] * 100}%`,
-            }"
-          />
-        </div>
-      </div>
-    </div>
+            <div class="stat-bar">
+              <div
+                class="stat-bar-fill"
+                :style="{
+                  background: stat.color,
+                  width: `${animatedValues[stat.title] * 100}%`,
+                }"
+              />
+            </div>
+          </n-card>
+        </n-grid-item>
+      </n-grid>
+    </n-space>
   </div>
 </template>
 
@@ -95,20 +96,19 @@ onMounted(() => {
   animation: fadeInUp 0.2s ease-out;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-}
-
 .stat-card {
-  padding: 24px;
   background: rgba(255, 255, 255, 0.98);
   border-radius: var(--border-radius-lg);
   border: 1px solid rgba(255, 255, 255, 0.3);
   position: relative;
   overflow: hidden;
   animation: slideInUp 0.2s ease-out both;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-header {
@@ -131,32 +131,16 @@ onMounted(() => {
 }
 
 .stat-trend {
-  font-size: 0.875rem;
   font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
 }
 
-.trend-up {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16a34a;
-}
-
-.trend-down {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.trend-up::before {
-  content: "↗";
+.stat-trend:before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
   margin-right: 4px;
-}
-
-.trend-down::before {
-  content: "↘";
-  margin-right: 4px;
+  vertical-align: middle;
 }
 
 .stat-content {
@@ -215,14 +199,20 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 640px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
+/* 响应式网格 */
+:deep(.n-grid-item) {
+  min-width: 0;
+}
 
-  .stat-card {
-    padding: 20px;
+@media (max-width: 1200px) {
+  :deep(.n-grid) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  :deep(.n-grid) {
+    grid-template-columns: 1fr;
   }
 
   .stat-value {

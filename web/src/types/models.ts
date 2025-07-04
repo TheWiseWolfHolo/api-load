@@ -25,7 +25,7 @@ export interface Group {
   display_name: string;
   description: string;
   sort: number;
-  channel_type: "openai" | "gemini" | "silicon" | "chutes";
+  channel_type: "openai" | "gemini";
   upstreams: UpstreamInfo[];
   config: Record<string, unknown>;
   api_keys?: APIKey[];

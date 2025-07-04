@@ -43,7 +43,7 @@ const mockGroups: Group[] = [
     display_name: "Silicon测试组",
     description: "Silicon Flow测试API组",
     sort: 3,
-    channel_type: "silicon",
+    channel_type: "openai",
     upstreams: [{ url: "https://api.siliconflow.cn", weight: 1 }],
     config: {
       test_model: "qwen-turbo",
@@ -52,6 +52,215 @@ const mockGroups: Group[] = [
     },
     created_at: "2024-01-03T00:00:00Z",
     updated_at: "2024-01-03T00:00:00Z",
+  },
+  {
+    id: 4,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 5,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 6,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 7,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 8,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 9,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 10,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 12,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 13,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 14,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: 15,
+    name: "openai-main",
+    display_name: "OpenAI主组",
+    description: "OpenAI主要API组",
+    sort: 1,
+    channel_type: "openai",
+    upstreams: [
+      { url: "https://api.openai.com", weight: 1 },
+      { url: "https://api.openai.com/v1", weight: 2 },
+    ],
+    config: {
+      test_model: "gpt-3.5-turbo",
+      param_overrides: { temperature: 0.7 },
+      request_timeout: 30000,
+    },
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
   },
 ];
 
@@ -490,46 +699,36 @@ export const keysApi = {
   },
 
   // 批量切换密钥状态
-  async batchToggleKeys(keyIds: string[], status: 0 | 1): Promise<void> {
+  async batchToggleKeys(_keyIds: string[], _status: 0 | 1): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 500));
-
-    // 模拟批量操作
-    const numKeys = keyIds.length;
-    console.warn(`Mock: 批量${status === 1 ? "启用" : "禁用"}${numKeys}个密钥`, keyIds);
+    // 模拟批量操作成功
   },
 
   // 批量删除密钥
-  async batchDeleteKeys(keyIds: string[]): Promise<void> {
+  async batchDeleteKeys(_keyIds: string[]): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 800));
-
-    // 模拟批量删除
-    const numKeys = keyIds.length;
-    console.warn(`Mock: 批量删除${numKeys}个密钥`, keyIds);
+    // 模拟批量删除成功
   },
 
   // 切换单个密钥状态
-  async toggleKeyStatus(keyId: string, status: 0 | 1): Promise<void> {
+  async toggleKeyStatus(_keyId: string, _status: 0 | 1): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 300));
-
-    console.warn(`Mock: ${status === 1 ? "启用" : "禁用"}密钥 ${keyId}`);
+    // 模拟切换状态成功
   },
 
   // 删除单个密钥
-  async deleteKeyById(keyId: string): Promise<void> {
+  async deleteKeyById(_keyId: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 400));
-
-    console.warn(`Mock: 删除密钥 ${keyId}`);
+    // 模拟删除成功
   },
 
   // 验证密钥
-  async validateKeys(groupId: number): Promise<{ valid_count: number; invalid_count: number }> {
+  async validateKeys(_groupId: number): Promise<{ valid_count: number; invalid_count: number }> {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // 模拟验证结果
     const validCount = Math.floor(Math.random() * 10) + 5;
     const invalidCount = Math.floor(Math.random() * 3);
-
-    console.warn(`Mock: 验证分组${groupId}的密钥，有效：${validCount}，无效：${invalidCount}`);
 
     return {
       valid_count: validCount,

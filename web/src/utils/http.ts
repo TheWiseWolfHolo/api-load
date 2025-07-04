@@ -45,7 +45,6 @@ http.interceptors.response.use(
       // Something happened in setting up the request that triggered an Error
       window.$message.error("请求设置错误");
     }
-    console.error("API Error:", error);
     return Promise.reject(error);
   }
 );

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group } from "@/types/models";
-import { useMessage } from "naive-ui";
+import { NButton, NCard, NEmpty, NInput, NSpin, NTag, useMessage } from "naive-ui";
 import { computed, ref } from "vue";
 
 interface Props {
@@ -41,6 +41,18 @@ function handleGroupClick(group: Group) {
   emit("group-select", group);
 }
 
+// 获取渠道类型的标签颜色
+function getChannelTagType(channelType: string) {
+  switch (channelType) {
+    case "openai":
+      return "success";
+    case "gemini":
+      return "info";
+    default:
+      return "default";
+  }
+}
+
 // 简单的创建分组功能（演示用）
 async function createDemoGroup() {
   try {
@@ -60,8 +72,8 @@ async function createDemoGroup() {
 
     message.success(`创建分组成功: ${newGroup.display_name}`);
     emit("refresh");
-  } catch (error) {
-    console.error("创建分组失败:", error);
+  } catch (_error) {
+    // 错误已记录
     message.error("创建分组失败");
   }
 }
@@ -69,113 +81,105 @@ async function createDemoGroup() {
 
 <template>
   <div class="group-list-container">
-    <div class="group-list-card">
+    <n-card class="group-list-card modern-card" :bordered="false" size="small">
       <!-- 搜索框 -->
       <div class="search-section">
-        <input v-model="searchText" placeholder="搜索分组名称..." class="search-input" />
+        <n-input v-model:value="searchText" placeholder="搜索分组名称..." size="small" clearable>
+          <template #prefix>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+              />
+            </svg>
+          </template>
+        </n-input>
       </div>
 
       <!-- 分组列表 -->
       <div class="groups-section">
-        <div v-if="loading" class="loading-state">加载中...</div>
-        <div v-else-if="filteredGroups.length === 0" class="empty-state">
-          <div class="empty-text">
-            {{ searchText ? "未找到匹配的分组" : "暂无分组" }}
+        <n-spin :show="loading" size="small">
+          <div v-if="filteredGroups.length === 0 && !loading" class="empty-container">
+            <n-empty size="small" :description="searchText ? '未找到匹配的分组' : '暂无分组'" />
           </div>
-        </div>
-        <div v-else class="groups-list">
-          <div
-            v-for="group in filteredGroups"
-            :key="group.id"
-            class="group-item"
-            :class="{ active: selectedGroup?.id === group.id }"
-            @click="handleGroupClick(group)"
-          >
-            <div class="group-icon">
-              <span v-if="group.channel_type === 'openai'">🤖</span>
-              <span v-else-if="group.channel_type === 'gemini'">💎</span>
-              <span v-else-if="group.channel_type === 'silicon'">⚡</span>
-              <span v-else>🔧</span>
-            </div>
-            <div class="group-content">
-              <div class="group-name">
-                {{ group.display_name || group.name }}
+          <div v-else class="groups-list">
+            <div
+              v-for="group in filteredGroups"
+              :key="group.id"
+              class="group-item"
+              :class="{ active: selectedGroup?.id === group.id }"
+              @click="handleGroupClick(group)"
+            >
+              <div class="group-icon">
+                <span v-if="group.channel_type === 'openai'">🤖</span>
+                <span v-else-if="group.channel_type === 'gemini'">💎</span>
+                <span v-else>🔧</span>
               </div>
-              <div class="group-info">
-                <span class="channel-type">{{ group.channel_type }}</span>
-                <span class="group-id">#{{ group.id }}</span>
+              <div class="group-content">
+                <div class="group-name">{{ group.display_name || group.name }}</div>
+                <div class="group-meta">
+                  <n-tag size="tiny" :type="getChannelTagType(group.channel_type)">
+                    {{ group.channel_type }}
+                  </n-tag>
+                  <span class="group-id">#{{ group.id }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </n-spin>
       </div>
 
       <!-- 添加分组按钮 -->
       <div class="add-section">
-        <button class="add-button" @click="createDemoGroup">
-          <span class="add-icon">+</span>
-          添加分组
-        </button>
+        <n-button type="primary" size="small" block @click="createDemoGroup">
+          <template #icon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+          </template>
+          创建分组
+        </n-button>
       </div>
-    </div>
+    </n-card>
   </div>
 </template>
 
 <style scoped>
+:deep(.n-card__content) {
+  height: 100%;
+}
+
+.groups-section::-webkit-scrollbar {
+  width: 1px;
+  height: 1px;
+}
+
 .group-list-container {
   height: 100%;
 }
 
 .group-list-card {
   height: 100%;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 12px;
   display: flex;
   flex-direction: column;
 }
 
+.group-list-card:hover {
+  transform: none;
+  box-shadow: var(--shadow-lg);
+}
+
 .search-section {
-  margin-bottom: 12px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  font-size: 12px;
-  background: #f8f9fa;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  height: 41px;
 }
 
 .groups-section {
   flex: 1;
-  min-height: 0;
-  margin-bottom: 12px;
+  height: calc(100% - 82px);
+  overflow: auto;
 }
 
-.loading-state {
-  text-align: center;
-  padding: 20px;
-  color: #6c757d;
-  font-size: 14px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #6c757d;
-}
-
-.empty-text {
-  font-size: 12px;
+.empty-container {
+  padding: 20px 0;
 }
 
 .groups-list {
@@ -191,33 +195,34 @@ async function createDemoGroup() {
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
   font-size: 12px;
 }
 
 .group-item:hover {
-  background: #f8f9fa;
-  border-color: #e9ecef;
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.2);
 }
 
 .group-item.active {
-  background: #007bff;
+  background: var(--primary-gradient);
   color: white;
-  border-color: #007bff;
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
 }
 
 .group-icon {
-  font-size: 14px;
-  width: 24px;
-  height: 24px;
+  font-size: 16px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 6px;
   flex-shrink: 0;
 }
 
@@ -234,56 +239,32 @@ async function createDemoGroup() {
   font-weight: 600;
   font-size: 14px;
   line-height: 1.2;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.group-info {
+.group-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 10px;
-  opacity: 0.7;
-}
-
-.channel-type {
-  text-transform: uppercase;
-  font-weight: 500;
 }
 
 .group-id {
-  opacity: 0.6;
+  opacity: 0.7;
+  color: #64748b;
+}
+
+.group-item.active .group-id {
+  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .add-section {
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 12px;
-}
-
-.add-button {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #007bff;
-  background: #007bff;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.add-button:hover {
-  background: #0056b3;
-}
-
-.add-icon {
-  font-size: 14px;
 }
 
 /* 滚动条样式 */
@@ -313,7 +294,7 @@ async function createDemoGroup() {
     font-size: 11px;
   }
 
-  .group-info {
+  .group-meta {
     font-size: 9px;
   }
 }

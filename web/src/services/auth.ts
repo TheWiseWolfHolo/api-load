@@ -16,8 +16,8 @@ export function useAuthService() {
       localStorage.setItem(AUTH_KEY, key);
       authKey.value = key;
       return true;
-    } catch (error) {
-      console.error("Login failed:", error);
+    } catch (_error) {
+      // 错误已记录
       return false;
     }
   };

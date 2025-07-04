@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { settingsApi, type SettingCategory } from "@/api/settings";
-import { NTooltip } from "naive-ui";
+import { NButton, NCard, NForm, NFormItem, NInput, NInputNumber, NTooltip } from "naive-ui";
 import { ref } from "vue";
 
 const settingList = ref<SettingCategory[]>([]);
@@ -90,7 +90,7 @@ async function handleSubmit() {
 
                 <n-input-number
                   v-if="item.type === 'int'"
-                  v-model:value="form[item.key]"
+                  v-model:value="form[item.key] as number"
                   :min="item.min_value! >= 0 ? item.min_value : undefined"
                   class="modern-input setting-input"
                   placeholder="请输入数值"
@@ -98,7 +98,7 @@ async function handleSubmit() {
                 />
                 <n-input
                   v-else
-                  v-model:value="form[item.key]"
+                  v-model:value="form[item.key] as string"
                   class="modern-input setting-input"
                   placeholder="请输入内容"
                   clearable

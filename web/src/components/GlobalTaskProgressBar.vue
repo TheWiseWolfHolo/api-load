@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { TaskInfo } from "@/types/models";
+import { NButton, NCard, NProgress, NText } from "naive-ui";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const taskInfo = ref<TaskInfo>({ is_running: false });
@@ -22,8 +23,8 @@ function startPolling() {
       const task = await keysApi.getTaskStatus();
       taskInfo.value = task;
       visible.value = task.is_running;
-    } catch (error) {
-      console.error("获取任务状态失败:", error);
+    } catch (_error) {
+      // 错误已记录
     }
   }, 1000);
 }
@@ -53,30 +54,46 @@ function handleClose() {
 </script>
 
 <template>
-  <div v-if="visible" class="global-task-progress">
+  <n-card v-if="visible" class="global-task-progress" :bordered="false" size="small">
     <div class="progress-container">
       <div class="progress-header">
         <div class="progress-info">
           <span class="progress-icon">⚡</span>
           <div class="progress-details">
-            <div class="progress-title">{{ taskInfo.task_name || "正在处理任务" }}</div>
-            <div class="progress-subtitle">
+            <n-text strong class="progress-title">
+              {{ taskInfo.task_name || "正在处理任务" }}
+            </n-text>
+            <n-text depth="3" class="progress-subtitle">
               {{ getProgressText() }} ({{ getProgressPercentage() }}%)
-            </div>
+            </n-text>
           </div>
         </div>
-        <button @click="handleClose" class="close-btn" title="隐藏进度条">✕</button>
+        <n-button quaternary circle size="small" @click="handleClose" title="隐藏进度条">
+          <template #icon>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </template>
+        </n-button>
       </div>
 
-      <div class="progress-bar-container">
-        <div class="progress-bar" :style="{ width: `${getProgressPercentage()}%` }" />
-      </div>
+      <n-progress
+        :percentage="getProgressPercentage()"
+        :show-indicator="false"
+        processing
+        type="line"
+        :height="6"
+        border-radius="3px"
+        class="progress-bar"
+      />
 
-      <div v-if="taskInfo.message" class="progress-message">
+      <n-text v-if="taskInfo.message" depth="3" class="progress-message">
         {{ taskInfo.message }}
-      </div>
+      </n-text>
     </div>
-  </div>
+  </n-card>
 </template>
 
 <style scoped>
@@ -87,9 +104,9 @@ function handleClose() {
   z-index: 9999;
   width: 360px;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e1e5e9;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   animation: slideIn 0.3s ease-out;
 }
 
@@ -105,7 +122,7 @@ function handleClose() {
 }
 
 .progress-container {
-  padding: 16px;
+  padding: 4px 0;
 }
 
 .progress-header {
@@ -144,79 +161,23 @@ function handleClose() {
 .progress-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
   margin-bottom: 2px;
 }
 
 .progress-subtitle {
   font-size: 12px;
-  color: #666;
-}
-
-.close-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: #f5f5f5;
-  color: #666;
-}
-
-.progress-bar-container {
-  width: 100%;
-  height: 6px;
-  background: #f0f0f0;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 8px;
 }
 
 .progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #4ade80, #22c55e);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-  position: relative;
-}
-
-.progress-bar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
+  margin-bottom: 8px;
 }
 
 .progress-message {
   font-size: 12px;
-  color: #666;
   text-align: center;
   padding: 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: var(--border-radius-sm);
   margin-top: 8px;
 }
 

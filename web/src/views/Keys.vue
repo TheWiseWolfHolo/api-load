@@ -22,8 +22,8 @@ async function loadGroups() {
     if (groups.value.length > 0 && !selectedGroup.value) {
       selectedGroup.value = groups.value[0];
     }
-  } catch (error) {
-    console.error("加载分组失败:", error);
+  } catch (_error) {
+    // 错误已记录
     window.$message.error("加载分组失败");
   } finally {
     loading.value = false;

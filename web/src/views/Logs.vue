@@ -1,58 +1,51 @@
 <script setup lang="ts">
+import { NCard, NH3, NSpace, NTag, NText } from "naive-ui";
 // 这里可以添加日志管理相关的逻辑
 </script>
 
 <template>
   <div class="logs-container">
-    <div class="page-header">
-      <h2 class="page-title">系统日志</h2>
-      <p class="page-subtitle">查看系统运行日志和操作记录</p>
-    </div>
+    <n-space vertical size="large">
+      <!-- 占位符内容 -->
+      <div class="content-placeholder">
+        <n-card :bordered="false" class="placeholder-card">
+          <n-space vertical align="center" size="large">
+            <div class="placeholder-icon">📋</div>
+            <n-h3 class="placeholder-title">日志管理功能</n-h3>
+            <n-text depth="2" class="placeholder-description">
+              此功能正在开发中，将提供完整的系统日志查看和管理功能，包括实时日志、历史记录和日志分析。
+            </n-text>
 
-    <div class="content-placeholder">
-      <div class="placeholder-card modern-card">
-        <div class="placeholder-icon">📋</div>
-        <h3 class="placeholder-title">日志管理功能</h3>
-        <p class="placeholder-description">
-          此功能正在开发中，将提供完整的系统日志查看和管理功能，包括实时日志、历史记录和日志分析。
-        </p>
-        <div class="placeholder-features">
-          <div class="feature-item">📝 实时日志流</div>
-          <div class="feature-item">🔍 日志搜索过滤</div>
-          <div class="feature-item">📈 错误统计分析</div>
-          <div class="feature-item">💾 日志导出功能</div>
-        </div>
+            <n-space wrap size="medium" class="placeholder-features">
+              <n-tag type="info" size="medium">📝 实时日志流</n-tag>
+              <n-tag type="info" size="medium">🔍 日志搜索过滤</n-tag>
+              <n-tag type="info" size="medium">📈 错误统计分析</n-tag>
+              <n-tag type="info" size="medium">💾 日志导出功能</n-tag>
+            </n-space>
+          </n-space>
+        </n-card>
       </div>
-    </div>
+    </n-space>
   </div>
 </template>
 
 <style scoped>
-.logs-container {
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 32px;
-  text-align: center;
+.page-header-card {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: fadeInUp 0.2s ease-out;
 }
 
 .page-title {
   font-size: 2.25rem;
   font-weight: 700;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 8px 0;
+  margin: 0;
   letter-spacing: -0.5px;
 }
 
 .page-subtitle {
   font-size: 1.1rem;
-  color: #64748b;
-  margin: 0;
   font-weight: 500;
 }
 
@@ -61,6 +54,7 @@
   justify-content: center;
   align-items: center;
   min-height: 400px;
+  animation: fadeInUp 0.2s ease-out 0.1s both;
 }
 
 .placeholder-card {
@@ -68,41 +62,42 @@
   max-width: 500px;
   padding: 48px 32px;
   background: rgba(255, 255, 255, 0.98);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .placeholder-icon {
   font-size: 4rem;
-  margin-bottom: 24px;
   display: block;
 }
 
 .placeholder-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 16px 0;
+  margin: 0;
 }
 
 .placeholder-description {
   font-size: 1rem;
-  color: #64748b;
   line-height: 1.6;
-  margin: 0 0 32px 0;
+  text-align: center;
+  max-width: 400px;
 }
 
 .placeholder-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  justify-content: center;
+  margin-top: 8px;
 }
 
-.feature-item {
-  padding: 12px 16px;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: var(--border-radius-md);
-  color: #667eea;
-  font-weight: 500;
-  font-size: 0.9rem;
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 768px) {
@@ -111,8 +106,12 @@
     padding: 32px 24px;
   }
 
-  .placeholder-features {
-    grid-template-columns: 1fr;
+  .page-title {
+    font-size: 1.75rem;
+  }
+
+  .page-subtitle {
+    font-size: 1rem;
   }
 }
 </style>
