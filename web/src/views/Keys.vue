@@ -55,7 +55,7 @@ function handleGroupRefresh() {
       <!-- 右侧主内容区域，占80% -->
       <div class="main-content">
         <!-- 分组信息卡片，更紧凑 -->
-        <div v-if="selectedGroup" class="group-info">
+        <div class="group-info">
           <group-info-card :group="selectedGroup" @refresh="handleGroupRefresh" />
         </div>
 
@@ -69,15 +69,6 @@ function handleGroupRefresh() {
 </template>
 
 <style scoped>
-.keys-container {
-  /* padding: 12px 0; */
-  /* max-width: 1600px; */
-  /* margin: 0 auto; */
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .page-header {
   margin-bottom: 12px;
   padding-bottom: 6px;
@@ -101,6 +92,7 @@ function handleGroupRefresh() {
 .sidebar {
   width: 240px;
   flex-shrink: 0;
+  height: calc(100vh - 88px);
 }
 
 .main-content {

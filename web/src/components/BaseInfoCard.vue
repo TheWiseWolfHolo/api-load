@@ -58,7 +58,7 @@ onMounted(() => {
           <n-card
             :bordered="false"
             class="stat-card"
-            :style="{ animationDelay: `${index * 0.07}s` }"
+            :style="{ animationDelay: `${index * 0.05}s` }"
           >
             <div class="stat-header">
               <div class="stat-icon" :style="{ background: stat.color }">

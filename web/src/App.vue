@@ -24,22 +24,6 @@ const isLoggedIn = computed(() => !!authKey.value);
 <style>
 #app-root {
   width: 100%;
-  /* height: 100vh; */
   overflow: hidden;
-}
-
-.app-transition-enter-active,
-.app-transition-leave-active {
-  transition: all 0.4s ease;
-}
-
-.app-transition-enter-from {
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-.app-transition-leave-to {
-  opacity: 0;
-  transform: translateY(-20px);
 }
 </style>

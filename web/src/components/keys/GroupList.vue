@@ -120,7 +120,7 @@ async function createDemoGroup() {
                   <n-tag size="tiny" :type="getChannelTagType(group.channel_type)">
                     {{ group.channel_type }}
                   </n-tag>
-                  <span class="group-id">#{{ group.id }}</span>
+                  <span class="group-id">#{{ group.name }}</span>
                 </div>
               </div>
             </div>

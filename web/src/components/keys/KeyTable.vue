@@ -185,14 +185,12 @@ function formatRelativeTime(date: string) {
   }
 }
 
-function getStatusClass(status: "active" | "inactive" | "error") {
+function getStatusClass(status: "active" | "inactive") {
   switch (status) {
     case "active":
       return "status-valid";
     case "inactive":
       return "status-invalid";
-    case "error":
-      return "status-error";
     default:
       return "status-unknown";
   }
@@ -385,6 +383,8 @@ function changePageSize(size: number) {
             <!-- 主要信息行：Key + 快速操作 -->
             <div class="key-main">
               <div class="key-section">
+                <n-tag v-if="key.status === 'active'" type="info">有效</n-tag>
+                <n-tag v-else>无效</n-tag>
                 <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
                 <div class="quick-actions">
                   <n-button size="tiny" text @click="toggleKeyVisibility(key)" title="显示/隐藏">
@@ -417,12 +417,15 @@ function changePageSize(size: number) {
                 </span>
               </div>
               <div class="key-actions">
-                <n-button size="tiny" @click="testKey(key)" title="测试密钥">测试</n-button>
+                <n-button type="info" size="tiny" @click="testKey(key)" title="测试密钥">
+                  测试
+                </n-button>
                 <n-button
                   v-if="key.status !== 'active'"
                   size="tiny"
                   @click="restoreKey(key)"
                   title="恢复密钥"
+                  type="warning"
                 >
                   恢复
                 </n-button>

@@ -43,14 +43,14 @@ async function handleSubmit() {
 
 <template>
   <div class="settings-container">
-    <!-- <div class="settings-header">
-      <h2 class="settings-title">系统设置</h2>
-      <p class="settings-subtitle">配置系统参数和选项</p>
-    </div> -->
-
     <div class="settings-content">
       <n-form ref="formRef" :model="form" label-placement="top" class="settings-form">
-        <div v-for="(category, cIndex) in settingList" :key="cIndex" class="settings-category">
+        <div
+          v-for="(category, cIndex) in settingList"
+          :key="cIndex"
+          class="settings-category"
+          :style="{ animationDelay: `${cIndex * 0.05}s` }"
+        >
           <n-card class="category-card modern-card" :bordered="false" size="small">
             <template #header>
               <div class="category-header">
@@ -134,11 +134,6 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
-/* .settings-container {
-  max-width: 1000px;
-  margin: 0 auto;
-} */
-
 .settings-header {
   margin-bottom: 32px;
   text-align: center;
@@ -171,18 +166,6 @@ async function handleSubmit() {
 .settings-category {
   animation: fadeInUp 0.2s ease-out both;
   margin-bottom: 12px;
-}
-
-.settings-category:nth-child(2) {
-  animation-delay: 0.07s;
-}
-
-.settings-category:nth-child(3) {
-  animation-delay: 0.14s;
-}
-
-.settings-category:nth-child(4) {
-  animation-delay: 0.21s;
 }
 
 .category-card {

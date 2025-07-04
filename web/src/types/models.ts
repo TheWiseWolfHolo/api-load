@@ -3,7 +3,7 @@ export interface APIKey {
   id: number;
   group_id: number;
   key_value: string;
-  status: "active" | "inactive" | "error";
+  status: "active" | "inactive";
   request_count: number;
   failure_count: number;
   last_used_at?: string;

@@ -17,7 +17,7 @@ import {
 import { onMounted, ref, watch } from "vue";
 
 interface Props {
-  group: Group;
+  group: Group | null;
 }
 
 const props = defineProps<Props>();
@@ -38,6 +38,11 @@ watch(
 );
 
 async function loadStats() {
+  if (!props.group) {
+    stats.value = null;
+    return;
+  }
+
   try {
     loading.value = true;
     stats.value = await keysApi.getGroupStats(props.group.id);
@@ -69,6 +74,17 @@ function formatNumber(num: number): string {
 function formatPercentage(num: number): string {
   return `${num.toFixed(1)}%`;
 }
+
+function copyUrl(url: string) {
+  navigator.clipboard
+    .writeText(url)
+    .then(() => {
+      window.$message.success("地址已复制到剪贴板");
+    })
+    .catch(() => {
+      window.$message.error("复制失败");
+    });
+}
 </script>
 
 <template>
@@ -78,7 +94,14 @@ function formatPercentage(num: number): string {
         <div class="card-header">
           <div class="header-left">
             <h3 class="group-title">
-              {{ group.display_name || group.name }}
+              {{ group?.display_name || group?.name || "请选择分组" }}
+              <code
+                v-if="group"
+                class="group-url"
+                @click="copyUrl(`https://gpt-load.com/${group?.name}`)"
+              >
+                https://gpt-load.com/{{ group?.name }}
+              </code>
             </h3>
           </div>
           <div class="header-actions">
@@ -114,33 +137,36 @@ function formatPercentage(num: number): string {
       <!-- 统计摘要区 -->
       <div class="stats-summary">
         <n-spin :show="loading" size="small">
-          <n-grid v-if="stats" :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
+          <n-grid :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
             <n-grid-item span="1">
-              <n-card :title="`${stats.active_keys} / ${stats.total_keys}`" size="large">
+              <n-card
+                :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`"
+                size="large"
+              >
                 <template #header-extra><span class="status-title">密钥数量</span></template>
               </n-card>
             </n-grid-item>
             <n-grid-item span="1">
               <n-card
                 class="status-card-failure"
-                :title="formatPercentage(stats.failure_rate_24h)"
+                :title="formatPercentage(stats?.failure_rate_24h || 0)"
                 size="large"
               >
                 <template #header-extra><span class="status-title">失败率</span></template>
               </n-card>
             </n-grid-item>
             <n-grid-item span="1">
-              <n-card :title="formatNumber(stats.requests_1h)" size="large">
+              <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
                 <template #header-extra><span class="status-title">近1小时</span></template>
               </n-card>
             </n-grid-item>
             <n-grid-item span="1">
-              <n-card :title="formatNumber(stats.requests_24h)" size="large">
+              <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
                 <template #header-extra><span class="status-title">近24小时</span></template>
               </n-card>
             </n-grid-item>
             <n-grid-item span="1">
-              <n-card :title="formatNumber(stats.requests_7d)" size="large">
+              <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
                 <template #header-extra><span class="status-title">近7天</span></template>
               </n-card>
             </n-grid-item>
@@ -156,13 +182,15 @@ function formatPercentage(num: number): string {
               <div class="detail-section">
                 <h4 class="section-title">基础信息</h4>
                 <n-descriptions :column="2" size="small">
-                  <n-descriptions-item label="分组名称">{{ group.name }}</n-descriptions-item>
-                  <n-descriptions-item label="渠道类型">
-                    {{ group.channel_type }}
+                  <n-descriptions-item label="分组名称">
+                    {{ group?.name || "-" }}
                   </n-descriptions-item>
-                  <n-descriptions-item label="排序">{{ group.sort }}</n-descriptions-item>
-                  <n-descriptions-item v-if="group.description" label="描述" :span="2">
-                    {{ group.description }}
+                  <n-descriptions-item label="渠道类型">
+                    {{ group?.channel_type || "openai" }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="排序">{{ group?.sort || 0 }}</n-descriptions-item>
+                  <n-descriptions-item v-if="group?.description || ''" label="描述" :span="2">
+                    {{ group?.description || "" }}
                   </n-descriptions-item>
                 </n-descriptions>
               </div>
@@ -171,7 +199,7 @@ function formatPercentage(num: number): string {
                 <h4 class="section-title">上游地址</h4>
                 <n-descriptions :column="1" size="small">
                   <n-descriptions-item
-                    v-for="(upstream, index) in group.upstreams"
+                    v-for="(upstream, index) in group?.upstreams ?? []"
                     :key="index"
                     :label="`上游 ${index + 1}`"
                   >
@@ -186,19 +214,19 @@ function formatPercentage(num: number): string {
               <div class="detail-section">
                 <h4 class="section-title">配置信息</h4>
                 <n-descriptions :column="2" size="small">
-                  <n-descriptions-item v-if="group.config.test_model" label="测试模型">
-                    {{ group.config.test_model }}
+                  <n-descriptions-item v-if="group?.config?.test_model || ''" label="测试模型">
+                    {{ group?.config?.test_model || "" }}
                   </n-descriptions-item>
-                  <n-descriptions-item v-if="group.config.request_timeout" label="请求超时">
-                    {{ group.config.request_timeout }}ms
+                  <n-descriptions-item v-if="group?.config?.request_timeout || 0" label="请求超时">
+                    {{ group?.config?.request_timeout || 0 }}ms
                   </n-descriptions-item>
                   <n-descriptions-item
-                    v-if="Object.keys(group.config.param_overrides || {}).length > 0"
+                    v-if="Object.keys(group?.config?.param_overrides || {}).length > 0"
                     label="参数覆盖"
                     :span="2"
                   >
                     <pre class="config-json">{{
-                      JSON.stringify(group.config.param_overrides, null, 2)
+                      JSON.stringify(group?.config?.param_overrides || "", null, 2)
                     }}</pre>
                   </n-descriptions-item>
                 </n-descriptions>
@@ -243,6 +271,17 @@ function formatPercentage(num: number): string {
   font-weight: 600;
   color: #1e293b;
   margin: 0 0 8px 0;
+}
+
+.group-url {
+  font-size: 0.8rem;
+  color: #2563eb;
+  margin-left: 8px;
+  font-family: monospace;
+  background: rgba(37, 99, 235, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-right: 4px;
 }
 
 /* .group-meta {
