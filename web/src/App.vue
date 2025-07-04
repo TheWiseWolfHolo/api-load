@@ -12,10 +12,8 @@ const isLoggedIn = computed(() => !!authKey.value);
 <template>
   <global-providers>
     <div id="app-root">
-      <transition name="app-transition" mode="out-in">
-        <layout v-if="isLoggedIn" key="layout" />
-        <router-view v-else key="auth" />
-      </transition>
+      <layout v-if="isLoggedIn" key="layout" />
+      <router-view v-else key="auth" />
 
       <!-- 全局任务进度条 -->
       <global-task-progress-bar />
