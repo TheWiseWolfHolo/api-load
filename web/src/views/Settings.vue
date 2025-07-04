@@ -43,10 +43,10 @@ async function handleSubmit() {
 
 <template>
   <div class="settings-container">
-    <div class="settings-header">
+    <!-- <div class="settings-header">
       <h2 class="settings-title">系统设置</h2>
       <p class="settings-subtitle">配置系统参数和选项</p>
-    </div>
+    </div> -->
 
     <div class="settings-content">
       <n-form ref="formRef" :model="form" label-placement="top" class="settings-form">
@@ -134,10 +134,10 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
-.settings-container {
+/* .settings-container {
   max-width: 1000px;
   margin: 0 auto;
-}
+} */
 
 .settings-header {
   margin-bottom: 32px;
@@ -165,12 +165,12 @@ async function handleSubmit() {
 .settings-content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 
 .settings-category {
   animation: fadeInUp 0.2s ease-out both;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .settings-category:nth-child(2) {
@@ -211,7 +211,7 @@ async function handleSubmit() {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 12px 10px;
 }
 
@@ -263,7 +263,7 @@ async function handleSubmit() {
 .settings-actions {
   display: flex;
   justify-content: center;
-  padding-top: 24px;
+  padding-top: 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 

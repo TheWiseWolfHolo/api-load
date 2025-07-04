@@ -41,13 +41,7 @@ function handleGroupRefresh() {
 
 <template>
   <div class="keys-container">
-    <!-- 页面头部更紧凑 -->
-    <div class="page-header">
-      <h2 class="page-title">密钥管理</h2>
-    </div>
-
     <div class="keys-content">
-      <!-- 左侧分组列表，宽度减少到20% -->
       <div class="sidebar">
         <group-list
           :groups="groups"
@@ -76,10 +70,10 @@ function handleGroupRefresh() {
 
 <style scoped>
 .keys-container {
-  padding: 12px;
-  max-width: 1600px;
-  margin: 0 auto;
-  height: 100vh;
+  /* padding: 12px 0; */
+  /* max-width: 1600px; */
+  /* margin: 0 auto; */
+  height: 100%;
   display: flex;
   flex-direction: column;
 }

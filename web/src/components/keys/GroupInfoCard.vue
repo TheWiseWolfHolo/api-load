@@ -93,6 +93,12 @@ function formatPercentage(num: number): string {
             <div class="stat-label">密钥数量</div>
           </div>
           <div class="stat-item">
+            <div class="stat-value failure-rate">
+              {{ formatPercentage(stats.failure_rate_24h) }}
+            </div>
+            <div class="stat-label">失败率</div>
+          </div>
+          <div class="stat-item">
             <div class="stat-value">{{ formatNumber(stats.requests_1h) }}</div>
             <div class="stat-label">近1小时</div>
           </div>
@@ -101,10 +107,8 @@ function formatPercentage(num: number): string {
             <div class="stat-label">近24小时</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value failure-rate">
-              {{ formatPercentage(stats.failure_rate_24h) }}
-            </div>
-            <div class="stat-label">失败率</div>
+            <div class="stat-value">{{ formatNumber(stats.requests_7d) }}</div>
+            <div class="stat-label">近7天</div>
           </div>
         </div>
       </div>
@@ -304,7 +308,7 @@ function formatPercentage(num: number): string {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 

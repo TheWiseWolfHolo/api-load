@@ -232,7 +232,7 @@ async function createDemoGroup() {
 
 .group-name {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.2;
   margin-bottom: 2px;
   overflow: hidden;

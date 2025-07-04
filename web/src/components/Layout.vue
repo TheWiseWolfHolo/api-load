@@ -123,8 +123,9 @@ import NavBar from "@/components/NavBar.vue";
 .content-wrapper {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
-  min-height: calc(100vh - 64px);
+  padding: 24px 12px;
+  height: calc(100vh - 64px);
+  overflow: auto;
 }
 
 /* 响应式设计 */

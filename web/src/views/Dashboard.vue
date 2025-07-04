@@ -5,10 +5,10 @@ import LineChart from "@/components/LineChart.vue";
 
 <template>
   <div class="dashboard-container">
-    <div class="dashboard-header">
+    <!-- <div class="dashboard-header">
       <h2 class="dashboard-title">仪表盘</h2>
       <p class="dashboard-subtitle">系统概览与实时监控</p>
-    </div>
+    </div> -->
 
     <div class="dashboard-content">
       <base-info-card />

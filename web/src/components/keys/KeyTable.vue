@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group } from "@/types/models";
+import { NButton, NDropdown, NEmpty, NInput, NSelect, NSpace, NSpin } from "naive-ui";
 import { computed, ref, watch } from "vue";
 
 interface Props {
@@ -16,9 +17,27 @@ const statusFilter = ref<"all" | "valid" | "invalid">("all");
 const currentPage = ref(1);
 const pageSize = ref(20);
 const totalKeys = ref(0);
-const showMoreMenu = ref(false);
 
 const totalPages = computed(() => Math.ceil(totalKeys.value / pageSize.value));
+
+// 状态过滤选项
+const statusOptions = [
+  { label: "全部", value: "all" },
+  { label: "有效", value: "valid" },
+  { label: "无效", value: "invalid" },
+];
+
+// 更多操作下拉菜单选项
+const moreOptions = [
+  { label: "复制所有 Key", key: "copyAll" },
+  { label: "复制有效 Key", key: "copyValid" },
+  { label: "复制无效 Key", key: "copyInvalid" },
+  { type: "divider" },
+  { label: "恢复所有无效 Key", key: "restoreAll" },
+  { label: "验证所有 Key", key: "validateAll" },
+  { type: "divider" },
+  { label: "清空所有无效 Key", key: "clearInvalid", props: { style: { color: "#d03050" } } },
+];
 
 watch(
   () => props.selectedGroup,
@@ -34,6 +53,30 @@ watch(
 watch([currentPage, pageSize, statusFilter, searchText], async () => {
   await loadKeys();
 });
+
+// 处理更多操作菜单
+function handleMoreAction(key: string) {
+  switch (key) {
+    case "copyAll":
+      copyAllKeys();
+      break;
+    case "copyValid":
+      copyValidKeys();
+      break;
+    case "copyInvalid":
+      copyInvalidKeys();
+      break;
+    case "restoreAll":
+      restoreAllInvalid();
+      break;
+    case "validateAll":
+      validateAllKeys();
+      break;
+    case "clearInvalid":
+      clearAllInvalid();
+      break;
+  }
+}
 
 async function loadKeys() {
   if (!props.selectedGroup) {
@@ -298,118 +341,134 @@ function changePageSize(size: number) {
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <button @click="addKey" class="btn btn-primary btn-sm">+ 添加密钥</button>
+        <n-button type="primary" size="small" @click="addKey">
+          <template #icon>
+            <span style="font-size: 12px">+</span>
+          </template>
+          添加密钥
+        </n-button>
       </div>
       <div class="toolbar-right">
-        <div class="filter-group">
-          <select v-model="statusFilter" class="filter-select">
-            <option value="all">全部</option>
-            <option value="valid">有效</option>
-            <option value="invalid">无效</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <input v-model="searchText" type="text" placeholder="Key 模糊查询" class="search-input" />
-        </div>
-        <div class="more-actions">
-          <button @click="showMoreMenu = !showMoreMenu" class="btn btn-secondary btn-sm">
-            <span class="more-icon">⋯</span>
-          </button>
-          <div v-if="showMoreMenu" class="more-menu">
-            <button @click="copyAllKeys" class="menu-item">复制所有 Key</button>
-            <button @click="copyValidKeys" class="menu-item">复制有效 Key</button>
-            <button @click="copyInvalidKeys" class="menu-item">复制无效 Key</button>
-            <div class="menu-divider" />
-            <button @click="restoreAllInvalid" class="menu-item">恢复所有无效 Key</button>
-            <button @click="validateAllKeys" class="menu-item">验证所有 Key</button>
-            <div class="menu-divider" />
-            <button @click="clearAllInvalid" class="menu-item danger">清空所有无效 Key</button>
-          </div>
-        </div>
+        <n-space :size="12">
+          <n-select
+            v-model:value="statusFilter"
+            :options="statusOptions"
+            size="small"
+            style="width: 100px"
+          />
+          <n-input
+            v-model:value="searchText"
+            placeholder="Key 模糊查询"
+            size="small"
+            style="width: 180px"
+          />
+          <n-dropdown :options="moreOptions" trigger="click" @select="handleMoreAction">
+            <n-button size="small" secondary>
+              <template #icon>
+                <span style="font-size: 16px; font-weight: bold">⋯</span>
+              </template>
+            </n-button>
+          </n-dropdown>
+        </n-space>
       </div>
     </div>
 
     <!-- 密钥卡片网格 -->
     <div class="keys-grid-container">
-      <div v-if="loading" class="loading-state">
-        <div class="loading-spinner">加载中...</div>
-      </div>
-      <div v-else-if="keys.length === 0" class="empty-state">
-        <div class="empty-text">没有找到匹配的密钥</div>
-      </div>
-      <div v-else class="keys-grid">
-        <div v-for="key in keys" :key="key.id" class="key-card" :class="getStatusClass(key.status)">
-          <!-- 主要信息行：Key + 快速操作 -->
-          <div class="key-main">
-            <div class="key-section">
-              <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
-              <div class="quick-actions">
-                <button @click="toggleKeyVisibility(key)" class="quick-btn" title="显示/隐藏">
-                  👁️
-                </button>
-                <button @click="copyKey(key)" class="quick-btn" title="复制">📋</button>
+      <n-spin :show="loading">
+        <div v-if="keys.length === 0 && !loading" class="empty-container">
+          <n-empty description="没有找到匹配的密钥" />
+        </div>
+        <div v-else class="keys-grid">
+          <div
+            v-for="key in keys"
+            :key="key.id"
+            class="key-card"
+            :class="getStatusClass(key.status)"
+          >
+            <!-- 主要信息行：Key + 快速操作 -->
+            <div class="key-main">
+              <div class="key-section">
+                <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
+                <div class="quick-actions">
+                  <n-button size="tiny" text @click="toggleKeyVisibility(key)" title="显示/隐藏">
+                    <template #icon>
+                      <span style="font-size: 12px">👁️</span>
+                    </template>
+                  </n-button>
+                  <n-button size="tiny" text @click="copyKey(key)" title="复制">
+                    <template #icon>
+                      <span style="font-size: 12px">📋</span>
+                    </template>
+                  </n-button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 统计信息 + 操作按钮行 -->
+            <div class="key-bottom">
+              <div class="key-stats">
+                <span class="stat-item">
+                  请求
+                  <strong>{{ key.request_count }}</strong>
+                </span>
+                <span class="stat-item">
+                  失败
+                  <strong>{{ key.failure_count }}</strong>
+                </span>
+                <span class="stat-item">
+                  {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : "从未使用" }}
+                </span>
+              </div>
+              <div class="key-actions">
+                <n-button size="tiny" @click="testKey(key)" title="测试密钥">测试</n-button>
+                <n-button
+                  v-if="key.status !== 'active'"
+                  size="tiny"
+                  @click="restoreKey(key)"
+                  title="恢复密钥"
+                >
+                  恢复
+                </n-button>
+                <n-button size="tiny" type="error" @click="deleteKey(key)" title="删除密钥">
+                  删除
+                </n-button>
               </div>
             </div>
           </div>
-
-          <!-- 统计信息 + 操作按钮行 -->
-          <div class="key-bottom">
-            <div class="key-stats">
-              <span class="stat-item">
-                请求
-                <strong>{{ key.request_count }}</strong>
-              </span>
-              <span class="stat-item">
-                失败
-                <strong>{{ key.failure_count }}</strong>
-              </span>
-              <span class="stat-item">
-                {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : "从未使用" }}
-              </span>
-            </div>
-            <div class="key-actions">
-              <button @click="testKey(key)" class="action-btn primary">测试</button>
-              <button
-                v-if="key.status !== 'active'"
-                @click="restoreKey(key)"
-                class="action-btn secondary"
-              >
-                恢复
-              </button>
-              <button @click="deleteKey(key)" class="action-btn danger">删除</button>
-            </div>
-          </div>
         </div>
-      </div>
+      </n-spin>
     </div>
 
     <!-- 分页 -->
     <div class="pagination-container">
       <div class="pagination-info">
         <span>共 {{ totalKeys }} 条记录</span>
-        <select v-model="pageSize" @change="changePageSize(pageSize)" class="page-size-select">
-          <option :value="10">10条/页</option>
-          <option :value="20">20条/页</option>
-          <option :value="50">50条/页</option>
-          <option :value="100">100条/页</option>
-        </select>
+        <n-select
+          v-model:value="pageSize"
+          :options="[
+            { label: '10条/页', value: 10 },
+            { label: '20条/页', value: 20 },
+            { label: '50条/页', value: 50 },
+            { label: '100条/页', value: 100 },
+          ]"
+          size="small"
+          style="width: 100px; margin-left: 12px"
+          @update:value="changePageSize"
+        />
       </div>
       <div class="pagination-controls">
-        <button
-          @click="changePage(currentPage - 1)"
-          :disabled="currentPage <= 1"
-          class="btn btn-secondary btn-sm"
-        >
+        <n-button size="small" :disabled="currentPage <= 1" @click="changePage(currentPage - 1)">
           上一页
-        </button>
+        </n-button>
         <span class="page-info">第 {{ currentPage }} 页，共 {{ totalPages }} 页</span>
-        <button
-          @click="changePage(currentPage + 1)"
+        <n-button
+          size="small"
           :disabled="currentPage >= totalPages"
-          class="btn btn-secondary btn-sm"
+          @click="changePage(currentPage + 1)"
         >
           下一页
-        </button>
+        </n-button>
       </div>
     </div>
   </div>
