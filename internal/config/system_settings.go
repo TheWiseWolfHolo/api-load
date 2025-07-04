@@ -17,27 +17,25 @@ import (
 // SystemSettings 定义所有系统配置项
 // 使用结构体标签作为唯一事实来源
 type SystemSettings struct {
-	// 负载均衡和重试配置
-	BlacklistThreshold int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"失败重试" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
-	MaxRetries         int `json:"max_retries" default:"3" name:"最大重试次数" category:"失败重试" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
+	// 基础参数
+	BlacklistThreshold      int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"基础参数" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
+	MaxRetries              int `json:"max_retries" default:"3" name:"最大重试次数" category:"基础参数" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
+	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
 
-	// 服务器超时配置 (秒)
-	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务器配置" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
-	ServerWriteTimeout            int `json:"server_write_timeout" default:"1800" name:"写入超时" category:"服务器配置" desc:"HTTP 服务器写入超时时间（秒）" validate:"min=1"`
-	ServerIdleTimeout             int `json:"server_idle_timeout" default:"120" name:"空闲超时" category:"服务器配置" desc:"HTTP 服务器空闲超时时间（秒）" validate:"min=1"`
-	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" name:"优雅关闭超时" category:"服务器配置" desc:"服务优雅关闭的等待超时时间（秒）" validate:"min=1"`
+	// 服务超时
+	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务超时" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
+	ServerWriteTimeout            int `json:"server_write_timeout" default:"1800" name:"写入超时" category:"服务超时" desc:"HTTP 服务器写入超时时间（秒）" validate:"min=1"`
+	ServerIdleTimeout             int `json:"server_idle_timeout" default:"120" name:"空闲超时" category:"服务超时" desc:"HTTP 服务器空闲超时时间（秒）" validate:"min=1"`
+	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" name:"优雅关闭超时" category:"服务超时" desc:"服务优雅关闭的等待超时时间（秒）" validate:"min=1"`
 
-	// 请求超时配置 (秒)
-	RequestTimeout  int `json:"request_timeout" default:"30" name:"请求超时" category:"请求配置" desc:"请求处理的总体超时时间（秒）" validate:"min=1"`
-	ResponseTimeout int `json:"response_timeout" default:"30" name:"响应超时" category:"请求配置" desc:"TLS 握手和响应头的超时时间（秒）" validate:"min=1"`
-	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求配置" desc:"空闲连接的超时时间（秒）" validate:"min=1"`
+	// 请求超时
+	RequestTimeout  int `json:"request_timeout" default:"30" name:"请求超时" category:"请求超时" desc:"请求处理的总体超时时间（秒）" validate:"min=1"`
+	ResponseTimeout int `json:"response_timeout" default:"30" name:"响应超时" category:"请求超时" desc:"TLS 握手和响应头的超时时间（秒）" validate:"min=1"`
+	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求超时" desc:"空闲连接的超时时间（秒）" validate:"min=1"`
 
-	// 请求日志配置（数据库日志）
-	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"日志配置" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
-
-	// 密钥验证配置
-	KeyValidationIntervalMinutes  int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥验证" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
-	KeyValidationConcurrency      int `json:"key_validation_concurrency" default:"10" name:"验证并发数" category:"密钥验证" desc:"执行密钥验证时的并发 goroutine 数量" validate:"min=1,max=100"`
+	// 密钥验证
+	KeyValidationIntervalMinutes    int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥验证" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
+	KeyValidationConcurrency        int `json:"key_validation_concurrency" default:"10" name:"验证并发数" category:"密钥验证" desc:"执行密钥验证时的并发 goroutine 数量" validate:"min=1,max=100"`
 	KeyValidationTaskTimeoutMinutes int `json:"key_validation_task_timeout_minutes" default:"60" name:"手动验证超时" category:"密钥验证" desc:"手动触发的全量验证任务的超时时间（分钟）" validate:"min=10"`
 }
 
