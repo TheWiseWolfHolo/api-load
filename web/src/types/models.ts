@@ -11,6 +11,9 @@ export interface APIKey {
   updated_at: string;
 }
 
+// 类型别名，用于兼容
+export type Key = APIKey;
+
 export interface UpstreamInfo {
   url: string;
   weight: number;
@@ -47,6 +50,7 @@ export interface TaskInfo {
   processed?: number;
   total?: number;
   started_at?: string;
+  message?: string;
 }
 
 export interface RequestLog {

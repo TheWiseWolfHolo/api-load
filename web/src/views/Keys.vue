@@ -1,26 +1,73 @@
 <script setup lang="ts">
-// 这里可以添加密钥管理相关的逻辑
+import { keysApi } from "@/api/keys";
+import GroupInfoCard from "@/components/keys/GroupInfoCard.vue";
+import GroupList from "@/components/keys/GroupList.vue";
+import KeyTable from "@/components/keys/KeyTable.vue";
+import type { Group } from "@/types/models";
+import { onMounted, ref } from "vue";
+
+const groups = ref<Group[]>([]);
+const loading = ref(false);
+const selectedGroup = ref<Group | null>(null);
+
+onMounted(async () => {
+  await loadGroups();
+});
+
+async function loadGroups() {
+  try {
+    loading.value = true;
+    groups.value = await keysApi.getGroups();
+    // 默认选择第一个分组
+    if (groups.value.length > 0 && !selectedGroup.value) {
+      selectedGroup.value = groups.value[0];
+    }
+  } catch (error) {
+    console.error("加载分组失败:", error);
+    window.$message.error("加载分组失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function handleGroupSelect(group: Group) {
+  selectedGroup.value = group;
+}
+
+function handleGroupRefresh() {
+  loadGroups();
+}
 </script>
 
 <template>
   <div class="keys-container">
+    <!-- 页面头部更紧凑 -->
     <div class="page-header">
       <h2 class="page-title">密钥管理</h2>
-      <p class="page-subtitle">管理API密钥和访问凭证</p>
     </div>
 
-    <div class="content-placeholder">
-      <div class="placeholder-card modern-card">
-        <div class="placeholder-icon">🔑</div>
-        <h3 class="placeholder-title">密钥管理功能</h3>
-        <p class="placeholder-description">
-          此功能正在开发中，将提供完整的API密钥管理功能，包括添加、删除、编辑和监控密钥使用情况。
-        </p>
-        <div class="placeholder-features">
-          <div class="feature-item">✨ 密钥添加与删除</div>
-          <div class="feature-item">📊 使用情况统计</div>
-          <div class="feature-item">🔒 安全性验证</div>
-          <div class="feature-item">🔄 自动轮换</div>
+    <div class="keys-content">
+      <!-- 左侧分组列表，宽度减少到20% -->
+      <div class="sidebar">
+        <group-list
+          :groups="groups"
+          :selected-group="selectedGroup"
+          :loading="loading"
+          @group-select="handleGroupSelect"
+          @refresh="handleGroupRefresh"
+        />
+      </div>
+
+      <!-- 右侧主内容区域，占80% -->
+      <div class="main-content">
+        <!-- 分组信息卡片，更紧凑 -->
+        <div v-if="selectedGroup" class="group-info">
+          <group-info-card :group="selectedGroup" @refresh="handleGroupRefresh" />
+        </div>
+
+        <!-- 密钥表格区域，占主要空间 -->
+        <div class="key-table-section">
+          <key-table :selected-group="selectedGroup" />
         </div>
       </div>
     </div>
@@ -29,90 +76,69 @@
 
 <style scoped>
 .keys-container {
-  max-width: 1000px;
+  padding: 12px;
+  max-width: 1600px;
   margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
-  margin-bottom: 32px;
-  text-align: center;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e9ecef;
 }
 
 .page-title {
-  font-size: 2.25rem;
-  font-weight: 700;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.5px;
-}
-
-.page-subtitle {
-  font-size: 1.1rem;
-  color: #64748b;
-  margin: 0;
-  font-weight: 500;
-}
-
-.content-placeholder {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-}
-
-.placeholder-card {
-  text-align: center;
-  max-width: 500px;
-  padding: 48px 32px;
-  background: rgba(255, 255, 255, 0.98);
-}
-
-.placeholder-icon {
-  font-size: 4rem;
-  margin-bottom: 24px;
-  display: block;
-}
-
-.placeholder-title {
-  font-size: 1.5rem;
+  font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 16px 0;
+  color: #333;
+  margin: 0;
 }
 
-.placeholder-description {
-  font-size: 1rem;
-  color: #64748b;
-  line-height: 1.6;
-  margin: 0 0 32px 0;
-}
-
-.placeholder-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+.keys-content {
+  display: flex;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
-.feature-item {
-  padding: 12px 16px;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: var(--border-radius-md);
-  color: #667eea;
-  font-weight: 500;
-  font-size: 0.9rem;
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
-  .placeholder-card {
-    margin: 0 16px;
-    padding: 32px 24px;
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.group-info {
+  flex-shrink: 0;
+}
+
+.key-table-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .keys-content {
+    flex-direction: column;
   }
 
-  .placeholder-features {
-    grid-template-columns: 1fr;
+  .sidebar {
+    width: 100%;
+  }
+
+  .main-content {
+    width: 100%;
   }
 }
 </style>

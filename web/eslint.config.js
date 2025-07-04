@@ -39,7 +39,7 @@ export default [
         "warn",
         {
           html: {
-            void: "never",
+            void: "always",
             normal: "always",
             component: "always",
           },
@@ -51,7 +51,15 @@ export default [
       "vue/singleline-html-element-content-newline": "off",
       "vue/multiline-html-element-content-newline": "off",
       "vue/html-indent": ["error", 2],
-      "vue/script-indent": ["error", 2],
+      "vue/script-indent": [
+        "error",
+        2,
+        {
+          baseIndent: 0,
+          switchCase: 1,
+          ignores: [],
+        },
+      ],
       "vue/component-tags-order": ["error", { order: ["script", "template", "style"] }],
 
       // Vue 3 Composition API 规则
