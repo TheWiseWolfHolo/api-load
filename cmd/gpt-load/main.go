@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
 	"gpt-load/internal/db"
 	"gpt-load/internal/handler"
@@ -74,15 +75,28 @@ func main() {
 	go startRequestLogger(database, requestLogChan, &wg)
 	// ---
 
+	// --- Service Initialization ---
+	taskService := services.NewTaskService()
+	channelFactory := channel.NewFactory(settingsManager)
+	keyValidatorService := services.NewKeyValidatorService(database, channelFactory)
+
+	keyManualValidationService := services.NewKeyManualValidationService(database, keyValidatorService, taskService, settingsManager)
+	keyCronService := services.NewKeyCronService(database, keyValidatorService, settingsManager)
+	keyCronService.Start()
+	defer keyCronService.Stop()
+
+	keyService := services.NewKeyService(database)
+	// ---
+
 	// Create proxy server
-	proxyServer, err := proxy.NewProxyServer(database, requestLogChan)
+	proxyServer, err := proxy.NewProxyServer(database, channelFactory, requestLogChan)
 	if err != nil {
 		logrus.Fatalf("Failed to create proxy server: %v", err)
 	}
 	defer proxyServer.Close()
 
 	// Create handlers
-	serverHandler := handler.NewServer(database, configManager)
+	serverHandler := handler.NewServer(database, configManager, keyValidatorService, keyManualValidationService, taskService, keyService)
 	logCleanupHandler := handler.NewLogCleanupHandler(logCleanupService)
 
 	// Setup routes using the new router package

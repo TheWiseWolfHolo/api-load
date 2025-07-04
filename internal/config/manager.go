@@ -276,3 +276,16 @@ func getEnvOrDefault(key, defaultValue string) string {
 	}
 	return defaultValue
 }
+
+// GetInt is a helper function for SystemSettingsManager to get an integer value with a default.
+func (s *SystemSettingsManager) GetInt(key string, defaultValue int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if valStr, ok := s.settingsCache[key]; ok {
+		if valInt, err := strconv.Atoi(valStr); err == nil {
+			return valInt
+		}
+	}
+	return defaultValue
+}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gpt-load/internal/models"
+	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
@@ -14,15 +15,30 @@ import (
 
 // Server contains dependencies for HTTP handlers
 type Server struct {
-	DB     *gorm.DB
-	config types.ConfigManager
+	DB                         *gorm.DB
+	config                     types.ConfigManager
+	KeyValidatorService        *services.KeyValidatorService
+	KeyManualValidationService *services.KeyManualValidationService
+	TaskService                *services.TaskService
+	KeyService                 *services.KeyService
 }
 
 // NewServer creates a new handler instance
-func NewServer(db *gorm.DB, config types.ConfigManager) *Server {
+func NewServer(
+	db *gorm.DB,
+	config types.ConfigManager,
+	keyValidatorService *services.KeyValidatorService,
+	keyManualValidationService *services.KeyManualValidationService,
+	taskService *services.TaskService,
+	keyService *services.KeyService,
+) *Server {
 	return &Server{
-		DB:     db,
-		config: config,
+		DB:                         db,
+		config:                     config,
+		KeyValidatorService:        keyValidatorService,
+		KeyManualValidationService: keyManualValidationService,
+		TaskService:                taskService,
+		KeyService:                 keyService,
 	}
 }
 

@@ -8,38 +8,65 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/sirupsen/logrus"
 )
 
+// UpstreamInfo holds the information for a single upstream server, including its weight.
+type UpstreamInfo struct {
+	URL           *url.URL
+	Weight        int
+	CurrentWeight int
+}
+
 // BaseChannel provides common functionality for channel proxies.
 type BaseChannel struct {
-	Name          string
-	Upstreams     []*url.URL
-	HTTPClient    *http.Client
-	roundRobin    uint64
+	Name         string
+	Upstreams    []UpstreamInfo
+	HTTPClient   *http.Client
+	upstreamLock sync.Mutex
 }
 
 // RequestModifier is a function that can modify the request before it's sent.
 type RequestModifier func(req *http.Request, key *models.APIKey)
 
-// getUpstreamURL selects an upstream URL using round-robin.
+// getUpstreamURL selects an upstream URL using a smooth weighted round-robin algorithm.
 func (b *BaseChannel) getUpstreamURL() *url.URL {
+	b.upstreamLock.Lock()
+	defer b.upstreamLock.Unlock()
+
 	if len(b.Upstreams) == 0 {
 		return nil
 	}
 	if len(b.Upstreams) == 1 {
-		return b.Upstreams[0]
+		return b.Upstreams[0].URL
 	}
-	index := atomic.AddUint64(&b.roundRobin, 1) - 1
-	return b.Upstreams[index%uint64(len(b.Upstreams))]
+
+	totalWeight := 0
+	var best *UpstreamInfo
+
+	for i := range b.Upstreams {
+		up := &b.Upstreams[i]
+		totalWeight += up.Weight
+		up.CurrentWeight += up.Weight
+
+		if best == nil || up.CurrentWeight > best.CurrentWeight {
+			best = up
+		}
+	}
+
+	if best == nil {
+		return b.Upstreams[0].URL // 降级到第一个可用的
+	}
+
+	best.CurrentWeight -= totalWeight
+	return best.URL
 }
 
 // ProcessRequest handles the common logic of processing and forwarding a request.
-func (b *BaseChannel) ProcessRequest(c *gin.Context, apiKey *models.APIKey, modifier RequestModifier) error {
+func (b *BaseChannel) ProcessRequest(c *gin.Context, apiKey *models.APIKey, modifier RequestModifier, ch ChannelProxy) error {
 	upstreamURL := b.getUpstreamURL()
 	if upstreamURL == nil {
 		return fmt.Errorf("no upstream URL configured for channel %s", b.Name)
@@ -78,7 +105,7 @@ func (b *BaseChannel) ProcessRequest(c *gin.Context, apiKey *models.APIKey, modi
 	}
 
 	// Check if the client request is for a streaming endpoint
-	if isStreamingRequest(c) {
+	if ch.IsStreamingRequest(c) {
 		return b.handleStreaming(c, proxy)
 	}
 
@@ -87,6 +114,9 @@ func (b *BaseChannel) ProcessRequest(c *gin.Context, apiKey *models.APIKey, modi
 }
 
 func (b *BaseChannel) handleStreaming(c *gin.Context, proxy *httputil.ReverseProxy) error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -96,13 +126,12 @@ func (b *BaseChannel) handleStreaming(c *gin.Context, proxy *httputil.ReversePro
 	pr, pw := io.Pipe()
 	defer pr.Close()
 
-	// Create a new request with the pipe reader as the body
-	// This is a bit of a hack to get ReverseProxy to stream
 	req := c.Request.Clone(c.Request.Context())
 	req.Body = pr
 
 	// Start the proxy in a goroutine
 	go func() {
+		defer wg.Done()
 		defer pw.Close()
 		proxy.ServeHTTP(c.Writer, req)
 	}()
@@ -111,30 +140,14 @@ func (b *BaseChannel) handleStreaming(c *gin.Context, proxy *httputil.ReversePro
 	_, err := io.Copy(pw, c.Request.Body)
 	if err != nil {
 		logrus.Errorf("Error copying request body to pipe: %v", err)
+		wg.Wait() // Wait for the goroutine to finish even if copy fails
 		return err
 	}
 
+	// Wait for the proxy to finish
+	wg.Wait()
+
 	return nil
-}
-
-// isStreamingRequest checks if the request is for a streaming response.
-func isStreamingRequest(c *gin.Context) bool {
-	// For Gemini, streaming is indicated by the path.
-	if strings.Contains(c.Request.URL.Path, ":streamGenerateContent") {
-		return true
-	}
-
-	// For OpenAI, streaming is indicated by a "stream": true field in the JSON body.
-	// We use ShouldBindBodyWith to check the body without consuming it, so it can be read again by the proxy.
-	type streamPayload struct {
-		Stream bool `json:"stream"`
-	}
-	var p streamPayload
-	if err := c.ShouldBindBodyWith(&p, binding.JSON); err == nil {
-		return p.Stream
-	}
-
-	return false
 }
 
 // singleJoiningSlash joins two URL paths with a single slash.

@@ -106,13 +106,27 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		groups.PUT("/:id", serverHandler.UpdateGroup)
 		groups.DELETE("/:id", serverHandler.DeleteGroup)
 
+		// Key-specific routes
 		keys := groups.Group("/:id/keys")
 		{
-			keys.POST("", serverHandler.CreateKeysInGroup)
 			keys.GET("", serverHandler.ListKeysInGroup)
-			keys.PUT("/:key_id", serverHandler.UpdateKey)
-			keys.DELETE("", serverHandler.DeleteKeys)
+			keys.POST("/add-multiple", serverHandler.AddMultipleKeys)
+			keys.POST("/restore-all-invalid", serverHandler.RestoreAllInvalidKeys)
+			keys.POST("/clear-all-invalid", serverHandler.ClearAllInvalidKeys)
+			keys.GET("/export", serverHandler.ExportKeys)
+			keys.DELETE("/:key_id", serverHandler.DeleteSingleKey)
+			keys.POST("/:key_id/test", serverHandler.TestSingleKey)
 		}
+
+		// Group-level actions
+		groups.POST("/:id/validate-keys", serverHandler.ValidateGroupKeys)
+	}
+
+	// Tasks
+	tasks := api.Group("/tasks")
+	{
+		tasks.GET("/key-validation/status", serverHandler.GetTaskStatus)
+		tasks.GET("/:task_id/result", serverHandler.GetTaskResult)
 	}
 
 	// 仪表板和日志

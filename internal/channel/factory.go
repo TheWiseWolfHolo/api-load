@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"encoding/json"
 	"fmt"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
@@ -11,36 +12,61 @@ import (
 	"gorm.io/datatypes"
 )
 
+// Factory is responsible for creating channel proxies.
+type Factory struct {
+	settingsManager *config.SystemSettingsManager
+}
+
+// NewFactory creates a new channel factory.
+func NewFactory(settingsManager *config.SystemSettingsManager) *Factory {
+	return &Factory{
+		settingsManager: settingsManager,
+	}
+}
+
 // GetChannel returns a channel proxy based on the group's channel type.
-func GetChannel(group *models.Group) (ChannelProxy, error) {
+func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 	switch group.ChannelType {
 	case "openai":
-		return NewOpenAIChannel(group.Upstreams, group.Config)
+		return f.NewOpenAIChannel(group)
 	case "gemini":
-		return NewGeminiChannel(group.Upstreams, group.Config)
+		return f.NewGeminiChannel(group)
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", group.ChannelType)
 	}
 }
 
-// newBaseChannelWithUpstreams is a helper function to create and configure a BaseChannel.
-func newBaseChannelWithUpstreams(name string, upstreams []string, groupConfig datatypes.JSONMap) (BaseChannel, error) {
-	if len(upstreams) == 0 {
-		return BaseChannel{}, fmt.Errorf("at least one upstream is required for %s channel", name)
+// newBaseChannel is a helper function to create and configure a BaseChannel.
+func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, groupConfig datatypes.JSONMap) (*BaseChannel, error) {
+	type upstreamDef struct {
+		URL    string `json:"url"`
+		Weight int    `json:"weight"`
 	}
 
-	var upstreamURLs []*url.URL
-	for _, us := range upstreams {
-		u, err := url.Parse(us)
+	var defs []upstreamDef
+	if err := json.Unmarshal(upstreamsJSON, &defs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal upstreams for %s channel: %w", name, err)
+	}
+
+	if len(defs) == 0 {
+		return nil, fmt.Errorf("at least one upstream is required for %s channel", name)
+	}
+
+	var upstreamInfos []UpstreamInfo
+	for _, def := range defs {
+		u, err := url.Parse(def.URL)
 		if err != nil {
-			return BaseChannel{}, fmt.Errorf("failed to parse upstream url '%s' for %s channel: %w", us, name, err)
+			return nil, fmt.Errorf("failed to parse upstream url '%s' for %s channel: %w", def.URL, name, err)
 		}
-		upstreamURLs = append(upstreamURLs, u)
+		weight := def.Weight
+		if weight <= 0 {
+			weight = 1 // Default weight to 1 if not specified or invalid
+		}
+		upstreamInfos = append(upstreamInfos, UpstreamInfo{URL: u, Weight: weight})
 	}
 
 	// Get effective settings by merging system and group configs
-	settingsManager := config.GetSystemSettingsManager()
-	effectiveSettings := settingsManager.GetEffectiveConfig(groupConfig)
+	effectiveSettings := f.settingsManager.GetEffectiveConfig(groupConfig)
 
 	// Configure the HTTP client with the effective timeouts
 	httpClient := &http.Client{
@@ -50,9 +76,9 @@ func newBaseChannelWithUpstreams(name string, upstreams []string, groupConfig da
 		Timeout: time.Duration(effectiveSettings.RequestTimeout) * time.Second,
 	}
 
-	return BaseChannel{
+	return &BaseChannel{
 		Name:       name,
-		Upstreams:  upstreamURLs,
+		Upstreams:  upstreamInfos,
 		HTTPClient: httpClient,
 	}, nil
 }

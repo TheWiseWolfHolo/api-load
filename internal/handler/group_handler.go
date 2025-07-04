@@ -3,6 +3,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 )
 
 // isValidGroupName checks if the group name is valid.
@@ -20,6 +22,50 @@ func isValidGroupName(name string) bool {
 	// 允许使用小写字母、数字和下划线，长度在 3 到 30 个字符之间
 	match, _ := regexp.MatchString("^[a-z0-9_]{3,30}$", name)
 	return match
+}
+
+// validateAndCleanConfig validates the group config against the GroupConfig struct.
+func validateAndCleanConfig(configMap map[string]interface{}) (map[string]interface{}, error) {
+	if configMap == nil {
+		return nil, nil
+	}
+
+	configBytes, err := json.Marshal(configMap)
+	if err != nil {
+		return nil, err
+	}
+
+	var validatedConfig models.GroupConfig
+	if err := json.Unmarshal(configBytes, &validatedConfig); err != nil {
+		return nil, err
+	}
+
+	// 验证配置项的合理范围
+	if validatedConfig.BlacklistThreshold != nil && *validatedConfig.BlacklistThreshold < 0 {
+		return nil, fmt.Errorf("blacklist_threshold must be >= 0")
+	}
+	if validatedConfig.MaxRetries != nil && (*validatedConfig.MaxRetries < 0 || *validatedConfig.MaxRetries > 10) {
+		return nil, fmt.Errorf("max_retries must be between 0 and 10")
+	}
+	if validatedConfig.RequestTimeout != nil && (*validatedConfig.RequestTimeout < 1 || *validatedConfig.RequestTimeout > 3600) {
+		return nil, fmt.Errorf("request_timeout must be between 1 and 3600 seconds")
+	}
+	if validatedConfig.KeyValidationIntervalMinutes != nil && (*validatedConfig.KeyValidationIntervalMinutes < 5 || *validatedConfig.KeyValidationIntervalMinutes > 1440) {
+		return nil, fmt.Errorf("key_validation_interval_minutes must be between 5 and 1440 minutes")
+	}
+
+	// Marshal back to a map to remove any fields not in GroupConfig
+	validatedBytes, err := json.Marshal(validatedConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	var cleanedMap map[string]interface{}
+	if err := json.Unmarshal(validatedBytes, &cleanedMap); err != nil {
+		return nil, err
+	}
+
+	return cleanedMap, nil
 }
 
 // CreateGroup handles the creation of a new group.
@@ -43,6 +89,17 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Channel type is required"))
 		return
 	}
+	if group.TestModel == "" {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Test model is required"))
+		return
+	}
+
+	cleanedConfig, err := validateAndCleanConfig(group.Config)
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid config format"))
+		return
+	}
+	group.Config = cleanedConfig
 
 	if err := s.DB.Create(&group).Error; err != nil {
 		response.Error(c, app_errors.ParseDBError(err))
@@ -62,6 +119,20 @@ func (s *Server) ListGroups(c *gin.Context) {
 	response.Success(c, groups)
 }
 
+// GroupUpdateRequest defines the payload for updating a group.
+// Using a dedicated struct avoids issues with zero values being ignored by GORM's Update.
+type GroupUpdateRequest struct {
+	Name           string                 `json:"name"`
+	DisplayName    string                 `json:"display_name"`
+	Description    string                 `json:"description"`
+	Upstreams      json.RawMessage        `json:"upstreams"`
+	ChannelType    string                 `json:"channel_type"`
+	Sort           *int                   `json:"sort"`
+	TestModel      string                 `json:"test_model"`
+	ParamOverrides map[string]interface{} `json:"param_overrides"`
+	Config         map[string]interface{} `json:"config"`
+}
+
 // UpdateGroup handles updating an existing group.
 func (s *Server) UpdateGroup(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -76,84 +147,70 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	var updateData models.Group
-	if err := c.ShouldBindJSON(&updateData); err != nil {
+	var req GroupUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
 		return
 	}
 
-	// Validate group name if it's being updated
-	if updateData.Name != "" && !isValidGroupName(updateData.Name) {
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format. Use 3-30 lowercase letters, numbers, and underscores."))
-		return
-	}
-
-	// Use a transaction to ensure atomicity
+	// Start a transaction
 	tx := s.DB.Begin()
 	if tx.Error != nil {
 		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
+	defer tx.Rollback() // Rollback on panic
 
-	// Convert updateData to a map to ensure zero values (like Sort: 0) are updated
-	var updateMap map[string]interface{}
-	updateBytes, _ := json.Marshal(updateData)
-	if err := json.Unmarshal(updateBytes, &updateMap); err != nil {
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process update data"))
-		return
-	}
-
-	// If config is being updated, it needs to be marshalled to JSON string for GORM
-	if config, ok := updateMap["config"]; ok {
-		if configMap, isMap := config.(map[string]interface{}); isMap {
-			configJSON, err := json.Marshal(configMap)
-			if err != nil {
-				response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process config data"))
-				return
-			}
-			updateMap["config"] = string(configJSON)
+	// Apply updates from the request
+	if req.Name != "" {
+		if !isValidGroupName(req.Name) {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format."))
+			return
 		}
+		group.Name = req.Name
 	}
-
-	// Handle upstreams field specifically
-	if upstreams, ok := updateMap["upstreams"]; ok {
-		if upstreamsSlice, isSlice := upstreams.([]interface{}); isSlice {
-			upstreamsJSON, err := json.Marshal(upstreamsSlice)
-			if err != nil {
-				response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Failed to process upstreams data"))
-				return
-			}
-			updateMap["upstreams"] = string(upstreamsJSON)
+	if req.DisplayName != "" {
+		group.DisplayName = req.DisplayName
+	}
+	if req.Description != "" {
+		group.Description = req.Description
+	}
+	if req.Upstreams != nil {
+		group.Upstreams = datatypes.JSON(req.Upstreams)
+	}
+	if req.ChannelType != "" {
+		group.ChannelType = req.ChannelType
+	}
+	if req.Sort != nil {
+		group.Sort = *req.Sort
+	}
+	if req.TestModel != "" {
+		group.TestModel = req.TestModel
+	}
+	if req.ParamOverrides != nil {
+		group.ParamOverrides = req.ParamOverrides
+	}
+	if req.Config != nil {
+		cleanedConfig, err := validateAndCleanConfig(req.Config)
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid config format"))
+			return
 		}
+		group.Config = cleanedConfig
 	}
 
-	// Remove fields that are not actual columns or should not be updated from the map
-	delete(updateMap, "id")
-	delete(updateMap, "api_keys")
-	delete(updateMap, "created_at")
-	delete(updateMap, "updated_at")
-
-	// Use Updates with a map to only update provided fields, including zero values
-	if err := tx.Model(&group).Updates(updateMap).Error; err != nil {
-		tx.Rollback()
+	// Save the updated group object
+	if err := tx.Save(&group).Error; err != nil {
 		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
 		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 
-	// Re-fetch the group to return the updated data
-	var updatedGroup models.Group
-	if err := s.DB.First(&updatedGroup, id).Error; err != nil {
-		response.Error(c, app_errors.ParseDBError(err))
-		return
-	}
-
-	response.Success(c, updatedGroup)
+	response.Success(c, group)
 }
 
 // DeleteGroup handles deleting a group.
