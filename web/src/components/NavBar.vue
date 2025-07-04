@@ -46,11 +46,10 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
 .navbar-container {
   flex: 1;
   display: flex;
-  justify-content: center;
   max-width: 600px;
 }
 
-.nav-menu-item {
+:deep(.nav-menu-item) {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -62,18 +61,13 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
   font-weight: 500;
 }
 
-.nav-menu-item:hover {
-  background: rgba(102, 126, 234, 0.1);
-  transform: translateY(-1px);
-}
-
-.nav-item-icon {
+:deep(.nav-item-icon) {
   font-size: 1.1rem;
   display: flex;
   align-items: center;
 }
 
-.nav-item-text {
+:deep(.nav-item-text) {
   font-size: 0.95rem;
   letter-spacing: 0.2px;
 }
