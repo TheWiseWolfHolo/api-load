@@ -1,4 +1,6 @@
 :root {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   font-family:
     "Inter",
     -apple-system,
@@ -51,7 +53,7 @@ body {
 }
 
 #app {
-  max-width: 1400px;
+  /* max-width: 1400px; */
   width: 100%;
   margin: 0 auto;
   height: 100%;
@@ -119,9 +121,8 @@ body {
 /* 动画和过渡 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
-
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
@@ -129,7 +130,7 @@ body {
 
 .slide-enter-active,
 .slide-leave-active {
-  transition: transform 0.3s ease;
+  transition: transform 0.2s ease;
 }
 
 .slide-enter-from {
@@ -167,7 +168,7 @@ body {
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-lg);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .modern-card:hover {
@@ -178,7 +179,7 @@ body {
 /* 按钮增强 */
 .modern-button {
   border-radius: var(--border-radius-md);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
@@ -191,7 +192,7 @@ body {
 /* 输入框增强 */
 .modern-input {
   border-radius: var(--border-radius-md);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .modern-input:focus {
@@ -266,8 +267,8 @@ body {
 /* 悬停效果增强 */
 .hover-lift {
   transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .hover-lift:hover {
@@ -327,4 +328,8 @@ body {
 
 .bounce {
   animation: bounce 1s ease-in-out;
+}
+
+.n-layout-scroll-container {
+  overflow: hidden;
 }

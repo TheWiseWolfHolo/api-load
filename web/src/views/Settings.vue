@@ -169,20 +169,20 @@ async function handleSubmit() {
 }
 
 .settings-category {
-  animation: fadeInUp 0.6s ease-out both;
+  animation: fadeInUp 0.2s ease-out both;
   margin-bottom: 24px;
 }
 
 .settings-category:nth-child(2) {
-  animation-delay: 0.1s;
+  animation-delay: 0.07s;
 }
 
 .settings-category:nth-child(3) {
-  animation-delay: 0.2s;
+  animation-delay: 0.14s;
 }
 
 .settings-category:nth-child(4) {
-  animation-delay: 0.3s;
+  animation-delay: 0.21s;
 }
 
 .category-card {

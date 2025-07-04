@@ -215,11 +215,11 @@ onMounted(() => {
 
 .chart-line {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-  transition: stroke-dashoffset 2s ease-out;
+  transition: stroke-dashoffset 0.2s ease-out;
 }
 
 .chart-point {
-  transition: r 0.3s ease;
+  transition: r 0.2s ease;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 

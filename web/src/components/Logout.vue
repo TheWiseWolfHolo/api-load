@@ -30,7 +30,7 @@ const handleLogout = () => {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-weight: 500;
   letter-spacing: 0.2px;
 }

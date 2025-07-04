@@ -54,7 +54,7 @@ import LineChart from "@/components/LineChart.vue";
 }
 
 .dashboard-chart {
-  animation: fadeInUp 0.6s ease-out 0.2s both;
+  animation: fadeInUp 0.2s ease-out 0.2s both;
 }
 
 @keyframes fadeInUp {

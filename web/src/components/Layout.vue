@@ -57,14 +57,14 @@ import NavBar from "@/components/NavBar.vue";
   top: 0;
   z-index: 100;
   padding: 0 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 1400px;
-  margin: 0 auto;
   height: 100%;
   padding: 0 8px;
 }
@@ -100,14 +100,18 @@ import NavBar from "@/components/NavBar.vue";
 }
 
 .header-nav {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 600px;
   display: flex;
   justify-content: center;
-  max-width: 600px;
 }
 
 .header-actions {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .layout-content {
@@ -150,22 +154,6 @@ import NavBar from "@/components/NavBar.vue";
   .content-wrapper {
     padding: 12px;
   }
-}
-
-/* 过渡动画 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
 }
 
 :deep(.n-layout-header) {

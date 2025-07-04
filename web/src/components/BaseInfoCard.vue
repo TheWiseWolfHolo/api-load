@@ -56,7 +56,7 @@ onMounted(() => {
         v-for="(stat, index) in stats"
         :key="stat.title"
         class="stat-card modern-card"
-        :style="{ animationDelay: `${index * 0.1}s` }"
+        :style="{ animationDelay: `${index * 0.07}s` }"
       >
         <div class="stat-header">
           <div class="stat-icon" :style="{ background: stat.color }">
@@ -92,7 +92,7 @@ onMounted(() => {
 <style scoped>
 .stats-container {
   width: 100%;
-  animation: fadeInUp 0.6s ease-out;
+  animation: fadeInUp 0.2s ease-out;
 }
 
 .stats-grid {
@@ -108,7 +108,7 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.3);
   position: relative;
   overflow: hidden;
-  animation: slideInUp 0.6s ease-out both;
+  animation: slideInUp 0.2s ease-out both;
 }
 
 .stat-header {
@@ -190,7 +190,7 @@ onMounted(() => {
   height: 100%;
   border-radius: 2px;
   transition: width 1s ease-out;
-  transition-delay: 0.3s;
+  transition-delay: 0.2s;
 }
 
 @keyframes slideInUp {

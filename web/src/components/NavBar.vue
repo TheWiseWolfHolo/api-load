@@ -58,7 +58,7 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
   color: inherit;
   padding: 8px 16px;
   border-radius: var(--border-radius-md);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-weight: 500;
 }
 
@@ -81,12 +81,13 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
 :deep(.n-menu) {
   background: transparent;
   border-bottom: none;
+  justify-content: center;
 }
 
 :deep(.n-menu-item) {
   border-radius: var(--border-radius-md);
   margin: 0 4px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 :deep(.n-menu-item:hover) {
