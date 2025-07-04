@@ -302,7 +302,7 @@ function copyUrl(url: string) {
 }
 
 .stats-summary {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   text-align: center;
 }
 
@@ -316,11 +316,11 @@ function copyUrl(url: string) {
 }
 
 .details-section {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .details-content {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .detail-section {

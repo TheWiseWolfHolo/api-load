@@ -92,7 +92,7 @@ function handleGroupRefresh() {
 .sidebar {
   width: 240px;
   flex-shrink: 0;
-  height: calc(100vh - 88px);
+  height: calc(100vh - 106px);
 }
 
 .main-content {

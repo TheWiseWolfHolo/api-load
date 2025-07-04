@@ -121,7 +121,7 @@ async function handleSubmit() {
 
     <div
       v-if="settingList.length > 0"
-      style="display: flex; justify-content: center; padding-top: 16px"
+      style="display: flex; justify-content: center; padding-top: 12px"
     >
       <n-button
         type="primary"
