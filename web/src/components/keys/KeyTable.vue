@@ -650,13 +650,13 @@ function changePageSize(size: number) {
 
 /* 状态相关样式 */
 .key-card.status-valid {
-  border-color: #10a37f;
-  background: #f8fff9;
+  border-color: #18a0584d;
+  background: #18a0581a;
 }
 
 .key-card.status-invalid {
-  border-color: #dc3545;
-  background: #fff5f5;
+  border-color: #d030503b;
+  background: #d0305014;
 }
 
 .key-card.status-error {
@@ -717,7 +717,7 @@ function changePageSize(size: number) {
   font-size: 14px;
   font-weight: 600;
   color: #495057;
-  background: #f8f9fa;
+  background: #fff;
   padding: 4px 8px;
   border-radius: 4px;
   flex: 1;

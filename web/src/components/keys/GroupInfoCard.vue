@@ -1,7 +1,20 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group, GroupStats } from "@/types/models";
-import { onMounted, ref } from "vue";
+import {
+  NButton,
+  NCard,
+  NCollapse,
+  NCollapseItem,
+  NDescriptions,
+  NDescriptionsItem,
+  NGrid,
+  NGridItem,
+  NSpin,
+  NTag,
+  useMessage,
+} from "naive-ui";
+import { onMounted, ref, watch } from "vue";
 
 interface Props {
   group: Group;
@@ -11,33 +24,36 @@ const props = defineProps<Props>();
 
 const stats = ref<GroupStats | null>(null);
 const loading = ref(false);
-const showDetails = ref(false);
+const message = useMessage();
 
 onMounted(() => {
   loadStats();
 });
 
+watch(
+  () => props.group,
+  () => {
+    loadStats();
+  }
+);
+
 async function loadStats() {
   try {
     loading.value = true;
     stats.value = await keysApi.getGroupStats(props.group.id);
-  } catch (error) {
-    console.error("加载统计信息失败:", error);
+  } catch (_error) {
+    // 错误已记录
   } finally {
     loading.value = false;
   }
 }
 
 function handleEdit() {
-  window.$message.info("编辑分组功能开发中...");
+  message.info("编辑分组功能开发中...");
 }
 
 function handleDelete() {
-  window.$message.info("删除分组功能开发中...");
-}
-
-function toggleDetails() {
-  showDetails.value = !showDetails.value;
+  message.info("删除分组功能开发中...");
 }
 
 function formatNumber(num: number): string {
@@ -57,127 +73,141 @@ function formatPercentage(num: number): string {
 
 <template>
   <div class="group-info-container">
-    <div class="group-info-card">
-      <!-- 头部信息 -->
-      <div class="card-header">
-        <div class="header-left">
-          <h3 class="group-title">{{ group.display_name || group.name }}</h3>
-          <div class="group-meta">
-            <span class="channel-badge" :class="`channel-${group.channel_type}`">
-              {{ group.channel_type.toUpperCase() }}
-            </span>
-            <span class="group-id">#{{ group.id }}</span>
+    <n-card :bordered="false" class="group-info-card">
+      <template #header>
+        <div class="card-header">
+          <div class="header-left">
+            <h3 class="group-title">
+              {{ group.display_name || group.name }}
+            </h3>
+          </div>
+          <div class="header-actions">
+            <n-button quaternary circle size="small" @click="handleEdit" title="编辑分组">
+              <template #icon>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                  />
+                </svg>
+              </template>
+            </n-button>
+            <n-button
+              quaternary
+              circle
+              size="small"
+              @click="handleDelete"
+              title="删除分组"
+              type="error"
+            >
+              <template #icon>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                  />
+                </svg>
+              </template>
+            </n-button>
           </div>
         </div>
-        <div class="header-actions">
-          <button class="action-btn" @click="handleEdit" title="编辑分组">
-            <span class="icon">✏️</span>
-          </button>
-          <button class="action-btn delete-btn" @click="handleDelete" title="删除分组">
-            <span class="icon">🗑️</span>
-          </button>
-        </div>
-      </div>
+      </template>
 
       <!-- 统计摘要区 -->
       <div class="stats-summary">
-        <div v-if="loading" class="loading-stats">
-          <div class="loading-placeholder" />
-          <div class="loading-placeholder" />
-          <div class="loading-placeholder" />
-          <div class="loading-placeholder" />
-        </div>
-        <div v-else-if="stats" class="stats-grid">
-          <div class="stat-item">
-            <div class="stat-value">{{ stats.active_keys }}/{{ stats.total_keys }}</div>
-            <div class="stat-label">密钥数量</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value failure-rate">
-              {{ formatPercentage(stats.failure_rate_24h) }}
-            </div>
-            <div class="stat-label">失败率</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ formatNumber(stats.requests_1h) }}</div>
-            <div class="stat-label">近1小时</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ formatNumber(stats.requests_24h) }}</div>
-            <div class="stat-label">近24小时</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ formatNumber(stats.requests_7d) }}</div>
-            <div class="stat-label">近7天</div>
-          </div>
-        </div>
+        <n-spin :show="loading" size="small">
+          <n-grid v-if="stats" :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
+            <n-grid-item span="1">
+              <n-card :title="`${stats.active_keys} / ${stats.total_keys}`" size="large">
+                <template #header-extra><span class="status-title">密钥数量</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card
+                class="status-card-failure"
+                :title="formatPercentage(stats.failure_rate_24h)"
+                size="large"
+              >
+                <template #header-extra><span class="status-title">失败率</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats.requests_1h)" size="large">
+                <template #header-extra><span class="status-title">近1小时</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats.requests_24h)" size="large">
+                <template #header-extra><span class="status-title">近24小时</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats.requests_7d)" size="large">
+                <template #header-extra><span class="status-title">近7天</span></template>
+              </n-card>
+            </n-grid-item>
+          </n-grid>
+        </n-spin>
       </div>
 
       <!-- 详细信息区（可折叠） -->
       <div class="details-section">
-        <button class="toggle-btn" @click="toggleDetails">
-          <span class="toggle-text">{{ showDetails ? "收起" : "展开" }}详细信息</span>
-          <span class="toggle-icon" :class="{ expanded: showDetails }">▼</span>
-        </button>
+        <n-collapse>
+          <n-collapse-item title="详细信息" name="details">
+            <div class="details-content">
+              <div class="detail-section">
+                <h4 class="section-title">基础信息</h4>
+                <n-descriptions :column="2" size="small">
+                  <n-descriptions-item label="分组名称">{{ group.name }}</n-descriptions-item>
+                  <n-descriptions-item label="渠道类型">
+                    {{ group.channel_type }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="排序">{{ group.sort }}</n-descriptions-item>
+                  <n-descriptions-item v-if="group.description" label="描述" :span="2">
+                    {{ group.description }}
+                  </n-descriptions-item>
+                </n-descriptions>
+              </div>
 
-        <div v-if="showDetails" class="details-content">
-          <div class="detail-section">
-            <h4 class="section-title">基础信息</h4>
-            <div class="detail-grid">
-              <div class="detail-item">
-                <span class="detail-label">分组名称:</span>
-                <span class="detail-value">{{ group.name }}</span>
+              <div class="detail-section">
+                <h4 class="section-title">上游地址</h4>
+                <n-descriptions :column="1" size="small">
+                  <n-descriptions-item
+                    v-for="(upstream, index) in group.upstreams"
+                    :key="index"
+                    :label="`上游 ${index + 1}`"
+                  >
+                    <span class="upstream-url">{{ upstream.url }}</span>
+                    <n-tag size="small" type="info" class="upstream-weight">
+                      权重: {{ upstream.weight }}
+                    </n-tag>
+                  </n-descriptions-item>
+                </n-descriptions>
               </div>
-              <div class="detail-item">
-                <span class="detail-label">渠道类型:</span>
-                <span class="detail-value">{{ group.channel_type }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">排序:</span>
-                <span class="detail-value">{{ group.sort }}</span>
-              </div>
-              <div v-if="group.description" class="detail-item full-width">
-                <span class="detail-label">描述:</span>
-                <span class="detail-value">{{ group.description }}</span>
+
+              <div class="detail-section">
+                <h4 class="section-title">配置信息</h4>
+                <n-descriptions :column="2" size="small">
+                  <n-descriptions-item v-if="group.config.test_model" label="测试模型">
+                    {{ group.config.test_model }}
+                  </n-descriptions-item>
+                  <n-descriptions-item v-if="group.config.request_timeout" label="请求超时">
+                    {{ group.config.request_timeout }}ms
+                  </n-descriptions-item>
+                  <n-descriptions-item
+                    v-if="Object.keys(group.config.param_overrides || {}).length > 0"
+                    label="参数覆盖"
+                    :span="2"
+                  >
+                    <pre class="config-json">{{
+                      JSON.stringify(group.config.param_overrides, null, 2)
+                    }}</pre>
+                  </n-descriptions-item>
+                </n-descriptions>
               </div>
             </div>
-          </div>
-
-          <div class="detail-section">
-            <h4 class="section-title">上游地址</h4>
-            <div class="upstream-list">
-              <div v-for="(upstream, index) in group.upstreams" :key="index" class="upstream-item">
-                <span class="upstream-url">{{ upstream.url }}</span>
-                <span class="upstream-weight">权重: {{ upstream.weight }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <h4 class="section-title">配置信息</h4>
-            <div class="config-content">
-              <div v-if="group.config.test_model" class="config-item">
-                <span class="config-label">测试模型:</span>
-                <span class="config-value">{{ group.config.test_model }}</span>
-              </div>
-              <div v-if="group.config.request_timeout" class="config-item">
-                <span class="config-label">请求超时:</span>
-                <span class="config-value">{{ group.config.request_timeout }}ms</span>
-              </div>
-              <div
-                v-if="Object.keys(group.config.param_overrides || {}).length > 0"
-                class="config-item"
-              >
-                <span class="config-label">参数覆盖:</span>
-                <pre class="config-json">{{
-                  JSON.stringify(group.config.param_overrides, null, 2)
-                }}</pre>
-              </div>
-            </div>
-          </div>
-        </div>
+          </n-collapse-item>
+        </n-collapse>
       </div>
-    </div>
+    </n-card>
   </div>
 </template>
 
@@ -186,19 +216,22 @@ function formatPercentage(num: number): string {
   width: 100%;
 }
 
+:deep(.n-card-header) {
+  padding: 12px 24px;
+}
+
 .group-info-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: fadeInUp 0.2s ease-out;
 }
 
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e9ecef;
+  width: 100%;
 }
 
 .header-left {
@@ -206,180 +239,53 @@ function formatPercentage(num: number): string {
 }
 
 .group-title {
-  font-size: 18px;
+  font-size: 1.2rem;
   font-weight: 600;
-  color: #333;
-  margin: 0 0 4px 0;
+  color: #1e293b;
+  margin: 0 0 8px 0;
 }
 
-.group-meta {
+/* .group-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.channel-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-
-.channel-openai {
-  background: rgba(16, 163, 127, 0.1);
-  color: #10a37f;
-}
-
-.channel-gemini {
-  background: rgba(66, 133, 244, 0.1);
-  color: #4285f4;
-}
-
-.channel-silicon {
-  background: rgba(147, 51, 234, 0.1);
-  color: #9333ea;
-}
-
-.channel-chutes {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
+} */
 
 .group-id {
-  font-size: 12px;
-  color: #6c757d;
+  font-size: 0.75rem;
+  color: #64748b;
+  opacity: 0.7;
 }
 
 .header-actions {
   display: flex;
-  gap: 4px;
-}
-
-.action-btn {
-  padding: 4px 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.action-btn:hover {
-  background: rgba(0, 123, 255, 0.1);
-}
-
-.action-btn.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.action-btn .icon {
-  font-size: 14px;
+  gap: 8px;
 }
 
 .stats-summary {
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.loading-stats {
-  display: flex;
-  gap: 12px;
-}
-
-.loading-placeholder {
-  height: 40px;
-  flex: 1;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
-  border-radius: 4px;
-}
-
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-}
-
-.stat-item {
+  margin-bottom: 16px;
   text-align: center;
-  padding: 8px;
-  background: white;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.stat-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333;
-  margin-bottom: 2px;
+:deep(.status-card-failure .n-card-header__main) {
+  color: #d03050;
 }
 
-.stat-value.failure-rate {
-  color: #dc3545;
-}
-
-.stat-label {
-  font-size: 10px;
-  color: #6c757d;
-  font-weight: 500;
+.status-title {
+  color: #64748b;
+  font-size: 12px;
 }
 
 .details-section {
-  border-top: 1px solid #e9ecef;
-}
-
-.toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 16px;
-  border: none;
-  background: #f8f9fa;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.toggle-btn:hover {
-  background: #e9ecef;
-}
-
-.toggle-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: #495057;
-}
-
-.toggle-icon {
-  font-size: 10px;
-  color: #6c757d;
-  transition: transform 0.2s;
-}
-
-.toggle-icon.expanded {
-  transform: rotate(180deg);
+  margin-top: 16px;
 }
 
 .details-content {
-  padding: 12px 16px;
-  background: white;
+  margin-top: 16px;
 }
 
 .detail-section {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .detail-section:last-child {
@@ -387,119 +293,82 @@ function formatPercentage(num: number): string {
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 1rem;
   font-weight: 600;
-  color: #333;
-  margin: 0 0 8px 0;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.detail-item.full-width {
-  grid-column: 1 / -1;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.detail-label {
-  font-weight: 500;
-  color: #6c757d;
-}
-
-.detail-value {
-  color: #333;
-}
-
-.upstream-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.upstream-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  font-size: 12px;
+  color: #374151;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
 }
 
 .upstream-url {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  color: #333;
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: #374151;
+  margin-right: 8px;
 }
 
 .upstream-weight {
-  color: #6c757d;
-  font-weight: 500;
-}
-
-.config-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.config-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.config-label {
-  font-weight: 500;
-  color: #6c757d;
-}
-
-.config-value {
-  color: #333;
+  margin-left: 8px;
 }
 
 .config-json {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 10px;
-  color: #495057;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: var(--border-radius-sm);
+  padding: 12px;
+  font-size: 0.8rem;
+  color: #374151;
+  margin: 8px 0;
   overflow-x: auto;
-  margin: 0;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式网格 */
+:deep(.n-grid) {
+  gap: 8px;
+}
+
+:deep(.n-grid-item) {
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
-  .stats-grid {
+  :deep(.n-grid) {
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
   }
 
-  .detail-grid {
+  .group-title {
+    font-size: 1rem;
+  }
+
+  .section-title {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.n-grid) {
     grid-template-columns: 1fr;
-  }
-
-  .upstream-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
   }
 
   .card-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+
+  .header-actions {
+    align-self: flex-end;
   }
 }
 </style>
