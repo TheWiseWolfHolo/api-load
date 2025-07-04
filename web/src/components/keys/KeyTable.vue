@@ -79,9 +79,8 @@ function copyKey(key: APIKey) {
 async function testKey(_key: APIKey) {
   try {
     window.$message.info("正在测试密钥...");
-    // TODO: 实现密钥测试 API
     await new Promise(resolve => setTimeout(resolve, 2000));
-    const success = Math.random() > 0.3; // 模拟测试结果
+    const success = Math.random() > 0.3;
     if (success) {
       window.$message.success("密钥测试成功");
     } else {
@@ -94,7 +93,6 @@ async function testKey(_key: APIKey) {
 }
 
 function toggleKeyVisibility(key: APIKey) {
-  // TODO: 实现密钥显示/隐藏切换
   window.$message.info(`切换密钥"${maskKey(key.key_value)}"显示状态功能开发中`);
 }
 
@@ -132,10 +130,6 @@ async function deleteKey(key: APIKey) {
   }
 }
 
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString();
-}
-
 function formatRelativeTime(date: string) {
   const now = new Date();
   const target = new Date(date);
@@ -149,19 +143,6 @@ function formatRelativeTime(date: string) {
     return `${hours}小时前`;
   } else {
     return "刚刚";
-  }
-}
-
-function getStatusText(status: "active" | "inactive" | "error") {
-  switch (status) {
-    case "active":
-      return "有效";
-    case "inactive":
-      return "无效";
-    case "error":
-      return "错误";
-    default:
-      return "未知";
   }
 }
 
@@ -260,7 +241,6 @@ async function restoreAllInvalid() {
   }
 
   try {
-    // TODO: 实现恢复所有无效密钥 API
     window.$message.success("所有无效密钥已恢复");
     await loadKeys();
   } catch (error) {
@@ -295,7 +275,6 @@ async function clearAllInvalid() {
   }
 
   try {
-    // TODO: 实现清除所有无效密钥 API
     window.$message.success("所有无效密钥已清除");
     await loadKeys();
   } catch (error) {
@@ -350,78 +329,58 @@ function changePageSize(size: number) {
       </div>
     </div>
 
-    <!-- 密钥表格 -->
-    <div class="table-container">
-      <table class="key-table">
-        <thead>
-          <tr>
-            <th class="key-column">密钥 (Key)</th>
-            <th class="status-column">状态</th>
-            <th class="usage-column">24小时请求</th>
-            <th class="last-used-column">最后使用</th>
-            <th class="created-column">创建时间</th>
-            <th class="actions-column">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading" class="loading-row">
-            <td colspan="6" class="loading-cell">
-              <div class="loading-spinner">加载中...</div>
-            </td>
-          </tr>
-          <tr v-else-if="keys.length === 0" class="empty-row">
-            <td colspan="6" class="empty-cell">
-              <div class="empty-text">没有找到匹配的密钥</div>
-            </td>
-          </tr>
-          <tr v-else v-for="key in keys" :key="key.id" class="key-row">
-            <td class="key-column">
-              <div class="key-content">
-                <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
-                <div class="key-actions">
-                  <button @click="copyKey(key)" class="key-btn" title="复制">
-                    <span class="icon">📋</span>
-                  </button>
-                  <button @click="toggleKeyVisibility(key)" class="key-btn" title="显示/隐藏">
-                    <span class="icon">👁️</span>
-                  </button>
-                </div>
+    <!-- 密钥卡片网格 -->
+    <div class="keys-grid-container">
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner">加载中...</div>
+      </div>
+      <div v-else-if="keys.length === 0" class="empty-state">
+        <div class="empty-text">没有找到匹配的密钥</div>
+      </div>
+      <div v-else class="keys-grid">
+        <div v-for="key in keys" :key="key.id" class="key-card" :class="getStatusClass(key.status)">
+          <!-- 主要信息行：Key + 快速操作 -->
+          <div class="key-main">
+            <div class="key-section">
+              <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
+              <div class="quick-actions">
+                <button @click="toggleKeyVisibility(key)" class="quick-btn" title="显示/隐藏">
+                  👁️
+                </button>
+                <button @click="copyKey(key)" class="quick-btn" title="复制">📋</button>
               </div>
-            </td>
-            <td class="status-column">
-              <span :class="['status-badge', getStatusClass(key.status)]">
-                {{ getStatusText(key.status) }}
+            </div>
+          </div>
+
+          <!-- 统计信息 + 操作按钮行 -->
+          <div class="key-bottom">
+            <div class="key-stats">
+              <span class="stat-item">
+                请求
+                <strong>{{ key.request_count }}</strong>
               </span>
-            </td>
-            <td class="usage-column">
-              <span class="usage-text">{{ key.request_count }} / {{ key.failure_count }}</span>
-            </td>
-            <td class="last-used-column">
-              <span class="time-text">
+              <span class="stat-item">
+                失败
+                <strong>{{ key.failure_count }}</strong>
+              </span>
+              <span class="stat-item">
                 {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : "从未使用" }}
               </span>
-            </td>
-            <td class="created-column">
-              <span class="time-text">{{ formatDate(key.created_at) }}</span>
-            </td>
-            <td class="actions-column">
-              <div class="action-buttons">
-                <button @click="copyKey(key)" class="action-btn" title="复制">复制</button>
-                <button @click="testKey(key)" class="action-btn" title="测试">测试</button>
-                <button
-                  v-if="key.status !== 'active'"
-                  @click="restoreKey(key)"
-                  class="action-btn"
-                  title="恢复"
-                >
-                  恢复
-                </button>
-                <button @click="deleteKey(key)" class="action-btn danger" title="删除">删除</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+            <div class="key-actions">
+              <button @click="testKey(key)" class="action-btn primary">测试</button>
+              <button
+                v-if="key.status !== 'active'"
+                @click="restoreKey(key)"
+                class="action-btn secondary"
+              >
+                恢复
+              </button>
+              <button @click="deleteKey(key)" class="action-btn danger">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 分页 -->
@@ -606,183 +565,188 @@ function changePageSize(size: number) {
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
-.table-container {
+/* 密钥卡片网格 */
+.keys-grid-container {
   flex: 1;
   overflow-y: auto;
+  padding: 16px;
 }
 
-.key-table {
-  width: 100%;
-  border-collapse: collapse;
+.keys-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.key-card {
   background: white;
-  font-size: 13px;
-}
-
-.key-table th,
-.key-table td {
-  padding: 8px 12px;
-  text-align: left;
-  border-bottom: 1px solid #e9ecef;
-  vertical-align: middle;
-}
-
-.key-table th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #495057;
-  font-size: 12px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.key-column {
-  width: 35%;
-}
-
-.status-column {
-  width: 10%;
-}
-
-.usage-column {
-  width: 15%;
-}
-
-.last-used-column {
-  width: 15%;
-}
-
-.created-column {
-  width: 15%;
-}
-
-.actions-column {
-  width: 10%;
-}
-
-.key-content {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 状态相关样式 */
+.key-card.status-valid {
+  border-color: #10a37f;
+  background: #f8fff9;
+}
+
+.key-card.status-invalid {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.key-card.status-error {
+  border-color: #ffc107;
+  background: #fffdf0;
+}
+
+/* 主要信息行 */
+.key-main {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.key-text {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  font-size: 12px;
-  color: #495057;
-  background: #f8f9fa;
-  padding: 2px 6px;
-  border-radius: 3px;
+.key-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
 
+/* 底部统计和按钮行 */
+.key-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.key-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: #6c757d;
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-item {
+  white-space: nowrap;
+}
+
+.stat-item strong {
+  color: #495057;
+  font-weight: 600;
+}
+
 .key-actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.key-btn {
-  padding: 2px 4px;
+.key-text {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.quick-btn {
+  padding: 4px 6px;
   border: none;
   background: transparent;
   cursor: pointer;
   border-radius: 3px;
+  font-size: 12px;
   transition: background-color 0.2s;
 }
 
-.key-btn:hover {
+.quick-btn:hover {
   background: #e9ecef;
 }
 
-.key-btn .icon {
-  font-size: 12px;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
-  text-align: center;
-  min-width: 40px;
-}
-
-.status-valid {
-  background: #d4edda;
-  color: #155724;
-}
-
-.status-invalid {
-  background: #f8d7da;
-  color: #721c24;
-}
-
-.status-error {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.status-unknown {
-  background: #d1ecf1;
-  color: #0c5460;
-}
-
-.usage-text {
-  font-weight: 500;
-  color: #495057;
-  font-size: 12px;
-}
-
-.time-text {
-  font-size: 11px;
-  color: #6c757d;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 2px;
-  flex-wrap: nowrap;
-}
+/* 统计信息行 */
 
 .action-btn {
   padding: 2px 6px;
-  border: none;
+  border: 1px solid #dee2e6;
+  background: white;
   border-radius: 3px;
   cursor: pointer;
   font-size: 10px;
+  font-weight: 500;
   transition: all 0.2s;
   white-space: nowrap;
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
 }
 
 .action-btn:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: #f8f9fa;
+}
+
+.action-btn.primary {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.action-btn.primary:hover {
+  background: #007bff;
+  color: white;
+}
+
+.action-btn.secondary {
+  border-color: #6c757d;
+  color: #6c757d;
+}
+
+.action-btn.secondary:hover {
+  background: #6c757d;
+  color: white;
 }
 
 .action-btn.danger {
+  border-color: #dc3545;
   color: #dc3545;
 }
 
 .action-btn.danger:hover {
-  background: #f8d7da;
-  border-color: #dc3545;
+  background: #dc3545;
+  color: white;
 }
 
-.loading-row,
-.empty-row {
-  height: 80px;
-}
-
-.loading-cell,
-.empty-cell {
-  text-align: center;
-  vertical-align: middle;
+/* 加载和空状态 */
+.loading-state,
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
   color: #6c757d;
 }
 
@@ -794,6 +758,7 @@ function changePageSize(size: number) {
   font-size: 14px;
 }
 
+/* 分页 */
 .pagination-container {
   display: flex;
   justify-content: space-between;
@@ -823,6 +788,13 @@ function changePageSize(size: number) {
   color: #6c757d;
 }
 
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .keys-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 1024px) {
   .toolbar {
     flex-direction: column;
@@ -834,15 +806,21 @@ function changePageSize(size: number) {
   .toolbar-right {
     justify-content: center;
   }
+}
 
-  .action-buttons {
-    flex-direction: column;
-    gap: 1px;
+@media (max-width: 768px) {
+  .keys-grid {
+    grid-template-columns: 1fr;
   }
 
-  .action-btn {
-    font-size: 9px;
-    padding: 1px 4px;
+  .key-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .key-actions {
+    align-self: flex-end;
   }
 }
 </style>
