@@ -11,16 +11,42 @@ export interface APIKey {
   updated_at: string;
 }
 
+export interface UpstreamInfo {
+  url: string;
+  weight: number;
+}
+
 export interface Group {
   id: number;
   name: string;
-  nickname: string;
+  display_name: string;
   description: string;
-  channel_type: "openai" | "gemini";
-  config: string;
+  sort: number;
+  channel_type: "openai" | "gemini" | "silicon" | "chutes";
+  upstreams: UpstreamInfo[];
+  config: Record<string, unknown>;
   api_keys?: APIKey[];
   created_at: string;
   updated_at: string;
+}
+
+export interface GroupStats {
+  total_keys: number;
+  active_keys: number;
+  requests_1h: number;
+  requests_24h: number;
+  requests_7d: number;
+  failure_rate_24h: number;
+}
+
+export interface TaskInfo {
+  is_running: boolean;
+  task_name?: string;
+  group_id?: number;
+  group_name?: string;
+  processed?: number;
+  total?: number;
+  started_at?: string;
 }
 
 export interface RequestLog {
@@ -59,6 +85,6 @@ export interface DashboardStats {
 }
 
 export interface GroupRequestStat {
-  group_nickname: string;
+  display_name: string;
   request_count: number;
 }

@@ -24,9 +24,9 @@ func (s *Server) Stats(c *gin.Context) {
 
 	// 2. Get request counts per group
 	s.DB.Table("api_keys").
-		Select("groups.nickname as group_nickname, SUM(api_keys.request_count) as request_count").
+		Select("groups.display_name as display_name, SUM(api_keys.request_count) as request_count").
 		Joins("join groups on groups.id = api_keys.group_id").
-		Group("groups.id, groups.nickname").
+		Group("groups.id, groups.display_name").
 		Order("request_count DESC").
 		Scan(&groupStats)
 

@@ -56,7 +56,7 @@ type GroupConfig struct {
 type Group struct {
 	ID          uint              `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name        string            `gorm:"type:varchar(255);not null;unique" json:"name"`
-	Nickname    string            `gorm:"type:varchar(255)" json:"nickname"`
+	DisplayName    string            `gorm:"type:varchar(255)" json:"display_name"`
 	Description string            `gorm:"type:varchar(512)" json:"description"`
 	Upstreams   Upstreams         `gorm:"type:json;not null" json:"upstreams"`
 	ChannelType string            `gorm:"type:varchar(50);not null" json:"channel_type"`
@@ -94,7 +94,7 @@ type RequestLog struct {
 
 // GroupRequestStat 用于表示每个分组的请求统计
 type GroupRequestStat struct {
-	GroupNickname string `json:"group_nickname"`
+	DisplayName string `json:"display_name"`
 	RequestCount int64  `json:"request_count"`
 }
 
