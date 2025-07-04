@@ -208,7 +208,7 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) erro
 	for key, value := range settingsMap {
 		settingsToUpdate = append(settingsToUpdate, models.SystemSetting{
 			SettingKey:   key,
-			SettingValue: fmt.Sprintf("%v", value), // Convert interface{} to string
+			SettingValue: fmt.Sprintf("%v", value), // Convert any to string
 		})
 	}
 
@@ -403,7 +403,7 @@ func setFieldFromString(fieldValue reflect.Value, value string) error {
 
 // 工具函数
 
-func interfaceToInt(val interface{}) (int, error) {
+func interfaceToInt(val any) (int, error) {
 	switch v := val.(type) {
 	case int:
 		return v, nil
@@ -421,13 +421,13 @@ func interfaceToInt(val interface{}) (int, error) {
 }
 
 // interfaceToString is kept for GetEffectiveConfig
-func interfaceToString(val interface{}) (string, bool) {
+func interfaceToString(val any) (string, bool) {
 	s, ok := val.(string)
 	return s, ok
 }
 
 // interfaceToBool is kept for GetEffectiveConfig
-func interfaceToBool(val interface{}) (bool, bool) {
+func interfaceToBool(val any) (bool, bool) {
 	switch v := val.(type) {
 	case bool:
 		return v, true

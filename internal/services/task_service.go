@@ -21,7 +21,7 @@ type TaskStatus struct {
 type TaskService struct {
 	mu           sync.Mutex
 	status       TaskStatus
-	resultsCache map[string]interface{}
+	resultsCache map[string]any
 	cacheOrder   []string
 	maxCacheSize int
 }
@@ -29,9 +29,9 @@ type TaskService struct {
 // NewTaskService creates a new TaskService.
 func NewTaskService() *TaskService {
 	return &TaskService{
-		resultsCache: make(map[string]interface{}),
+		resultsCache: make(map[string]any),
 		cacheOrder:   make([]string, 0),
-		maxCacheSize: 100, // Store results for the last 100 tasks
+		maxCacheSize: 100,
 	}
 }
 
@@ -100,7 +100,7 @@ func (s *TaskService) EndTask() {
 }
 
 // StoreResult stores the result of a finished task.
-func (s *TaskService) StoreResult(taskID string, result interface{}) {
+func (s *TaskService) StoreResult(taskID string, result any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -116,7 +116,7 @@ func (s *TaskService) StoreResult(taskID string, result interface{}) {
 }
 
 // GetResult retrieves the result of a finished task.
-func (s *TaskService) GetResult(taskID string) (interface{}, bool) {
+func (s *TaskService) GetResult(taskID string) (any, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

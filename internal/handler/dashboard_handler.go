@@ -12,7 +12,7 @@ import (
 // @Tags Dashboard
 // @Accept  json
 // @Produce  json
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/dashboard/stats [get]
 func (s *Server) Stats(c *gin.Context) {
 	var totalRequests, successRequests int64

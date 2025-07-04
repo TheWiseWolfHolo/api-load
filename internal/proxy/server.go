@@ -137,7 +137,7 @@ func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *mode
 // updateKeyStats atomically updates the request and failure counts for a key
 func (ps *ProxyServer) updateKeyStats(keyID uint, success bool) {
 	// Always increment the request count
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"request_count": gorm.Expr("request_count + 1"),
 	}
 
@@ -178,7 +178,7 @@ func (ps *ProxyServer) applyParamOverrides(c *gin.Context, group *models.Group) 
 	originalContentType := c.GetHeader("Content-Type")
 
 	// Unmarshal the body into a map
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
 		// If not a valid JSON, just pass it through
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))

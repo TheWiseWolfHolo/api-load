@@ -10,9 +10,9 @@ import (
 
 // SuccessResponse defines the standard JSON success response structure.
 type SuccessResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // ErrorResponse defines the standard JSON error response structure.
@@ -22,7 +22,7 @@ type ErrorResponse struct {
 }
 
 // Success sends a standardized success response.
-func Success(c *gin.Context, data interface{}) {
+func Success(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Code:    0,
 		Message: "Success",

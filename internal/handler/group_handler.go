@@ -25,7 +25,7 @@ func isValidGroupName(name string) bool {
 }
 
 // validateAndCleanConfig validates the group config against the GroupConfig struct.
-func validateAndCleanConfig(configMap map[string]interface{}) (map[string]interface{}, error) {
+func validateAndCleanConfig(configMap map[string]any) (map[string]any, error) {
 	if configMap == nil {
 		return nil, nil
 	}
@@ -60,7 +60,7 @@ func validateAndCleanConfig(configMap map[string]interface{}) (map[string]interf
 		return nil, err
 	}
 
-	var cleanedMap map[string]interface{}
+	var cleanedMap map[string]any
 	if err := json.Unmarshal(validatedBytes, &cleanedMap); err != nil {
 		return nil, err
 	}
@@ -122,15 +122,15 @@ func (s *Server) ListGroups(c *gin.Context) {
 // GroupUpdateRequest defines the payload for updating a group.
 // Using a dedicated struct avoids issues with zero values being ignored by GORM's Update.
 type GroupUpdateRequest struct {
-	Name           string                 `json:"name"`
-	DisplayName    string                 `json:"display_name"`
-	Description    string                 `json:"description"`
-	Upstreams      json.RawMessage        `json:"upstreams"`
-	ChannelType    string                 `json:"channel_type"`
-	Sort           *int                   `json:"sort"`
-	TestModel      string                 `json:"test_model"`
-	ParamOverrides map[string]interface{} `json:"param_overrides"`
-	Config         map[string]interface{} `json:"config"`
+	Name           string          `json:"name"`
+	DisplayName    string          `json:"display_name"`
+	Description    string          `json:"description"`
+	Upstreams      json.RawMessage `json:"upstreams"`
+	ChannelType    string          `json:"channel_type"`
+	Sort           *int            `json:"sort"`
+	TestModel      string          `json:"test_model"`
+	ParamOverrides map[string]any  `json:"param_overrides"`
+	Config         map[string]any  `json:"config"`
 }
 
 // UpdateGroup handles updating an existing group.
