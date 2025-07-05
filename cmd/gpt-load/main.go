@@ -95,7 +95,7 @@ func main() {
 	// ---
 
 	keyManualValidationService := services.NewKeyManualValidationService(database, keyValidatorService, taskService, settingsManager, configManager)
-	keyCronService := services.NewKeyCronService(database, settingsManager, KeyValidationPool)
+	keyCronService := services.NewKeyCronService(database, settingsManager, KeyValidationPool, storage)
 	keyCronService.Start()
 	defer keyCronService.Stop()
 
