@@ -57,12 +57,12 @@ func (s *KeyManualValidationService) StartValidationTask(group *models.Group) (*
 	}
 
 	// Run the validation in a separate goroutine
-	go s.runValidation(group, keys, taskStatus)
+	go s.runValidation(group, keys)
 
 	return taskStatus, nil
 }
 
-func (s *KeyManualValidationService) runValidation(group *models.Group, keys []models.APIKey, task *TaskStatus) {
+func (s *KeyManualValidationService) runValidation(group *models.Group, keys []models.APIKey) {
 	logrus.Infof("Starting manual validation for group %s", group.Name)
 
 	jobs := make(chan models.APIKey, len(keys))
@@ -70,7 +70,7 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 
 	concurrency := s.SettingsManager.GetInt("key_validation_concurrency", 10)
 	if concurrency <= 0 {
-		concurrency = 10 // Fallback to a safe default
+		concurrency = 10
 	}
 
 	var wg sync.WaitGroup

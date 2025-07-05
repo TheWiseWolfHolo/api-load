@@ -149,8 +149,8 @@ func (s *KeyCronService) worker(ctx context.Context, wg *sync.WaitGroup, group *
 	for key := range jobs {
 		isValid, validationErr := s.Validator.ValidateSingleKey(ctx, &key, group)
 
-		newStatus := key.Status
-		newErrorReason := key.ErrorReason
+		var newStatus string
+		var newErrorReason string
 		statusChanged := false
 
 		if validationErr != nil {
@@ -161,11 +161,8 @@ func (s *KeyCronService) worker(ctx context.Context, wg *sync.WaitGroup, group *
 			// Validation succeeded
 			if isValid {
 				newStatus = "active"
-				newErrorReason = "" // Clear reason on success
+				newErrorReason = ""
 			} else {
-				// This case might happen if the key is valid but has no quota, etc.
-				// The error would be in validationErr, so this branch is less likely.
-				// We still mark it as inactive but without a specific error from our side.
 				newStatus = "inactive"
 				newErrorReason = "Validation returned false without a specific error."
 			}
