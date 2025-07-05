@@ -56,7 +56,7 @@ func (s *KeyCronService) run() {
 		// Dynamically get the interval for the next run
 		intervalMinutes := s.SettingsManager.GetInt("key_validation_interval_minutes", 60)
 		if intervalMinutes <= 0 {
-			intervalMinutes = 60 // Fallback to a safe default
+			intervalMinutes = 60
 		}
 		nextRunTimer := time.NewTimer(time.Duration(intervalMinutes) * time.Minute)
 
@@ -84,6 +84,7 @@ func (s *KeyCronService) validateAllGroups(ctx context.Context) {
 			// Get effective settings for the group
 			effectiveSettings := s.SettingsManager.GetEffectiveConfig(g.Config)
 			interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
+			logrus.Infof("KeyCronService: Validating group %s with interval %s", g.Name, interval)
 
 			// Check if it's time to validate this group
 			if g.LastValidatedAt == nil || time.Since(*g.LastValidatedAt) > interval {

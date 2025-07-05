@@ -86,7 +86,7 @@ func main() {
 
 	taskService := services.NewTaskService(storage)
 	channelFactory := channel.NewFactory(settingsManager)
-	keyValidatorService := services.NewKeyValidatorService(database, channelFactory)
+	keyValidatorService := services.NewKeyValidatorService(database, channelFactory, settingsManager)
 
 	keyManualValidationService := services.NewKeyManualValidationService(database, keyValidatorService, taskService, settingsManager)
 	keyCronService := services.NewKeyCronService(database, keyValidatorService, settingsManager)
