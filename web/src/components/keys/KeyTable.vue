@@ -293,7 +293,7 @@ async function validateAllKeys() {
   }
 
   try {
-    const result = await keysApi.validateKeys(props.selectedGroup.id);
+    const result = await keysApi.validateGroupKeys(props.selectedGroup.id);
     window.$message.success(`验证完成: 有效${result.valid_count}个，无效${result.invalid_count}个`);
   } catch (_error) {
     // 错误已记录

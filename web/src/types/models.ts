@@ -20,17 +20,26 @@ export interface UpstreamInfo {
 }
 
 export interface Group {
-  id: number;
+  id?: number;
   name: string;
   display_name: string;
   description: string;
   sort: number;
+  test_model: string;
   channel_type: "openai" | "gemini";
   upstreams: UpstreamInfo[];
   config: Record<string, unknown>;
   api_keys?: APIKey[];
-  created_at: string;
-  updated_at: string;
+  param_overrides: any;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GroupConfigOption {
+  key: string;
+  name: string;
+  description: string;
+  default_value: number;
 }
 
 export interface GroupStats {
