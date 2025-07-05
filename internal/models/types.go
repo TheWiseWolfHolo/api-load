@@ -34,6 +34,7 @@ type GroupConfig struct {
 type Group struct {
 	ID              uint              `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name            string            `gorm:"type:varchar(255);not null;unique" json:"name"`
+	Endpoint        string            `gorm:"-" json:"endpoint"`
 	DisplayName     string            `gorm:"type:varchar(255)" json:"display_name"`
 	Description     string            `gorm:"type:varchar(512)" json:"description"`
 	Upstreams       datatypes.JSON    `gorm:"type:json;not null" json:"upstreams"`

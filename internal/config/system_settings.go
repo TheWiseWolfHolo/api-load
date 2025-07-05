@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"gpt-load/internal/db"
 	"gpt-load/internal/models"
 	"reflect"
@@ -18,7 +19,8 @@ import (
 // 使用结构体标签作为唯一事实来源
 type SystemSettings struct {
 	// 基础参数
-	BlacklistThreshold      int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"基础参数" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
+	AppUrl                  string `json:"app_url" default:"" name:"项目地址" category:"基础参数" desc:"项目的基础 URL，用于拼接分组终端节点地址。系统配置优先于环境变量 APP_URL。"`
+	BlacklistThreshold      int    `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"基础参数" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
 	MaxRetries              int `json:"max_retries" default:"3" name:"最大重试次数" category:"基础参数" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
 	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
 
@@ -137,9 +139,26 @@ func (sm *SystemSettingsManager) InitializeSystemSettings() error {
 		var existing models.SystemSetting
 		err := db.DB.Where("setting_key = ?", meta.Key).First(&existing).Error
 		if err != nil { // Not found
+			value := fmt.Sprintf("%v", meta.DefaultValue)
+			if meta.Key == "app_url" {
+				// Special handling for app_url initialization
+				if appURL := os.Getenv("APP_URL"); appURL != "" {
+					value = appURL
+				} else {
+					host := os.Getenv("HOST")
+					if host == "" || host == "0.0.0.0" {
+						host = "localhost"
+					}
+					port := os.Getenv("PORT")
+					if port == "" {
+						port = "3000"
+					}
+					value = fmt.Sprintf("http://%s:%s", host, port)
+				}
+			}
 			setting := models.SystemSetting{
 				SettingKey:   meta.Key,
-				SettingValue: fmt.Sprintf("%v", meta.DefaultValue),
+				SettingValue: value,
 				Description:  meta.Description,
 			}
 			if err := db.DB.Create(&setting).Error; err != nil {
@@ -188,6 +207,21 @@ func (sm *SystemSettingsManager) GetSettings() SystemSettings {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.settings
+}
+
+// GetAppUrl returns the effective App URL.
+// It prioritizes the value from system settings (database) over the APP_URL environment variable.
+func (sm *SystemSettingsManager) GetAppUrl() string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	// 1. 优先级: 数据库中的系统配置
+	if sm.settings.AppUrl != "" {
+		return sm.settings.AppUrl
+	}
+
+	// 2. 回退: 环境变量
+	return os.Getenv("APP_URL")
 }
 
 // UpdateSettings 更新系统配置
@@ -332,6 +366,7 @@ func (sm *SystemSettingsManager) DisplayCurrentSettings() {
 	defer sm.mu.RUnlock()
 
 	logrus.Info("Current System Settings:")
+	logrus.Infof("   App URL: %s", sm.settings.AppUrl)
 	logrus.Infof("   Blacklist threshold: %d", sm.settings.BlacklistThreshold)
 	logrus.Infof("   Max retries: %d", sm.settings.MaxRetries)
 	logrus.Infof("   Server timeouts: read=%ds, write=%ds, idle=%ds, shutdown=%ds",

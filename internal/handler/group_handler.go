@@ -4,6 +4,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"gpt-load/internal/config"
 	app_errors "gpt-load/internal/errors"
@@ -208,7 +209,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, newGroupResponse(&group))
+	response.Success(c, s.newGroupResponse(&group))
 }
 
 // ListGroups handles listing all groups.
@@ -220,8 +221,8 @@ func (s *Server) ListGroups(c *gin.Context) {
 	}
 
 	var groupResponses []GroupResponse
-	for _, group := range groups {
-		groupResponses = append(groupResponses, *newGroupResponse(&group))
+	for i := range groups {
+		groupResponses = append(groupResponses, *s.newGroupResponse(&groups[i]))
 	}
 
 	response.Success(c, groupResponses)
@@ -339,13 +340,14 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, newGroupResponse(&group))
+	response.Success(c, s.newGroupResponse(&group))
 }
 
 // GroupResponse defines the structure for a group response, excluding sensitive or large fields.
 type GroupResponse struct {
 	ID             uint              `json:"id"`
 	Name           string            `json:"name"`
+	Endpoint       string            `json:"endpoint"`
 	DisplayName    string            `json:"display_name"`
 	Description    string            `json:"description"`
 	Upstreams      datatypes.JSON    `json:"upstreams"`
@@ -360,10 +362,21 @@ type GroupResponse struct {
 }
 
 // newGroupResponse creates a new GroupResponse from a models.Group.
-func newGroupResponse(group *models.Group) *GroupResponse {
+func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
+	appURL := s.SettingsManager.GetAppUrl()
+	endpoint := ""
+	if appURL != "" {
+		u, err := url.Parse(appURL)
+		if err == nil {
+			u.Path = strings.TrimRight(u.Path, "/") + "/proxy/" + group.Name
+			endpoint = u.String()
+		}
+	}
+
 	return &GroupResponse{
 		ID:              group.ID,
 		Name:            group.Name,
+		Endpoint:        endpoint,
 		DisplayName:     group.DisplayName,
 		Description:     group.Description,
 		Upstreams:       group.Upstreams,
