@@ -1,0 +1,39 @@
+import type { Group } from "@/types/models";
+
+/**
+ * Formats a string from camelCase, snake_case, or kebab-case
+ * into a more readable format with spaces and capitalized words.
+ *
+ * @param name The input string.
+ * @returns The formatted string.
+ *
+ * @example
+ * formatDisplayName("myGroupName")      // "My Group Name"
+ * formatDisplayName("my_group_name")    // "My Group Name"
+ * formatDisplayName("my-group-name")    // "My Group Name"
+ * formatDisplayName("MyGroup")          // "My Group"
+ */
+export function formatDisplayName(name: string): string {
+  if (!name) {
+    return "";
+  }
+
+  // Replace snake_case and kebab-case with spaces, and add a space before uppercase letters in camelCase.
+  const result = name.replace(/[_-]/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+
+  // Capitalize the first letter of each word.
+  return result
+    .split(" ")
+    .filter(word => word.length > 0)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * Gets the display name for a group, falling back to a formatted version of its name.
+ * @param group The group object.
+ * @returns The display name for the group.
+ */
+export function getGroupDisplayName(group: Group): string {
+  return group.display_name || formatDisplayName(group.name);
+}

@@ -5,8 +5,8 @@ const mockGroups: Group[] = [
   {
     id: 1,
     name: "openai-main",
-    display_name: "OpenAI主组",
-    description: "OpenAI主要API组",
+    display_name: "",
+    description: "",
     sort: 1,
     channel_type: "openai",
     upstreams: [

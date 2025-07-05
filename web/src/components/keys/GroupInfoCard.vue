@@ -14,6 +14,7 @@ import {
   NTag,
   useMessage,
 } from "naive-ui";
+import { getGroupDisplayName } from "@/utils/display";
 import { onMounted, ref, watch } from "vue";
 
 interface Props {
@@ -94,7 +95,7 @@ function copyUrl(url: string) {
         <div class="card-header">
           <div class="header-left">
             <h3 class="group-title">
-              {{ group?.display_name || group?.name || "请选择分组" }}
+              {{ group ? getGroupDisplayName(group) : "请选择分组" }}
               <code
                 v-if="group"
                 class="group-url"

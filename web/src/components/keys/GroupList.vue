@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group } from "@/types/models";
+import { getGroupDisplayName } from "@/utils/display";
 import { NButton, NCard, NEmpty, NInput, NSpin, NTag, useMessage } from "naive-ui";
 import { computed, ref } from "vue";
 
@@ -115,7 +116,7 @@ async function createDemoGroup() {
                 <span v-else>🔧</span>
               </div>
               <div class="group-content">
-                <div class="group-name">{{ group.display_name || group.name }}</div>
+                <div class="group-name">{{ getGroupDisplayName(group) }}</div>
                 <div class="group-meta">
                   <n-tag size="tiny" :type="getChannelTagType(group.channel_type)">
                     {{ group.channel_type }}
