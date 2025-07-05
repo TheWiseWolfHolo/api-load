@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gpt-load/internal/channel"
 
@@ -207,7 +208,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, group)
+	response.Success(c, newGroupResponse(&group))
 }
 
 // ListGroups handles listing all groups.
@@ -217,7 +218,13 @@ func (s *Server) ListGroups(c *gin.Context) {
 		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
-	response.Success(c, groups)
+
+	var groupResponses []GroupResponse
+	for _, group := range groups {
+		groupResponses = append(groupResponses, *newGroupResponse(&group))
+	}
+
+	response.Success(c, groupResponses)
 }
 
 // GroupUpdateRequest defines the payload for updating a group.
@@ -332,8 +339,45 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, group)
+	response.Success(c, newGroupResponse(&group))
 }
+
+// GroupResponse defines the structure for a group response, excluding sensitive or large fields.
+type GroupResponse struct {
+	ID             uint              `json:"id"`
+	Name           string            `json:"name"`
+	DisplayName    string            `json:"display_name"`
+	Description    string            `json:"description"`
+	Upstreams      datatypes.JSON    `json:"upstreams"`
+	ChannelType    string            `json:"channel_type"`
+	Sort           int               `json:"sort"`
+	TestModel      string            `json:"test_model"`
+	ParamOverrides datatypes.JSONMap `json:"param_overrides"`
+	Config         datatypes.JSONMap `json:"config"`
+	LastValidatedAt *time.Time       `json:"last_validated_at"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
+}
+
+// newGroupResponse creates a new GroupResponse from a models.Group.
+func newGroupResponse(group *models.Group) *GroupResponse {
+	return &GroupResponse{
+		ID:              group.ID,
+		Name:            group.Name,
+		DisplayName:     group.DisplayName,
+		Description:     group.Description,
+		Upstreams:       group.Upstreams,
+		ChannelType:     group.ChannelType,
+		Sort:            group.Sort,
+		TestModel:       group.TestModel,
+		ParamOverrides:  group.ParamOverrides,
+		Config:          group.Config,
+		LastValidatedAt: group.LastValidatedAt,
+		CreatedAt:       group.CreatedAt,
+		UpdatedAt:       group.UpdatedAt,
+	}
+}
+
 
 // DeleteGroup handles deleting a group.
 func (s *Server) DeleteGroup(c *gin.Context) {
@@ -383,10 +427,10 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 
 // ConfigOption represents a single configurable option for a group.
 type ConfigOption struct {
-	Key          string `json:"key"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	DefaultValue any    `json:"default_value"`
+	Key          string    `json:"key"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	DefaultValue any       `json:"default_value"`
 }
 
 // GetGroupConfigOptions returns a list of available configuration options for groups.
