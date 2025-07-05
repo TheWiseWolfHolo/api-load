@@ -11,30 +11,31 @@ import (
 	"gorm.io/gorm"
 )
 
-// KeyCronService is responsible for periodically validating all API keys.
+// KeyCronService is responsible for periodically submitting keys for validation.
 type KeyCronService struct {
 	DB              *gorm.DB
-	Validator       *KeyValidatorService
 	SettingsManager *config.SystemSettingsManager
+	Pool            *KeyValidationPool
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 }
 
 // NewKeyCronService creates a new KeyCronService.
-func NewKeyCronService(db *gorm.DB, validator *KeyValidatorService, settingsManager *config.SystemSettingsManager) *KeyCronService {
+func NewKeyCronService(db *gorm.DB, settingsManager *config.SystemSettingsManager, pool *KeyValidationPool) *KeyCronService {
 	return &KeyCronService{
 		DB:              db,
-		Validator:       validator,
 		SettingsManager: settingsManager,
+		Pool:            pool,
 		stopChan:        make(chan struct{}),
 	}
 }
 
-// Start begins the cron job.
+// Start begins the cron job and the results processor.
 func (s *KeyCronService) Start() {
 	logrus.Info("Starting KeyCronService...")
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.run()
+	go s.processResults()
 }
 
 // Stop stops the cron job.
@@ -45,9 +46,11 @@ func (s *KeyCronService) Stop() {
 	logrus.Info("KeyCronService stopped.")
 }
 
+// run is the main ticker loop that triggers validation cycles.
 func (s *KeyCronService) run() {
 	defer s.wg.Done()
-	ctx := context.Background()
+	// Run once on start, then start the ticker.
+	s.submitValidationJobs()
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -55,15 +58,73 @@ func (s *KeyCronService) run() {
 	for {
 		select {
 		case <-ticker.C:
-			s.validateAllGroups(ctx)
+			s.submitValidationJobs()
 		case <-s.stopChan:
 			return
 		}
 	}
 }
 
-func (s *KeyCronService) validateAllGroups(ctx context.Context) {
-	logrus.Info("KeyCronService: Starting validation cycle for all groups.")
+// processResults consumes results from the validation pool and updates the database.
+func (s *KeyCronService) processResults() {
+	defer s.wg.Done()
+	keysToUpdate := make(map[uint]models.APIKey)
+
+	// Process results in batches to avoid constant DB writes.
+	// This ticker defines the maximum delay for a batch update.
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case result, ok := <-s.Pool.ResultsChannel():
+			if !ok {
+				s.batchUpdateKeyStatus(keysToUpdate)
+				return
+			}
+
+			key := result.Job.Key
+			var newStatus string
+			var newErrorReason string
+
+			if result.Error != nil {
+				newStatus = "inactive"
+				newErrorReason = result.Error.Error()
+			} else {
+				if result.IsValid {
+					newStatus = "active"
+					newErrorReason = ""
+				} else {
+					newStatus = "inactive"
+					newErrorReason = "Validation returned false without a specific error."
+				}
+			}
+
+			if key.Status != newStatus || key.ErrorReason != newErrorReason {
+				key.Status = newStatus
+				key.ErrorReason = newErrorReason
+				keysToUpdate[key.ID] = key
+			}
+
+		case <-ticker.C:
+			// Process batch on ticker interval
+			if len(keysToUpdate) > 0 {
+				s.batchUpdateKeyStatus(keysToUpdate)
+				keysToUpdate = make(map[uint]models.APIKey) 
+			}
+		case <-s.stopChan:
+			// Process any remaining keys before stopping
+			if len(keysToUpdate) > 0 {
+				s.batchUpdateKeyStatus(keysToUpdate)
+			}
+			return
+		}
+	}
+}
+
+// submitValidationJobs finds groups and keys that need validation and submits them to the pool.
+func (s *KeyCronService) submitValidationJobs() {
+	logrus.Info("KeyCronService: Starting validation submission cycle.")
 	var groups []models.Group
 	if err := s.DB.Find(&groups).Error; err != nil {
 		logrus.Errorf("KeyCronService: Failed to get groups: %v", err)
@@ -71,123 +132,70 @@ func (s *KeyCronService) validateAllGroups(ctx context.Context) {
 	}
 
 	validationStartTime := time.Now()
-	var wg sync.WaitGroup
-	for _, group := range groups {
-		groupCopy := group
-		wg.Add(1)
-		go func(g models.Group) {
-			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					logrus.Errorf("KeyCronService: Panic recovered in group validation for %s: %v", g.Name, r)
+	groupsToUpdateTimestamp := make(map[uint]*models.Group)
+
+	for i := range groups {
+		group := &groups[i]
+		effectiveSettings := s.SettingsManager.GetEffectiveConfig(group.Config)
+		interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
+
+		if group.LastValidatedAt == nil || validationStartTime.Sub(*group.LastValidatedAt) > interval {
+			groupsToUpdateTimestamp[group.ID] = group
+			var keys []models.APIKey
+			if err := s.DB.Where("group_id = ?", group.ID).Find(&keys).Error; err != nil {
+				logrus.Errorf("KeyCronService: Failed to get keys for group %s: %v", group.Name, err)
+				continue
+			}
+
+			if len(keys) == 0 {
+				continue
+			}
+
+			logrus.Infof("KeyCronService: Submitting %d keys for group %s for validation.", len(keys), group.Name)
+
+			for _, key := range keys {
+				// Create a new context with timeout for each job
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+				job := ValidationJob{
+					Key:        key,
+					Group:      group,
+					Ctx:        ctx,
+					CancelFunc: cancel,
 				}
-			}()
 
-			effectiveSettings := s.SettingsManager.GetEffectiveConfig(g.Config)
-			interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
-
-			if g.LastValidatedAt == nil || validationStartTime.Sub(*g.LastValidatedAt) > interval {
-				s.validateGroup(ctx, &g, validationStartTime)
+				s.Pool.SubmitJob(job)
 			}
-		}(groupCopy)
+		}
 	}
-	wg.Wait()
-	logrus.Info("KeyCronService: Validation cycle finished.")
+
+	// Update timestamps for all groups that were due for validation
+	if len(groupsToUpdateTimestamp) > 0 {
+		s.updateGroupTimestamps(groupsToUpdateTimestamp, validationStartTime)
+	}
+	logrus.Info("KeyCronService: Validation submission cycle finished.")
 }
 
-func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group, validationStartTime time.Time) {
+func (s *KeyCronService) updateGroupTimestamps(groups map[uint]*models.Group, validationStartTime time.Time) {
+	var groupIDs []uint
+	for id := range groups {
+		groupIDs = append(groupIDs, id)
+	}
+	if err := s.DB.Model(&models.Group{}).Where("id IN ?", groupIDs).Update("last_validated_at", validationStartTime).Error; err != nil {
+		logrus.Errorf("KeyCronService: Failed to batch update last_validated_at for groups: %v", err)
+	}
+}
+
+func (s *KeyCronService) batchUpdateKeyStatus(keysToUpdate map[uint]models.APIKey) {
+	if len(keysToUpdate) == 0 {
+		return
+	}
+	logrus.Infof("KeyCronService: Batch updating status for %d keys.", len(keysToUpdate))
+
 	var keys []models.APIKey
-	if err := s.DB.Where("group_id = ?", group.ID).Find(&keys).Error; err != nil {
-		logrus.Errorf("KeyCronService: Failed to get keys for group %s: %v", group.Name, err)
-		return
+	for _, key := range keysToUpdate {
+		keys = append(keys, key)
 	}
-
-	if len(keys) == 0 {
-		if err := s.DB.Model(group).Update("last_validated_at", validationStartTime).Error; err != nil {
-			logrus.Errorf("KeyCronService: Failed to update last_validated_at for empty group %s: %v", group.Name, err)
-		}
-		return
-	}
-
-	logrus.Infof("KeyCronService: Validating %d keys for group %s", len(keys), group.Name)
-
-	jobs := make(chan models.APIKey, len(keys))
-	results := make(chan models.APIKey, len(keys))
-
-	concurrency := s.SettingsManager.GetInt("key_validation_concurrency", 10)
-	if concurrency <= 0 {
-		concurrency = 10
-	}
-
-	var workerWg sync.WaitGroup
-	for range concurrency {
-		workerWg.Add(1)
-		go s.worker(ctx, &workerWg, group, jobs, results)
-	}
-
-	for _, key := range keys {
-		jobs <- key
-	}
-	close(jobs)
-
-	workerWg.Wait()
-	close(results)
-
-	var keysToUpdate []models.APIKey
-	for key := range results {
-		keysToUpdate = append(keysToUpdate, key)
-	}
-
-	if len(keysToUpdate) > 0 {
-		s.batchUpdateKeyStatus(keysToUpdate)
-	}
-
-	if err := s.DB.Model(group).Update("last_validated_at", validationStartTime).Error; err != nil {
-		logrus.Errorf("KeyCronService: Failed to update last_validated_at for group %s: %v", group.Name, err)
-	}
-
-	logrus.Infof("KeyCronService: Finished validating group %s. %d keys had their status changed.", group.Name, len(keysToUpdate))
-}
-
-func (s *KeyCronService) worker(ctx context.Context, wg *sync.WaitGroup, group *models.Group, jobs <-chan models.APIKey, results chan<- models.APIKey) {
-	defer wg.Done()
-	for key := range jobs {
-		isValid, validationErr := s.Validator.ValidateSingleKey(ctx, &key, group)
-
-		var newStatus string
-		var newErrorReason string
-		statusChanged := false
-
-		if validationErr != nil {
-			newStatus = "inactive"
-			newErrorReason = validationErr.Error()
-		} else {
-			if isValid {
-				newStatus = "active"
-				newErrorReason = ""
-			} else {
-				newStatus = "inactive"
-				newErrorReason = "Validation returned false without a specific error."
-			}
-		}
-
-		if key.Status != newStatus || key.ErrorReason != newErrorReason {
-			statusChanged = true
-		}
-
-		if statusChanged {
-			key.Status = newStatus
-			key.ErrorReason = newErrorReason
-			results <- key
-		}
-	}
-}
-
-func (s *KeyCronService) batchUpdateKeyStatus(keys []models.APIKey) {
-	if len(keys) == 0 {
-		return
-	}
-	logrus.Infof("KeyCronService: Batch updating status/reason for %d keys.", len(keys))
 
 	err := s.DB.Transaction(func(tx *gorm.DB) error {
 		for _, key := range keys {
@@ -196,15 +204,13 @@ func (s *KeyCronService) batchUpdateKeyStatus(keys []models.APIKey) {
 				"error_reason": key.ErrorReason,
 			}
 			if err := tx.Model(&models.APIKey{}).Where("id = ?", key.ID).Updates(updates).Error; err != nil {
-				// Log the error for this specific key but continue the transaction
 				logrus.Errorf("KeyCronService: Failed to update key ID %d: %v", key.ID, err)
 			}
 		}
-		return nil // Commit the transaction even if some updates failed
+		return nil
 	})
 
 	if err != nil {
-		// This error is for the transaction itself, not individual updates
 		logrus.Errorf("KeyCronService: Transaction failed during batch update of key statuses: %v", err)
 	}
 }

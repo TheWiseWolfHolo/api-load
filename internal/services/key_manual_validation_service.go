@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
+	"gpt-load/internal/types"
 	"sync"
 	"time"
 
@@ -25,15 +26,17 @@ type KeyManualValidationService struct {
 	Validator       *KeyValidatorService
 	TaskService     *TaskService
 	SettingsManager *config.SystemSettingsManager
+	ConfigManager   types.ConfigManager
 }
 
 // NewKeyManualValidationService creates a new KeyManualValidationService.
-func NewKeyManualValidationService(db *gorm.DB, validator *KeyValidatorService, taskService *TaskService, settingsManager *config.SystemSettingsManager) *KeyManualValidationService {
+func NewKeyManualValidationService(db *gorm.DB, validator *KeyValidatorService, taskService *TaskService, settingsManager *config.SystemSettingsManager, configManager types.ConfigManager) *KeyManualValidationService {
 	return &KeyManualValidationService{
 		DB:              db,
 		Validator:       validator,
 		TaskService:     taskService,
 		SettingsManager: settingsManager,
+		ConfigManager:   configManager,
 	}
 }
 
@@ -68,7 +71,9 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	jobs := make(chan models.APIKey, len(keys))
 	results := make(chan bool, len(keys))
 
-	concurrency := s.SettingsManager.GetInt("key_validation_concurrency", 10)
+	performanceConfig := s.ConfigManager.GetPerformanceConfig()
+	concurrency := performanceConfig.KeyValidationPoolSize
+
 	if concurrency <= 0 {
 		concurrency = 10
 	}

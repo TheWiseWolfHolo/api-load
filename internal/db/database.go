@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"gpt-load/internal/models"
+	"gpt-load/internal/types"
 	"log"
 	"os"
 	"time"
@@ -14,10 +15,10 @@ import (
 
 var DB *gorm.DB
 
-func InitDB() (*gorm.DB, error) {
-	dsn := os.Getenv("DATABASE_DSN")
-	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_DSN environment variable not set")
+func InitDB(configManager types.ConfigManager) (*gorm.DB, error) {
+	dbConfig := configManager.GetDatabaseConfig()
+	if dbConfig.DSN == "" {
+		return nil, fmt.Errorf("DATABASE_DSN is not configured")
 	}
 
 	newLogger := logger.New(
@@ -31,7 +32,7 @@ func InitDB() (*gorm.DB, error) {
 	)
 
 	var err error
-	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+	DB, err = gorm.Open(mysql.Open(dbConfig.DSN), &gorm.Config{
 		Logger: newLogger,
 	})
 	if err != nil {
@@ -48,7 +49,7 @@ func InitDB() (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	if os.Getenv("DB_AUTO_MIGRATE") != "false" {
+	if dbConfig.AutoMigrate {
 		err = DB.AutoMigrate(
 			&models.SystemSetting{},
 			&models.Group{},

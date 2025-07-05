@@ -47,6 +47,7 @@ type Config struct {
 	CORS        types.CORSConfig        `json:"cors"`
 	Performance types.PerformanceConfig `json:"performance"`
 	Log         types.LogConfig         `json:"log"`
+	Database    types.DatabaseConfig    `json:"database"`
 	RedisDSN    string                  `json:"redis_dsn"`
 }
 
@@ -102,6 +103,7 @@ func (m *Manager) ReloadConfig() error {
 		Performance: types.PerformanceConfig{
 			MaxConcurrentRequests: parseInteger(os.Getenv("MAX_CONCURRENT_REQUESTS"), 100),
 			EnableGzip:            parseBoolean(os.Getenv("ENABLE_GZIP"), true),
+			KeyValidationPoolSize: parseInteger(os.Getenv("KEY_VALIDATION_POOL_SIZE"), 10),
 		},
 		Log: types.LogConfig{
 			Level:         getEnvOrDefault("LOG_LEVEL", "info"),
@@ -109,6 +111,10 @@ func (m *Manager) ReloadConfig() error {
 			EnableFile:    parseBoolean(os.Getenv("LOG_ENABLE_FILE"), false),
 			FilePath:      getEnvOrDefault("LOG_FILE_PATH", "logs/app.log"),
 			EnableRequest: parseBoolean(os.Getenv("LOG_ENABLE_REQUEST"), true),
+		},
+		Database: types.DatabaseConfig{
+			DSN:         os.Getenv("DATABASE_DSN"),
+			AutoMigrate: parseBoolean(os.Getenv("DB_AUTO_MIGRATE"), true),
 		},
 		RedisDSN: os.Getenv("REDIS_DSN"),
 	}
@@ -152,6 +158,11 @@ func (m *Manager) GetLogConfig() types.LogConfig {
 // GetRedisDSN returns the Redis DSN string.
 func (m *Manager) GetRedisDSN() string {
 	return m.config.RedisDSN
+}
+
+// GetDatabaseConfig returns the database configuration.
+func (m *Manager) GetDatabaseConfig() types.DatabaseConfig {
+	return m.config.Database
 }
 
 // GetEffectiveServerConfig returns server configuration merged with system settings
@@ -217,6 +228,7 @@ func (m *Manager) DisplayConfig() {
 	}
 	logrus.Infof("   CORS: %s", corsStatus)
 	logrus.Infof("   Max concurrent requests: %d", perfConfig.MaxConcurrentRequests)
+	logrus.Infof("   Concurrency pool size: %d", perfConfig.KeyValidationPoolSize)
 
 	gzipStatus := "disabled"
 	if perfConfig.EnableGzip {

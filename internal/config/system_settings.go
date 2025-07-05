@@ -37,7 +37,6 @@ type SystemSettings struct {
 
 	// 密钥验证
 	KeyValidationIntervalMinutes    int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥验证" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
-	KeyValidationConcurrency        int `json:"key_validation_concurrency" default:"10" name:"验证并发数" category:"密钥验证" desc:"执行密钥验证时的并发 goroutine 数量" validate:"min=10,max=200"`
 	KeyValidationTaskTimeoutMinutes int `json:"key_validation_task_timeout_minutes" default:"60" name:"手动验证超时" category:"密钥验证" desc:"手动触发的全量验证任务的超时时间（分钟）" validate:"min=10"`
 }
 
@@ -375,8 +374,8 @@ func (sm *SystemSettingsManager) DisplayCurrentSettings() {
 	logrus.Infof("   Request timeouts: request=%ds, response=%ds, idle_conn=%ds",
 		sm.settings.RequestTimeout, sm.settings.ResponseTimeout, sm.settings.IdleConnTimeout)
 	logrus.Infof("   Request log retention: %d days", sm.settings.RequestLogRetentionDays)
-	logrus.Infof("   Key validation: interval=%dmin, concurrency=%d, task_timeout=%dmin",
-		sm.settings.KeyValidationIntervalMinutes, sm.settings.KeyValidationConcurrency, sm.settings.KeyValidationTaskTimeoutMinutes)
+	logrus.Infof("   Key validation: interval=%dmin, task_timeout=%dmin",
+		sm.settings.KeyValidationIntervalMinutes, sm.settings.KeyValidationTaskTimeoutMinutes)
 }
 
 // 辅助方法

@@ -11,6 +11,7 @@ type ConfigManager interface {
 	GetCORSConfig() CORSConfig
 	GetPerformanceConfig() PerformanceConfig
 	GetLogConfig() LogConfig
+	GetDatabaseConfig() DatabaseConfig
 	GetEffectiveServerConfig() ServerConfig
 	GetRedisDSN() string
 	Validate() error
@@ -61,6 +62,7 @@ type CORSConfig struct {
 // PerformanceConfig represents performance configuration
 type PerformanceConfig struct {
 	MaxConcurrentRequests int  `json:"maxConcurrentRequests"`
+	KeyValidationPoolSize int  `json:"KeyValidationPoolSize"`
 	EnableGzip            bool `json:"enableGzip"`
 }
 
@@ -71,4 +73,10 @@ type LogConfig struct {
 	EnableFile    bool   `json:"enableFile"`
 	FilePath      string `json:"filePath"`
 	EnableRequest bool   `json:"enableRequest"`
+}
+
+// DatabaseConfig represents database configuration
+type DatabaseConfig struct {
+	DSN         string `json:"dsn"`
+	AutoMigrate bool   `json:"autoMigrate"`
 }

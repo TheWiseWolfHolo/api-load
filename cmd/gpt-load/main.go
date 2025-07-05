@@ -46,7 +46,7 @@ func main() {
 	setupLogger(configManager)
 
 	// Initialize database
-	database, err := db.InitDB()
+	database, err := db.InitDB(configManager)
 	if err != nil {
 		logrus.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -88,8 +88,14 @@ func main() {
 	channelFactory := channel.NewFactory(settingsManager)
 	keyValidatorService := services.NewKeyValidatorService(database, channelFactory, settingsManager)
 
-	keyManualValidationService := services.NewKeyManualValidationService(database, keyValidatorService, taskService, settingsManager)
-	keyCronService := services.NewKeyCronService(database, keyValidatorService, settingsManager)
+	// --- Global Key Validation Pool ---
+	KeyValidationPool := services.NewKeyValidationPool(keyValidatorService, configManager)
+	KeyValidationPool.Start()
+	defer KeyValidationPool.Stop()
+	// ---
+
+	keyManualValidationService := services.NewKeyManualValidationService(database, keyValidatorService, taskService, settingsManager, configManager)
+	keyCronService := services.NewKeyCronService(database, settingsManager, KeyValidationPool)
 	keyCronService.Start()
 	defer keyCronService.Stop()
 
