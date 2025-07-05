@@ -53,7 +53,6 @@ async function handleSubmit() {
     isSaving.value = true;
     await settingsApi.updateSettings(form.value);
     await fetchSettings();
-    message.success("设置已保存");
   } finally {
     isSaving.value = false;
   }
