@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group, GroupStats } from "@/types/models";
+import { getGroupDisplayName } from "@/utils/display";
 import {
   NButton,
   NCard,
@@ -14,7 +15,6 @@ import {
   NTag,
   useMessage,
 } from "naive-ui";
-import { getGroupDisplayName } from "@/utils/display";
 import { onMounted, ref, watch } from "vue";
 
 interface Props {
@@ -47,8 +47,6 @@ async function loadStats() {
   try {
     loading.value = true;
     stats.value = await keysApi.getGroupStats(props.group.id);
-  } catch (_error) {
-    // 错误已记录
   } finally {
     loading.value = false;
   }

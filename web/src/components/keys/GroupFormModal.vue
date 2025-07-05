@@ -1,0 +1,562 @@
+<script setup lang="ts">
+import { keysApi } from "@/api/keys";
+import { settingsApi } from "@/api/settings";
+import type { Group, GroupConfigOption, Upstream } from "@/types/models";
+import {
+  NButton,
+  NCard,
+  NCollapse,
+  NCollapseItem,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NModal,
+  NSelect,
+  NSpace,
+  useMessage,
+} from "naive-ui";
+import { reactive, ref, watch } from "vue";
+
+interface Props {
+  show: boolean;
+  group?: Group | null;
+}
+
+interface Emits {
+  (e: "update:show", value: boolean): void;
+  (e: "success"): void;
+}
+
+// 配置项类型
+interface ConfigItem {
+  key: string;
+  value: number;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  group: null,
+});
+
+const emit = defineEmits<Emits>();
+
+const message = useMessage();
+const loading = ref(false);
+const formRef = ref();
+
+// 表单数据
+const formData = reactive<any>({
+  name: "",
+  display_name: "",
+  description: "",
+  upstreams: [
+    {
+      url: "",
+      weight: 1,
+    },
+  ] as Upstream[],
+  channel_type: "openai",
+  sort: 1,
+  test_model: "",
+  param_overrides: "",
+  config: {},
+  configItems: [] as ConfigItem[],
+});
+
+const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
+const configOptions = ref<GroupConfigOption[]>([]);
+
+// 表单验证规则
+const rules = {
+  name: {
+    required: true,
+    message: "请输入分组名称",
+    trigger: ["blur", "input"],
+  },
+  channel_type: {
+    required: true,
+    message: "请选择渠道类型",
+    trigger: ["blur", "change"],
+  },
+  test_model: {
+    required: true,
+    message: "请输入测试模型",
+    trigger: ["blur", "input"],
+  },
+  upstreams: {
+    type: "array",
+    min: 1,
+    message: "至少需要一个上游地址",
+    trigger: ["blur", "change"],
+  },
+};
+
+// 监听弹窗显示状态
+watch(
+  () => props.show,
+  show => {
+    if (show) {
+      resetForm();
+      if (props.group) {
+        loadGroupData();
+      }
+    }
+  }
+);
+
+// 重置表单
+function resetForm() {
+  Object.assign(formData, {
+    name: "",
+    display_name: "",
+    description: "",
+    upstreams: [{ url: "", weight: 1 }],
+    channel_type: "openai",
+    sort: 1,
+    test_model: "",
+    param_overrides: "",
+    config: {},
+    configItems: [],
+  });
+}
+
+// 加载分组数据（编辑模式）
+function loadGroupData() {
+  if (!props.group) {
+    return;
+  }
+
+  const configItems = Object.entries(props.group.config || {}).map(([key, value]) => ({
+    key,
+    value: Number(value) || 0,
+  }));
+  Object.assign(formData, {
+    name: props.group.name || "",
+    display_name: props.group.display_name || "",
+    description: props.group.description || "",
+    upstreams: props.group.upstreams?.length
+      ? [...props.group.upstreams]
+      : [{ url: "", weight: 1 }],
+    channel_type: props.group.channel_type || "openai",
+    sort: props.group.sort || 1,
+    test_model: props.group.config?.test_model || "",
+    param_overrides: JSON.stringify(props.group.config?.param_overrides || {}, null, 2),
+    config: {},
+    configItems,
+  });
+}
+
+fetchChannelTypes();
+async function fetchChannelTypes() {
+  const options = (await settingsApi.getChannelTypes()) || [];
+  channelTypeOptions.value =
+    options?.map((type: string) => ({
+      label: type,
+      value: type,
+    })) || [];
+}
+
+// 添加上游地址
+function addUpstream() {
+  formData.upstreams.push({
+    url: "",
+    weight: 1,
+  });
+}
+
+// 删除上游地址
+function removeUpstream(index: number) {
+  if (formData.upstreams.length > 1) {
+    formData.upstreams.splice(index, 1);
+  }
+}
+
+fetchGroupConfigOptions();
+async function fetchGroupConfigOptions() {
+  const options = await keysApi.getGroupConfigOptions();
+  configOptions.value = options || [];
+}
+
+// 添加配置项
+function addConfigItem() {
+  formData.configItems.push({
+    key: "",
+    value: 0,
+  });
+}
+
+// 删除配置项
+function removeConfigItem(index: number) {
+  formData.configItems.splice(index, 1);
+}
+
+// 当配置项的key改变时，设置默认值
+function handleConfigKeyChange(index: number, key: string) {
+  const option = configOptions.value.find(opt => opt.key === key);
+  if (option) {
+    formData.configItems[index].value = option.default_value || 0;
+  }
+}
+
+// 关闭弹窗
+function handleClose() {
+  emit("update:show", false);
+}
+
+// 提交表单
+async function handleSubmit() {
+  try {
+    await formRef.value?.validate();
+
+    loading.value = true;
+
+    // 验证 JSON 格式
+    let paramOverrides = {};
+    try {
+      paramOverrides = JSON.parse(formData.param_overrides);
+    } catch {
+      message.error("参数覆盖必须是有效的 JSON 格式");
+      return;
+    }
+
+    // 将configItems转换为config对象
+    const config: Record<string, number> = {};
+    formData.configItems.forEach(item => {
+      if (item.key && item.key.trim()) {
+        config[item.key] = item.value;
+      }
+    });
+
+    // 构建提交数据
+    const submitData = {
+      name: formData.name,
+      display_name: formData.display_name,
+      description: formData.description,
+      upstreams: formData.upstreams.filter(upstream => upstream.url.trim()),
+      channel_type: formData.channel_type,
+      sort: formData.sort,
+      test_model: formData.test_model,
+      param_overrides: paramOverrides,
+      config,
+    };
+
+    if (props.group?.id) {
+      // 编辑模式
+      await keysApi.updateGroup(props.group.id, submitData);
+      message.success("分组更新成功");
+    } else {
+      // 新建模式
+      await keysApi.createGroup(submitData);
+      message.success("分组创建成功");
+    }
+
+    emit("success");
+    handleClose();
+  } finally {
+    loading.value = false;
+  }
+}
+</script>
+
+<template>
+  <n-modal :show="show" @update:show="handleClose" class="group-form-modal">
+    <n-card
+      style="width: 800px"
+      :title="group ? '编辑分组' : '创建分组'"
+      :bordered="false"
+      size="huge"
+      role="dialog"
+      aria-modal="true"
+    >
+      <template #header-extra>
+        <n-button quaternary circle @click="handleClose">
+          <template #icon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </template>
+        </n-button>
+      </template>
+
+      <n-form
+        ref="formRef"
+        :model="formData"
+        :rules="rules"
+        label-placement="left"
+        label-width="120px"
+        require-mark-placement="right-hanging"
+      >
+        <!-- 基础信息 -->
+        <div class="form-section">
+          <h4 class="section-title">基础信息</h4>
+
+          <n-form-item label="分组名称" path="name">
+            <n-input
+              v-model:value="formData.name"
+              placeholder="请输入分组名称，如：gemini"
+              :disabled="!!group"
+            />
+          </n-form-item>
+
+          <n-form-item label="显示名称" path="display_name">
+            <n-input v-model:value="formData.display_name" placeholder="可选，用于显示的友好名称" />
+          </n-form-item>
+
+          <n-form-item label="描述" path="description">
+            <n-input
+              v-model:value="formData.description"
+              type="textarea"
+              placeholder="可选，分组描述信息"
+              :rows="3"
+            />
+          </n-form-item>
+
+          <n-form-item label="渠道类型" path="channel_type">
+            <n-select
+              v-model:value="formData.channel_type"
+              :options="channelTypeOptions"
+              placeholder="请选择渠道类型"
+            />
+          </n-form-item>
+
+          <n-form-item label="测试模型" path="test_model">
+            <n-input v-model:value="formData.test_model" placeholder="如：gpt-3.5-turbo" />
+          </n-form-item>
+
+          <n-form-item label="排序" path="sort">
+            <n-input-number
+              v-model:value="formData.sort"
+              :min="0"
+              placeholder="排序值，数字越小越靠前"
+            />
+          </n-form-item>
+        </div>
+
+        <!-- 上游地址 -->
+        <div class="form-section">
+          <h4 class="section-title">上游地址</h4>
+
+          <n-form-item
+            v-for="(upstream, index) in formData.upstreams"
+            :key="index"
+            :label="`上游 ${index + 1}`"
+            :path="`upstreams[${index}].url`"
+            :rule="{
+              required: true,
+              message: '请输入上游地址',
+              trigger: ['blur', 'input'],
+            }"
+          >
+            <n-space style="width: 100%">
+              <n-input
+                v-model:value="upstream.url"
+                placeholder="https://api.openai.com"
+                style="flex: 1"
+              />
+              <n-input-number
+                v-model:value="upstream.weight"
+                :min="1"
+                placeholder="权重"
+                style="width: 80px"
+              />
+              <n-button
+                v-if="formData.upstreams.length > 1"
+                @click="removeUpstream(index)"
+                type="error"
+                quaternary
+                circle
+              >
+                <template #icon>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z" />
+                  </svg>
+                </template>
+              </n-button>
+            </n-space>
+          </n-form-item>
+
+          <n-form-item>
+            <n-button @click="addUpstream" dashed style="width: 100%">
+              <template #icon>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                </svg>
+              </template>
+              添加上游地址
+            </n-button>
+          </n-form-item>
+        </div>
+
+        <!-- 高级配置 -->
+        <div class="form-section">
+          <n-collapse>
+            <n-collapse-item title="高级配置" name="advanced">
+              <div class="config-section">
+                <h5 class="config-title">分组配置</h5>
+
+                <div class="config-items">
+                  <n-form-item
+                    v-for="(configItem, index) in formData.configItems"
+                    :key="index"
+                    class="flex config-item"
+                    :label="`配置 ${index + 1}`"
+                    :path="`configItems[${index}].key`"
+                    :rule="{
+                      required: true,
+                      message: '请选择配置参数',
+                      trigger: ['blur', 'change'],
+                    }"
+                  >
+                    <n-space style="width: 100%" align="center">
+                      <n-select
+                        v-model:value="configItem.key"
+                        :options="
+                          configOptions.map(opt => ({
+                            label: opt.name,
+                            value: opt.key,
+                            disabled:
+                              formData.configItems.map(item => item.key)?.includes(opt.key) &&
+                              opt.key !== configItem.key,
+                          }))
+                        "
+                        placeholder="请选择配置参数"
+                        style="min-width: 200px"
+                        @update:value="value => handleConfigKeyChange(index, value)"
+                        clearable
+                      />
+                      <n-input-number
+                        v-model:value="configItem.value"
+                        placeholder="参数值"
+                        style="width: 150px"
+                        :precision="0"
+                      />
+                      <n-button
+                        @click="removeConfigItem(index)"
+                        type="error"
+                        quaternary
+                        circle
+                        size="small"
+                      >
+                        <template #icon>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 13H5v-2h14v2z" />
+                          </svg>
+                        </template>
+                      </n-button>
+                    </n-space>
+                  </n-form-item>
+                </div>
+
+                <n-button
+                  @click="addConfigItem"
+                  dashed
+                  style="width: 100%; margin-top: 12px"
+                  :disabled="formData.configItems.length >= configOptions.length"
+                >
+                  <template #icon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                    </svg>
+                  </template>
+                  添加配置参数
+                </n-button>
+              </div>
+              <div class="config-section">
+                <h5 class="config-title">参数覆盖</h5>
+                <div class="config-items">
+                  <n-form-item path="param_overrides">
+                    <n-input
+                      v-model:value="formData.param_overrides"
+                      type="textarea"
+                      placeholder="JSON 格式的参数覆盖配置"
+                      :rows="8"
+                    />
+                  </n-form-item>
+                </div>
+              </div>
+            </n-collapse-item>
+          </n-collapse>
+        </div>
+      </n-form>
+
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 12px">
+          <n-button @click="handleClose">取消</n-button>
+          <n-button type="primary" @click="handleSubmit" :loading="loading">
+            {{ group ? "更新" : "创建" }}
+          </n-button>
+        </div>
+      </template>
+    </n-card>
+  </n-modal>
+</template>
+
+<style scoped>
+.group-form-modal {
+  --n-color: rgba(255, 255, 255, 0.95);
+}
+
+.form-section {
+  margin-top: 24px;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+}
+
+:deep(.n-form-item-label) {
+  font-weight: 500;
+}
+
+:deep(.n-input) {
+  --n-border-radius: 6px;
+}
+
+:deep(.n-select) {
+  --n-border-radius: 6px;
+}
+
+:deep(.n-input-number) {
+  --n-border-radius: 6px;
+}
+
+:deep(.n-card-header) {
+  border-bottom: 1px solid rgba(239, 239, 245, 0.8);
+}
+
+:deep(.n-card-footer) {
+  border-top: 1px solid rgba(239, 239, 245, 0.8);
+}
+
+.config-section {
+  margin-top: 16px;
+}
+
+.config-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+/* .empty-config {
+  color: #9ca3af;
+  font-style: italic;
+  text-align: center;
+  padding: 20px 0;
+} */
+
+.config-item {
+  margin-bottom: 12px;
+}
+:deep(.n-base-selection-label) {
+  height: 40px;
+}
+</style>
