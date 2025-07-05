@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -49,13 +48,12 @@ func (s *KeyManualValidationService) StartValidationTask(group *models.Group) (*
 		return nil, fmt.Errorf("no keys to validate in group %s", group.Name)
 	}
 
-	taskID := uuid.New().String()
 	timeoutMinutes := s.SettingsManager.GetInt("key_validation_task_timeout_minutes", 60)
 	timeout := time.Duration(timeoutMinutes) * time.Minute
 
-	taskStatus, err := s.TaskService.StartTask(taskID, group.Name, len(keys), timeout)
+	taskStatus, err := s.TaskService.StartTask(group.Name, len(keys), timeout)
 	if err != nil {
-		return nil, err // A task is already running
+		return nil, err
 	}
 
 	// Run the validation in a separate goroutine
@@ -65,9 +63,7 @@ func (s *KeyManualValidationService) StartValidationTask(group *models.Group) (*
 }
 
 func (s *KeyManualValidationService) runValidation(group *models.Group, keys []models.APIKey, task *TaskStatus) {
-	defer s.TaskService.EndTask()
-
-	logrus.Infof("Starting manual validation for group %s (TaskID: %s)", group.Name, task.TaskID)
+	logrus.Infof("Starting manual validation for group %s", group.Name)
 
 	jobs := make(chan models.APIKey, len(keys))
 	results := make(chan bool, len(keys))
@@ -88,18 +84,34 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	}
 	close(jobs)
 
-	wg.Wait()
-	close(results)
+	// Wait for all workers to complete in a separate goroutine
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	validCount := 0
 	processedCount := 0
+	lastUpdateTime := time.Now()
+
 	for isValid := range results {
 		processedCount++
 		if isValid {
 			validCount++
 		}
-		// Update progress
-		s.TaskService.UpdateProgress(processedCount)
+
+		// Throttle progress updates to once per second
+		if time.Since(lastUpdateTime) > time.Second {
+			if err := s.TaskService.UpdateProgress(processedCount); err != nil {
+				logrus.Warnf("Failed to update task progress: %v", err)
+			}
+			lastUpdateTime = time.Now()
+		}
+	}
+
+	// Ensure the final progress is always updated
+	if err := s.TaskService.UpdateProgress(processedCount); err != nil {
+		logrus.Warnf("Failed to update final task progress: %v", err)
 	}
 
 	result := ManualValidationResult{
@@ -108,11 +120,14 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 		InvalidKeys: len(keys) - validCount,
 	}
 
-	// Store the final result
-	s.TaskService.StoreResult(task.TaskID, result)
-	logrus.Infof("Manual validation finished for group %s (TaskID: %s): %+v", group.Name, task.TaskID, result)
+	// End the task and store the final result
+	if err := s.TaskService.EndTask(result, nil); err != nil {
+		logrus.Errorf("Failed to end task for group %s: %v", group.Name, err)
+	}
+	logrus.Infof("Manual validation finished for group %s: %+v", group.Name, result)
 }
 
+// validationResult 包含验证结果信息
 func (s *KeyManualValidationService) validationWorker(wg *sync.WaitGroup, group *models.Group, jobs <-chan models.APIKey, results chan<- bool) {
 	defer wg.Done()
 	for key := range jobs {

@@ -124,11 +124,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	}
 
 	// Tasks
-	tasks := api.Group("/tasks")
-	{
-		tasks.GET("/key-validation/status", serverHandler.GetTaskStatus)
-		tasks.GET("/:task_id/result", serverHandler.GetTaskResult)
-	}
+	api.GET("/tasks/status", serverHandler.GetTaskStatus)
 
 	// 仪表板和日志
 	dashboard := api.Group("/dashboard")

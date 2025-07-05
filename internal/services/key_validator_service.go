@@ -32,8 +32,6 @@ func NewKeyValidatorService(db *gorm.DB, factory *channel.Factory) *KeyValidator
 }
 
 // ValidateSingleKey performs a validation check on a single API key.
-// It does not modify the key's state in the database.
-// It returns true if the key is valid, and an error if it's not.
 func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models.APIKey, group *models.Group) (bool, error) {
 	// 添加超时保护
 	if ctx.Err() != nil {
@@ -65,7 +63,7 @@ func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models
 			"group_id":   group.ID,
 			"group_name": group.Name,
 			"error":      validationErr,
-		}).Warn("Key validation failed")
+		}).Debug("Key validation failed")
 		return false, validationErr
 	}
 
