@@ -22,6 +22,7 @@ import (
 	"gpt-load/internal/proxy"
 	"gpt-load/internal/router"
 	"gpt-load/internal/services"
+	"gpt-load/internal/store"
 	"gpt-load/internal/types"
 
 	"github.com/sirupsen/logrus"
@@ -76,7 +77,14 @@ func main() {
 	// ---
 
 	// --- Service Initialization ---
-	taskService := services.NewTaskService()
+	// Initialize the store first, as other services depend on it.
+	storage, err := store.NewStore(configManager)
+	if err != nil {
+		logrus.Fatalf("Failed to initialize store: %v", err)
+	}
+	defer storage.Close()
+
+	taskService := services.NewTaskService(storage)
 	channelFactory := channel.NewFactory(settingsManager)
 	keyValidatorService := services.NewKeyValidatorService(database, channelFactory)
 

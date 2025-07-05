@@ -47,6 +47,7 @@ type Config struct {
 	CORS        types.CORSConfig        `json:"cors"`
 	Performance types.PerformanceConfig `json:"performance"`
 	Log         types.LogConfig         `json:"log"`
+	RedisDSN    string                  `json:"redis_dsn"`
 }
 
 // NewManager creates a new configuration manager
@@ -109,6 +110,7 @@ func (m *Manager) ReloadConfig() error {
 			FilePath:      getEnvOrDefault("LOG_FILE_PATH", "logs/app.log"),
 			EnableRequest: parseBoolean(os.Getenv("LOG_ENABLE_REQUEST"), true),
 		},
+		RedisDSN: os.Getenv("REDIS_DSN"),
 	}
 	m.config = config
 
@@ -120,6 +122,11 @@ func (m *Manager) ReloadConfig() error {
 	logrus.Info("Environment configuration reloaded successfully")
 
 	return nil
+}
+
+// GetConfig returns the raw config struct
+func (m *Manager) GetConfig() *Config {
+	return m.config
 }
 
 // GetAuthConfig returns authentication configuration
@@ -140,6 +147,11 @@ func (m *Manager) GetPerformanceConfig() types.PerformanceConfig {
 // GetLogConfig returns logging configuration
 func (m *Manager) GetLogConfig() types.LogConfig {
 	return m.config.Log
+}
+
+// GetRedisDSN returns the Redis DSN string.
+func (m *Manager) GetRedisDSN() string {
+	return m.config.RedisDSN
 }
 
 // GetEffectiveServerConfig returns server configuration merged with system settings

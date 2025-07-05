@@ -12,6 +12,7 @@ type ConfigManager interface {
 	GetPerformanceConfig() PerformanceConfig
 	GetLogConfig() LogConfig
 	GetEffectiveServerConfig() ServerConfig
+	GetRedisDSN() string
 	Validate() error
 	DisplayConfig()
 	ReloadConfig() error
