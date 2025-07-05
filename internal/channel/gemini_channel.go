@@ -23,7 +23,7 @@ type GeminiChannel struct {
 }
 
 func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
-	base, err := f.newBaseChannel("gemini", group.Upstreams, group.Config, group.TestModel)
+	base, err := f.newBaseChannel("gemini", group)
 	if err != nil {
 		return nil, err
 	}

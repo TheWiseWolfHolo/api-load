@@ -23,7 +23,7 @@ type OpenAIChannel struct {
 }
 
 func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
-	base, err := f.newBaseChannel("openai", group.Upstreams, group.Config, group.TestModel)
+	base, err := f.newBaseChannel("openai", group)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,8 @@
 package channel
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"gpt-load/internal/models"
 	"io"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
 )
 
 // UpstreamInfo holds the information for a single upstream server, including its weight.
@@ -23,11 +26,13 @@ type UpstreamInfo struct {
 
 // BaseChannel provides common functionality for channel proxies.
 type BaseChannel struct {
-	Name         string
-	Upstreams    []UpstreamInfo
-	HTTPClient   *http.Client
-	TestModel    string
-	upstreamLock sync.Mutex
+	Name            string
+	Upstreams       []UpstreamInfo
+	HTTPClient      *http.Client
+	TestModel       string
+	upstreamLock    sync.Mutex
+	groupUpstreams  datatypes.JSON
+	groupConfig     datatypes.JSONMap
 }
 
 // RequestModifier is a function that can modify the request before it's sent.
@@ -64,6 +69,34 @@ func (b *BaseChannel) getUpstreamURL() *url.URL {
 
 	best.CurrentWeight -= totalWeight
 	return best.URL
+}
+
+// IsConfigStale checks if the channel's configuration is stale compared to the provided group.
+func (b *BaseChannel) IsConfigStale(group *models.Group) bool {
+	// It's important to compare the raw JSON here to detect any changes.
+	if !bytes.Equal(b.groupUpstreams, group.Upstreams) {
+		return true
+	}
+
+	// For JSONMap, we need to marshal it to compare.
+	currentConfigBytes, err := json.Marshal(b.groupConfig)
+	if err != nil {
+		// Log the error and assume it's stale to be safe
+		logrus.Errorf("failed to marshal current group config: %v", err)
+		return true
+	}
+	newConfigBytes, err := json.Marshal(group.Config)
+	if err != nil {
+		// Log the error and assume it's stale
+		logrus.Errorf("failed to marshal new group config: %v", err)
+		return true
+	}
+
+	if !bytes.Equal(currentConfigBytes, newConfigBytes) {
+		return true
+	}
+
+	return false
 }
 
 // ProcessRequest handles the common logic of processing and forwarding a request.

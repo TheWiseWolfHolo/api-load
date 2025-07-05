@@ -7,9 +7,10 @@ import (
 	"gpt-load/internal/models"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
-	"gorm.io/datatypes"
+	"github.com/sirupsen/logrus"
 )
 
 // channelConstructor defines the function signature for creating a new channel proxy.
@@ -41,33 +42,53 @@ func GetChannels() []string {
 // Factory is responsible for creating channel proxies.
 type Factory struct {
 	settingsManager *config.SystemSettingsManager
+	channelCache    map[uint]ChannelProxy
+	cacheLock       sync.Mutex
 }
 
 // NewFactory creates a new channel factory.
 func NewFactory(settingsManager *config.SystemSettingsManager) *Factory {
 	return &Factory{
 		settingsManager: settingsManager,
+		channelCache:    make(map[uint]ChannelProxy),
 	}
 }
 
 // GetChannel returns a channel proxy based on the group's channel type.
+// It uses a cache to ensure that only one instance of a channel is created for each group.
 func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
+	f.cacheLock.Lock()
+	defer f.cacheLock.Unlock()
+
+	if channel, ok := f.channelCache[group.ID]; ok {
+		if !channel.IsConfigStale(group) {
+			return channel, nil
+		}
+	}
+
+	logrus.Infof("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
+
 	constructor, ok := channelRegistry[group.ChannelType]
 	if !ok {
 		return nil, fmt.Errorf("unsupported channel type: %s", group.ChannelType)
 	}
-	return constructor(f, group)
+	channel, err := constructor(f, group)
+	if err != nil {
+		return nil, err
+	}
+	f.channelCache[group.ID] = channel
+	return channel, nil
 }
 
 // newBaseChannel is a helper function to create and configure a BaseChannel.
-func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, groupConfig datatypes.JSONMap, testModel string) (*BaseChannel, error) {
+func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel, error) {
 	type upstreamDef struct {
 		URL    string `json:"url"`
 		Weight int    `json:"weight"`
 	}
 
 	var defs []upstreamDef
-	if err := json.Unmarshal(upstreamsJSON, &defs); err != nil {
+	if err := json.Unmarshal(group.Upstreams, &defs); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal upstreams for %s channel: %w", name, err)
 	}
 
@@ -89,7 +110,7 @@ func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, grou
 	}
 
 	// Get effective settings by merging system and group configs
-	effectiveSettings := f.settingsManager.GetEffectiveConfig(groupConfig)
+	effectiveSettings := f.settingsManager.GetEffectiveConfig(group.Config)
 
 	// Configure the HTTP client with the effective timeouts
 	httpClient := &http.Client{
@@ -100,9 +121,11 @@ func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, grou
 	}
 
 	return &BaseChannel{
-		Name:       name,
-		Upstreams:  upstreamInfos,
-		HTTPClient: httpClient,
-		TestModel:  testModel,
+		Name:           name,
+		Upstreams:      upstreamInfos,
+		HTTPClient:     httpClient,
+		TestModel:      group.TestModel,
+		groupUpstreams: group.Upstreams,
+		groupConfig:    group.Config,
 	}, nil
 }

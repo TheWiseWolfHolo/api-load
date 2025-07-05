@@ -18,4 +18,7 @@ type ChannelProxy interface {
 
 	// IsStreamingRequest checks if the request is for a streaming response.
 	IsStreamingRequest(c *gin.Context) bool
+
+	// IsConfigStale checks if the channel's configuration is stale compared to the provided group.
+	IsConfigStale(group *models.Group) bool
 }
