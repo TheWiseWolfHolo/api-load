@@ -10,6 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// KeyTestResult holds the validation result for a single key.
+type KeyTestResult struct {
+	KeyValue string `json:"key_value"`
+	IsValid  bool   `json:"is_valid"`
+	Error    string `json:"error,omitempty"`
+}
+
 // KeyValidatorService provides methods to validate API keys.
 type KeyValidatorService struct {
 	DB             *gorm.DB
@@ -73,19 +80,45 @@ func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models
 	return isValid, nil
 }
 
-// TestSingleKeyByID performs a synchronous validation test for a single API key by its ID.
-// It is intended for handling user-initiated "Test" actions.
-// It does not modify the key's state in the database.
-func (s *KeyValidatorService) TestSingleKeyByID(ctx context.Context, keyID uint) (bool, error) {
-	var apiKey models.APIKey
-	if err := s.DB.First(&apiKey, keyID).Error; err != nil {
-		return false, fmt.Errorf("failed to find api key with id %d: %w", keyID, err)
+// TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.
+func (s *KeyValidatorService) TestMultipleKeys(ctx context.Context, group *models.Group, keyValues []string) ([]KeyTestResult, error) {
+	results := make([]KeyTestResult, len(keyValues))
+	ch, err := s.channelFactory.GetChannel(group)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel for group %s: %w", group.Name, err)
 	}
 
-	var group models.Group
-	if err := s.DB.First(&group, apiKey.GroupID).Error; err != nil {
-		return false, fmt.Errorf("failed to find group with id %d: %w", apiKey.GroupID, err)
+	// Find which of the provided keys actually exist in the database for this group
+	var existingKeys []models.APIKey
+	if err := s.DB.Where("group_id = ? AND key_value IN ?", group.ID, keyValues).Find(&existingKeys).Error; err != nil {
+		return nil, fmt.Errorf("failed to query keys from DB: %w", err)
+	}
+	existingKeyMap := make(map[string]bool)
+	for _, k := range existingKeys {
+		existingKeyMap[k.KeyValue] = true
 	}
 
-	return s.ValidateSingleKey(ctx, &apiKey, &group)
+	for i, kv := range keyValues {
+		// Pre-check: ensure the key belongs to the group to prevent unnecessary API calls
+		if !existingKeyMap[kv] {
+			results[i] = KeyTestResult{
+				KeyValue: kv,
+				IsValid:  false,
+				Error:    "Key does not exist in this group or has been removed.",
+			}
+			continue
+		}
+
+		isValid, validationErr := ch.ValidateKey(ctx, kv)
+		results[i] = KeyTestResult{
+			KeyValue: kv,
+			IsValid:  isValid,
+			Error:    "", // Explicitly set error to empty string on success
+		}
+		if validationErr != nil {
+			results[i].Error = validationErr.Error()
+		}
+	}
+
+	return results, nil
 }

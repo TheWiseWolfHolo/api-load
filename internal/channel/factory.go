@@ -60,7 +60,7 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 }
 
 // newBaseChannel is a helper function to create and configure a BaseChannel.
-func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, groupConfig datatypes.JSONMap) (*BaseChannel, error) {
+func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, groupConfig datatypes.JSONMap, testModel string) (*BaseChannel, error) {
 	type upstreamDef struct {
 		URL    string `json:"url"`
 		Weight int    `json:"weight"`
@@ -103,5 +103,6 @@ func (f *Factory) newBaseChannel(name string, upstreamsJSON datatypes.JSON, grou
 		Name:       name,
 		Upstreams:  upstreamInfos,
 		HTTPClient: httpClient,
+		TestModel:  testModel,
 	}, nil
 }

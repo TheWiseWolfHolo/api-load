@@ -17,6 +17,13 @@ type AddKeysResult struct {
 	TotalInGroup int64 `json:"total_in_group"`
 }
 
+// DeleteKeysResult holds the result of deleting multiple keys.
+type DeleteKeysResult struct {
+	DeletedCount  int   `json:"deleted_count"`
+	IgnoredCount  int   `json:"ignored_count"`
+	TotalInGroup  int64 `json:"total_in_group"`
+}
+
 // KeyService provides services related to API keys.
 type KeyService struct {
 	DB *gorm.DB
@@ -30,7 +37,7 @@ func NewKeyService(db *gorm.DB) *KeyService {
 // AddMultipleKeys handles the business logic of creating new keys from a text block.
 func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysResult, error) {
 	// 1. Parse keys from the text block
-	keys := s.parseKeysFromText(keysText)
+	keys := s.ParseKeysFromText(keysText)
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
@@ -101,7 +108,9 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 	}, nil
 }
 
-func (s *KeyService) parseKeysFromText(text string) []string {
+// ParseKeysFromText parses a string of keys from various formats into a string slice.
+// This function is exported to be shared with the handler layer.
+func (s *KeyService) ParseKeysFromText(text string) []string {
 	var keys []string
 
 	// First, try to parse as a JSON array of strings
@@ -162,45 +171,52 @@ func (s *KeyService) ClearAllInvalidKeys(groupID uint) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-// DeleteSingleKey deletes a specific key from a group.
-func (s *KeyService) DeleteSingleKey(groupID, keyID uint) (int64, error) {
-	result := s.DB.Where("group_id = ? AND id = ?", groupID, keyID).Delete(&models.APIKey{})
-	return result.RowsAffected, result.Error
-}
-
-// ExportKeys returns a list of keys for a group, filtered by status.
-func (s *KeyService) ExportKeys(groupID uint, filter string) ([]string, error) {
-	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID)
-
-	switch filter {
-	case "valid":
-		query = query.Where("status = ?", "active")
-	case "invalid":
-		query = query.Where("status = ?", "inactive")
-	case "all":
-		// No status filter needed
-	default:
-		return nil, fmt.Errorf("invalid filter value. Use 'all', 'valid', or 'invalid'")
+// DeleteMultipleKeys handles the business logic of deleting keys from a text block.
+func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteKeysResult, error) {
+	// 1. Parse keys from the text block
+	keysToDelete := s.ParseKeysFromText(keysText)
+	if len(keysToDelete) == 0 {
+		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	var keys []string
-	if err := query.Pluck("key_value", &keys).Error; err != nil {
+	// 2. Perform the deletion
+	// GORM's batch delete doesn't easily return which ones were deleted vs. ignored.
+	// We perform a bulk delete and then count the remaining to calculate the result.
+	result := s.DB.Where("group_id = ? AND key_value IN ?", groupID, keysToDelete).Delete(&models.APIKey{})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	deletedCount := int(result.RowsAffected)
+	ignoredCount := len(keysToDelete) - deletedCount
+
+	// 3. Get the new total count
+	var totalInGroup int64
+	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
 		return nil, err
 	}
-	return keys, nil
+
+	return &DeleteKeysResult{
+		DeletedCount: deletedCount,
+		IgnoredCount: ignoredCount,
+		TotalInGroup: totalInGroup,
+	}, nil
 }
 
-// ListKeysInGroup lists all keys within a specific group, filtered by status.
-func (s *KeyService) ListKeysInGroup(groupID uint, statusFilter string) ([]models.APIKey, error) {
-	var keys []models.APIKey
-	query := s.DB.Where("group_id = ?", groupID)
+// ListKeysInGroupQuery builds a query to list all keys within a specific group, filtered by status.
+// It returns a GORM query builder, allowing the handler to apply pagination.
+func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, searchKeyword string) *gorm.DB {
+	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID)
 
 	if statusFilter != "" {
 		query = query.Where("status = ?", statusFilter)
 	}
 
-	if err := query.Find(&keys).Error; err != nil {
-		return nil, err
+	if searchKeyword != "" {
+		// Use LIKE for fuzzy search on the key_value
+		query = query.Where("key_value LIKE ?", "%"+searchKeyword+"%")
 	}
-	return keys, nil
+
+	return query
 }
+

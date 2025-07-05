@@ -147,21 +147,38 @@ func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group)
 func (s *KeyCronService) worker(ctx context.Context, wg *sync.WaitGroup, group *models.Group, jobs <-chan models.APIKey, results chan<- models.APIKey) {
 	defer wg.Done()
 	for key := range jobs {
-		isValid, err := s.Validator.ValidateSingleKey(ctx, &key, group)
-		// Only update status if there was no error during validation
-		if err != nil {
-			logrus.Warnf("KeyCronService: Failed to validate key ID %d for group %s: %v. Skipping status update.", key.ID, group.Name, err)
-			continue
+		isValid, validationErr := s.Validator.ValidateSingleKey(ctx, &key, group)
+
+		newStatus := key.Status
+		newErrorReason := key.ErrorReason
+		statusChanged := false
+
+		if validationErr != nil {
+			// Validation failed, mark as inactive and record the reason
+			newStatus = "inactive"
+			newErrorReason = validationErr.Error()
+		} else {
+			// Validation succeeded
+			if isValid {
+				newStatus = "active"
+				newErrorReason = "" // Clear reason on success
+			} else {
+				// This case might happen if the key is valid but has no quota, etc.
+				// The error would be in validationErr, so this branch is less likely.
+				// We still mark it as inactive but without a specific error from our side.
+				newStatus = "inactive"
+				newErrorReason = "Validation returned false without a specific error."
+			}
 		}
 
-		newStatus := "inactive"
-		if isValid {
-			newStatus = "active"
+		// Check if status or error reason has changed
+		if key.Status != newStatus || key.ErrorReason != newErrorReason {
+			statusChanged = true
 		}
 
-		// Only send to results if the status has changed
-		if key.Status != newStatus {
+		if statusChanged {
 			key.Status = newStatus
+			key.ErrorReason = newErrorReason
 			results <- key
 		}
 	}
@@ -171,36 +188,24 @@ func (s *KeyCronService) batchUpdateKeyStatus(keys []models.APIKey) {
 	if len(keys) == 0 {
 		return
 	}
-	logrus.Infof("KeyCronService: Batch updating status for %d keys.", len(keys))
-
-	activeIDs := []uint{}
-	inactiveIDs := []uint{}
-
-	for _, key := range keys {
-		if key.Status == "active" {
-			activeIDs = append(activeIDs, key.ID)
-		} else {
-			inactiveIDs = append(inactiveIDs, key.ID)
-		}
-	}
+	logrus.Infof("KeyCronService: Batch updating status/reason for %d keys.", len(keys))
 
 	err := s.DB.Transaction(func(tx *gorm.DB) error {
-		if len(activeIDs) > 0 {
-			if err := tx.Model(&models.APIKey{}).Where("id IN ?", activeIDs).Update("status", "active").Error; err != nil {
-				return err
+		for _, key := range keys {
+			updates := map[string]interface{}{
+				"status":       key.Status,
+				"error_reason": key.ErrorReason,
 			}
-			logrus.Infof("KeyCronService: Set %d keys to 'active'.", len(activeIDs))
-		}
-		if len(inactiveIDs) > 0 {
-			if err := tx.Model(&models.APIKey{}).Where("id IN ?", inactiveIDs).Update("status", "inactive").Error; err != nil {
-				return err
+			if err := tx.Model(&models.APIKey{}).Where("id = ?", key.ID).Updates(updates).Error; err != nil {
+				// Log the error for this specific key but continue the transaction
+				logrus.Errorf("KeyCronService: Failed to update key ID %d: %v", key.ID, err)
 			}
-			logrus.Infof("KeyCronService: Set %d keys to 'inactive'.", len(inactiveIDs))
 		}
-		return nil
+		return nil // Commit the transaction even if some updates failed
 	})
 
 	if err != nil {
-		logrus.Errorf("KeyCronService: Failed to batch update key status: %v", err)
+		// This error is for the transaction itself, not individual updates
+		logrus.Errorf("KeyCronService: Transaction failed during batch update of key statuses: %v", err)
 	}
 }

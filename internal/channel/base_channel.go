@@ -26,6 +26,7 @@ type BaseChannel struct {
 	Name         string
 	Upstreams    []UpstreamInfo
 	HTTPClient   *http.Client
+	TestModel    string
 	upstreamLock sync.Mutex
 }
 
