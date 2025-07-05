@@ -23,6 +23,7 @@ type Server struct {
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
 	KeyService                 *services.KeyService
+	CommonHandler              *CommonHandler
 }
 
 // NewServer creates a new handler instance
@@ -43,6 +44,7 @@ func NewServer(
 		KeyManualValidationService: keyManualValidationService,
 		TaskService:                taskService,
 		KeyService:                 keyService,
+		CommonHandler:              NewCommonHandler(),
 	}
 }
 

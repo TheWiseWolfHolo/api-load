@@ -99,6 +99,8 @@ func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server
 
 // registerProtectedAPIRoutes 认证API路由
 func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server, logCleanupHandler *handler.LogCleanupHandler) {
+	api.GET("/channel-types", serverHandler.CommonHandler.GetChannelTypes)
+
 	groups := api.Group("/groups")
 	{
 		groups.POST("", serverHandler.CreateGroup)
