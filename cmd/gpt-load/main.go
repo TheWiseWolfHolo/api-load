@@ -96,7 +96,7 @@ func main() {
 	defer proxyServer.Close()
 
 	// Create handlers
-	serverHandler := handler.NewServer(database, configManager, keyValidatorService, keyManualValidationService, taskService, keyService)
+	serverHandler := handler.NewServer(database, configManager, settingsManager, keyValidatorService, keyManualValidationService, taskService, keyService)
 	logCleanupHandler := handler.NewLogCleanupHandler(logCleanupService)
 
 	// Setup routes using the new router package

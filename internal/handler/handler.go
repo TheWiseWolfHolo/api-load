@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"gpt-load/internal/config"
 	"gpt-load/internal/models"
 	"gpt-load/internal/services"
 	"gpt-load/internal/types"
@@ -17,6 +18,7 @@ import (
 type Server struct {
 	DB                         *gorm.DB
 	config                     types.ConfigManager
+	SettingsManager            *config.SystemSettingsManager
 	KeyValidatorService        *services.KeyValidatorService
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
@@ -27,6 +29,7 @@ type Server struct {
 func NewServer(
 	db *gorm.DB,
 	config types.ConfigManager,
+	settingsManager *config.SystemSettingsManager,
 	keyValidatorService *services.KeyValidatorService,
 	keyManualValidationService *services.KeyManualValidationService,
 	taskService *services.TaskService,
@@ -35,6 +38,7 @@ func NewServer(
 	return &Server{
 		DB:                         db,
 		config:                     config,
+		SettingsManager:            settingsManager,
 		KeyValidatorService:        keyValidatorService,
 		KeyManualValidationService: keyManualValidationService,
 		TaskService:                taskService,
