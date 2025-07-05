@@ -72,6 +72,7 @@ func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models
 	}
 
 	logrus.WithFields(logrus.Fields{
+		"error":       lastErr,
 		"key_id":      key.ID,
 		"group_id":    group.ID,
 		"max_retries": retries,
