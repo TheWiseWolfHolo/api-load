@@ -2,9 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"gpt-load/internal/db"
 	"gpt-load/internal/models"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,8 +21,8 @@ type SystemSettings struct {
 	// 基础参数
 	AppUrl                  string `json:"app_url" default:"" name:"项目地址" category:"基础参数" desc:"项目的基础 URL，用于拼接分组终端节点地址。系统配置优先于环境变量 APP_URL。"`
 	BlacklistThreshold      int    `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"基础参数" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
-	MaxRetries              int `json:"max_retries" default:"3" name:"最大重试次数" category:"基础参数" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
-	RequestLogRetentionDays int `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
+	MaxRetries              int    `json:"max_retries" default:"3" name:"最大重试次数" category:"基础参数" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
+	RequestLogRetentionDays int    `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
 
 	// 服务超时
 	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务超时" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
@@ -37,7 +37,7 @@ type SystemSettings struct {
 
 	// 密钥验证
 	KeyValidationIntervalMinutes    int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥验证" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
-	KeyValidationConcurrency        int `json:"key_validation_concurrency" default:"10" name:"验证并发数" category:"密钥验证" desc:"执行密钥验证时的并发 goroutine 数量" validate:"min=1,max=100"`
+	KeyValidationConcurrency        int `json:"key_validation_concurrency" default:"10" name:"验证并发数" category:"密钥验证" desc:"执行密钥验证时的并发 goroutine 数量" validate:"min=10,max=200"`
 	KeyValidationTaskTimeoutMinutes int `json:"key_validation_task_timeout_minutes" default:"60" name:"手动验证超时" category:"密钥验证" desc:"手动触发的全量验证任务的超时时间（分钟）" validate:"min=10"`
 }
 
