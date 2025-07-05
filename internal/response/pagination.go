@@ -23,13 +23,13 @@ type Pagination struct {
 
 // PaginatedResponse is the standard structure for all paginated API responses.
 type PaginatedResponse struct {
-	Items      interface{} `json:"items"`
-	Pagination Pagination  `json:"pagination"`
+	Items      any        `json:"items"`
+	Pagination Pagination `json:"pagination"`
 }
 
 // Paginate performs pagination on a GORM query and returns a standardized response.
 // It takes a Gin context, a GORM query builder, and a destination slice for the results.
-func Paginate(c *gin.Context, query *gorm.DB, dest interface{}) (*PaginatedResponse, error) {
+func Paginate(c *gin.Context, query *gorm.DB, dest any) (*PaginatedResponse, error) {
 	// 1. Get page and page size from query parameters
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || page < 1 {

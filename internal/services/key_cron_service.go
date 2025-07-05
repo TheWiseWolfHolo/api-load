@@ -190,7 +190,7 @@ func (s *KeyCronService) batchUpdateKeyStatus(keys []models.APIKey) {
 
 	err := s.DB.Transaction(func(tx *gorm.DB) error {
 		for _, key := range keys {
-			updates := map[string]interface{}{
+			updates := map[string]any{
 				"status":       key.Status,
 				"error_reason": key.ErrorReason,
 			}
