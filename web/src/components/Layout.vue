@@ -9,7 +9,8 @@ import NavBar from "@/components/NavBar.vue";
       <div class="header-content">
         <div class="header-brand">
           <div class="brand-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <img src="@/assets/logo.png" width="50" alt="" />
+            <!-- <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
               <path
                 d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
                 stroke="currentColor"
@@ -17,7 +18,7 @@ import NavBar from "@/components/NavBar.vue";
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
-            </svg>
+            </svg> -->
           </div>
           <h1 class="brand-title">GPT Load</h1>
         </div>
@@ -82,10 +83,10 @@ import NavBar from "@/components/NavBar.vue";
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: var(--primary-gradient);
+  /* background: var(--primary-gradient);
   border-radius: var(--border-radius-md);
   color: white;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md); */
 }
 
 .brand-title {
