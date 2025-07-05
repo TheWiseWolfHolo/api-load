@@ -49,20 +49,14 @@ func (s *KeyCronService) run() {
 	defer s.wg.Done()
 	ctx := context.Background()
 
-	s.validateAllGroups(ctx)
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 
 	for {
-		intervalMinutes := s.SettingsManager.GetInt("key_validation_interval_minutes", 60)
-		if intervalMinutes <= 0 {
-			intervalMinutes = 60
-		}
-		nextRunTimer := time.NewTimer(time.Duration(intervalMinutes) * time.Minute)
-
 		select {
-		case <-nextRunTimer.C:
+		case <-ticker.C:
 			s.validateAllGroups(ctx)
 		case <-s.stopChan:
-			nextRunTimer.Stop()
 			return
 		}
 	}
@@ -76,6 +70,7 @@ func (s *KeyCronService) validateAllGroups(ctx context.Context) {
 		return
 	}
 
+	validationStartTime := time.Now()
 	var wg sync.WaitGroup
 	for _, group := range groups {
 		groupCopy := group
@@ -90,10 +85,9 @@ func (s *KeyCronService) validateAllGroups(ctx context.Context) {
 
 			effectiveSettings := s.SettingsManager.GetEffectiveConfig(g.Config)
 			interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
-			logrus.Infof("KeyCronService: Validating group %s with interval %s", g.Name, interval)
 
-			if g.LastValidatedAt == nil || time.Since(*g.LastValidatedAt) > interval {
-				s.validateGroup(ctx, &g)
+			if g.LastValidatedAt == nil || validationStartTime.Sub(*g.LastValidatedAt) > interval {
+				s.validateGroup(ctx, &g, validationStartTime)
 			}
 		}(groupCopy)
 	}
@@ -101,7 +95,7 @@ func (s *KeyCronService) validateAllGroups(ctx context.Context) {
 	logrus.Info("KeyCronService: Validation cycle finished.")
 }
 
-func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group) {
+func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group, validationStartTime time.Time) {
 	var keys []models.APIKey
 	if err := s.DB.Where("group_id = ?", group.ID).Find(&keys).Error; err != nil {
 		logrus.Errorf("KeyCronService: Failed to get keys for group %s: %v", group.Name, err)
@@ -109,6 +103,9 @@ func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group)
 	}
 
 	if len(keys) == 0 {
+		if err := s.DB.Model(group).Update("last_validated_at", validationStartTime).Error; err != nil {
+			logrus.Errorf("KeyCronService: Failed to update last_validated_at for empty group %s: %v", group.Name, err)
+		}
 		return
 	}
 
@@ -122,10 +119,10 @@ func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group)
 		concurrency = 10
 	}
 
-	var wg sync.WaitGroup
+	var workerWg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-		go s.worker(ctx, &wg, group, jobs, results)
+		workerWg.Add(1)
+		go s.worker(ctx, &workerWg, group, jobs, results)
 	}
 
 	for _, key := range keys {
@@ -133,7 +130,7 @@ func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group)
 	}
 	close(jobs)
 
-	wg.Wait()
+	workerWg.Wait()
 	close(results)
 
 	var keysToUpdate []models.APIKey
@@ -145,9 +142,11 @@ func (s *KeyCronService) validateGroup(ctx context.Context, group *models.Group)
 		s.batchUpdateKeyStatus(keysToUpdate)
 	}
 
-	if err := s.DB.Model(group).Update("last_validated_at", time.Now()).Error; err != nil {
+	if err := s.DB.Model(group).Update("last_validated_at", validationStartTime).Error; err != nil {
 		logrus.Errorf("KeyCronService: Failed to update last_validated_at for group %s: %v", group.Name, err)
 	}
+
+	logrus.Infof("KeyCronService: Finished validating group %s. %d keys had their status changed.", group.Name, len(keysToUpdate))
 }
 
 func (s *KeyCronService) worker(ctx context.Context, wg *sync.WaitGroup, group *models.Group, jobs <-chan models.APIKey, results chan<- models.APIKey) {
