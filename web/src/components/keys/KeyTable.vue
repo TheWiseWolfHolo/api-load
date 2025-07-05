@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group } from "@/types/models";
-import { NButton, NDropdown, NEmpty, NInput, NSelect, NSpace, NSpin } from "naive-ui";
+import { AddCircleOutline, RemoveCircleOutline } from "@vicons/ionicons5";
+import { NButton, NDropdown, NEmpty, NIcon, NInput, NSelect, NSpace, NSpin } from "naive-ui";
 import { computed, ref, watch } from "vue";
 
 interface Props {
@@ -335,11 +336,17 @@ function changePageSize(size: number) {
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <n-button type="primary" size="small" @click="addKey">
+        <n-button type="success" size="small" @click="addKey">
           <template #icon>
-            <span style="font-size: 12px">+</span>
+            <n-icon :component="AddCircleOutline" />
           </template>
           添加密钥
+        </n-button>
+        <n-button type="error" size="small">
+          <template #icon>
+            <n-icon :component="RemoveCircleOutline" />
+          </template>
+          删除密钥
         </n-button>
       </div>
       <div class="toolbar-right">
