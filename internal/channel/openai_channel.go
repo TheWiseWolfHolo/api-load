@@ -10,11 +10,15 @@ import (
 	"github.com/gin-gonic/gin/binding"
 )
 
+func init() {
+	Register("openai", newOpenAIChannel)
+}
+
 type OpenAIChannel struct {
 	*BaseChannel
 }
 
-func (f *Factory) NewOpenAIChannel(group *models.Group) (*OpenAIChannel, error) {
+func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	base, err := f.newBaseChannel("openai", group.Upstreams, group.Config)
 	if err != nil {
 		return nil, err

@@ -11,11 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	Register("gemini", newGeminiChannel)
+}
+
 type GeminiChannel struct {
 	*BaseChannel
 }
 
-func (f *Factory) NewGeminiChannel(group *models.Group) (*GeminiChannel, error) {
+func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	base, err := f.newBaseChannel("gemini", group.Upstreams, group.Config)
 	if err != nil {
 		return nil, err
