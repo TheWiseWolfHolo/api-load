@@ -48,8 +48,6 @@ import NavBar from "@/components/NavBar.vue";
   top: 0;
   z-index: 100;
   padding: 0 24px;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 .header-content {
@@ -58,6 +56,8 @@ import NavBar from "@/components/NavBar.vue";
   justify-content: space-between;
   padding: 8px;
   overflow-x: auto;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .header-brand {
@@ -94,6 +94,8 @@ import NavBar from "@/components/NavBar.vue";
   flex: 1;
   overflow: auto;
   background: transparent;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .content-wrapper {

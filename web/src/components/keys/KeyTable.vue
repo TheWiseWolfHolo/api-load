@@ -22,6 +22,7 @@ import {
 } from "naive-ui";
 import { ref, watch } from "vue";
 import KeyCreateDialog from "./KeyCreateDialog.vue";
+import KeyDeleteDialog from "./KeyDeleteDialog.vue";
 
 interface KeyRow extends APIKey {
   is_visible: boolean;
@@ -69,6 +70,7 @@ let restoreMsg: any = null;
 let deleteMsg: any = null;
 
 const createDialogShow = ref(false);
+const deleteDialogShow = ref(false);
 
 watch(
   () => props.selectedGroup,
@@ -276,10 +278,6 @@ function getStatusClass(status: KeyStatus): string {
   }
 }
 
-function addKey() {
-  createDialogShow.value = true;
-}
-
 async function copyAllKeys() {
   if (!props.selectedGroup) {
     return;
@@ -417,13 +415,13 @@ function changePageSize(size: number) {
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <n-button type="success" size="small" @click="addKey">
+        <n-button type="success" size="small" @click="createDialogShow = true">
           <template #icon>
             <n-icon :component="AddCircleOutline" />
           </template>
           添加密钥
         </n-button>
-        <n-button type="error" size="small">
+        <n-button type="error" size="small" @click="deleteDialogShow = true">
           <template #icon>
             <n-icon :component="RemoveCircleOutline" />
           </template>
@@ -584,6 +582,14 @@ function changePageSize(size: number) {
     <key-create-dialog
       v-if="selectedGroup?.id"
       v-model:show="createDialogShow"
+      :group-id="selectedGroup.id"
+      :group-name="getGroupDisplayName(selectedGroup!)"
+      @success="loadKeys"
+    />
+
+    <key-delete-dialog
+      v-if="selectedGroup?.id"
+      v-model:show="deleteDialogShow"
       :group-id="selectedGroup.id"
       :group-name="getGroupDisplayName(selectedGroup!)"
       @success="loadKeys"
