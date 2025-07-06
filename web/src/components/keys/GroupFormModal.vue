@@ -13,7 +13,6 @@ import {
   NInputNumber,
   NModal,
   NSelect,
-  NSpace,
   useMessage,
 } from "naive-ui";
 import { reactive, ref, watch } from "vue";
@@ -309,7 +308,9 @@ async function handleSubmit() {
               v-model:value="formData.description"
               type="textarea"
               placeholder="可选，分组描述信息"
-              :rows="3"
+              :rows="2"
+              :autosize="{ minRows: 2, maxRows: 2 }"
+              style="resize: none"
             />
           </n-form-item>
 
@@ -335,7 +336,7 @@ async function handleSubmit() {
         </div>
 
         <!-- 上游地址 -->
-        <div class="form-section">
+        <div class="form-section" style="margin-top: 10px">
           <h4 class="section-title">上游地址</h4>
 
           <n-form-item
@@ -345,36 +346,40 @@ async function handleSubmit() {
             :path="`upstreams[${index}].url`"
             :rule="{
               required: true,
-              message: '请输入上游地址',
+              message: '',
               trigger: ['blur', 'input'],
             }"
           >
-            <n-space style="width: 100%">
+            <div class="flex items-center gap-2" style="width: 100%">
               <n-input
                 v-model:value="upstream.url"
                 placeholder="https://api.openai.com"
                 style="flex: 1"
               />
+              <span class="form-label">权重</span>
               <n-input-number
                 v-model:value="upstream.weight"
                 :min="1"
                 placeholder="权重"
-                style="width: 80px"
+                style="width: 100px"
               />
-              <n-button
-                v-if="formData.upstreams.length > 1"
-                @click="removeUpstream(index)"
-                type="error"
-                quaternary
-                circle
-              >
-                <template #icon>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 13H5v-2h14v2z" />
-                  </svg>
-                </template>
-              </n-button>
-            </n-space>
+              <div style="width: 40px">
+                <n-button
+                  v-if="formData.upstreams.length > 1"
+                  @click="removeUpstream(index)"
+                  type="error"
+                  quaternary
+                  circle
+                  style="margin-left: 10px"
+                >
+                  <template #icon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13H5v-2h14v2z" />
+                    </svg>
+                  </template>
+                </n-button>
+              </div>
+            </div>
           </n-form-item>
 
           <n-form-item>
@@ -390,7 +395,7 @@ async function handleSubmit() {
         </div>
 
         <!-- 高级配置 -->
-        <div class="form-section">
+        <div class="form-section" style="margin-top: 10px">
           <n-collapse>
             <n-collapse-item title="高级配置" name="advanced">
               <div class="config-section">
@@ -405,11 +410,11 @@ async function handleSubmit() {
                     :path="`configItems[${index}].key`"
                     :rule="{
                       required: true,
-                      message: '请选择配置参数',
+                      message: '',
                       trigger: ['blur', 'change'],
                     }"
                   >
-                    <n-space style="width: 100%" align="center">
+                    <div class="flex items-center" style="width: 100%">
                       <n-select
                         v-model:value="configItem.key"
                         :options="
@@ -429,7 +434,7 @@ async function handleSubmit() {
                       <n-input-number
                         v-model:value="configItem.value"
                         placeholder="参数值"
-                        style="width: 150px"
+                        style="width: 180px; margin-left: 15px"
                         :precision="0"
                       />
                       <n-button
@@ -438,6 +443,7 @@ async function handleSubmit() {
                         quaternary
                         circle
                         size="small"
+                        style="margin-left: 10px"
                       >
                         <template #icon>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -445,23 +451,25 @@ async function handleSubmit() {
                           </svg>
                         </template>
                       </n-button>
-                    </n-space>
+                    </div>
                   </n-form-item>
                 </div>
 
-                <n-button
-                  @click="addConfigItem"
-                  dashed
-                  style="width: 100%; margin-top: 12px"
-                  :disabled="formData.configItems.length >= configOptions.length"
-                >
-                  <template #icon>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                    </svg>
-                  </template>
-                  添加配置参数
-                </n-button>
+                <div style="margin-top: 12px; padding-left: 120px">
+                  <n-button
+                    @click="addConfigItem"
+                    dashed
+                    style="width: 100%"
+                    :disabled="formData.configItems.length >= configOptions.length"
+                  >
+                    <template #icon>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                      </svg>
+                    </template>
+                    添加配置参数
+                  </n-button>
+                </div>
               </div>
               <div class="config-section">
                 <h5 class="config-title">参数覆盖</h5>
@@ -471,7 +479,7 @@ async function handleSubmit() {
                       v-model:value="formData.param_overrides"
                       type="textarea"
                       placeholder="JSON 格式的参数覆盖配置"
-                      :rows="8"
+                      :rows="4"
                     />
                   </n-form-item>
                 </div>
@@ -499,7 +507,7 @@ async function handleSubmit() {
 }
 
 .form-section {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .section-title {
@@ -513,6 +521,10 @@ async function handleSubmit() {
 
 :deep(.n-form-item-label) {
   font-weight: 500;
+}
+
+:deep(.n-form-item-blank) {
+  flex-grow: 1;
 }
 
 :deep(.n-input) {
@@ -529,10 +541,21 @@ async function handleSubmit() {
 
 :deep(.n-card-header) {
   border-bottom: 1px solid rgba(239, 239, 245, 0.8);
+  padding: 10px 20px;
 }
 
-:deep(.n-card-footer) {
+:deep(.n-card__content) {
+  max-height: calc(100vh - 68px - 61px - 50px);
+  overflow-y: auto;
+}
+
+:deep(.n-card__footer) {
   border-top: 1px solid rgba(239, 239, 245, 0.8);
+  padding: 10px 15px;
+}
+
+:deep(.n-form-item-feedback-wrapper) {
+  min-height: 10px;
 }
 
 .config-section {
@@ -546,12 +569,13 @@ async function handleSubmit() {
   margin: 0 0 12px 0;
 }
 
-/* .empty-config {
-  color: #9ca3af;
-  font-style: italic;
-  text-align: center;
-  padding: 20px 0;
-} */
+.form-label {
+  margin-left: 25px;
+  margin-right: 10px;
+  height: 34px;
+  line-height: 34px;
+  font-weight: 500;
+}
 
 .config-item {
   margin-bottom: 12px;
