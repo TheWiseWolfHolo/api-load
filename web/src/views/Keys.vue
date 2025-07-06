@@ -31,59 +31,47 @@ function handleGroupSelect(group: Group) {
   selectedGroup.value = group;
 }
 
-function handleGroupRefresh() {
-  loadGroups();
+async function handleGroupRefresh() {
+  await loadGroups();
+  if (selectedGroup.value) {
+    // 重新加载当前选中的分组信息
+    selectedGroup.value = groups.value.find(g => g.id === selectedGroup.value?.id) || null;
+  }
 }
 </script>
 
 <template>
   <div class="keys-container">
-    <div class="keys-content">
-      <div class="sidebar">
-        <group-list
-          :groups="groups"
-          :selected-group="selectedGroup"
-          :loading="loading"
-          @group-select="handleGroupSelect"
-          @refresh="handleGroupRefresh"
-        />
+    <div class="sidebar">
+      <group-list
+        :groups="groups"
+        :selected-group="selectedGroup"
+        :loading="loading"
+        @group-select="handleGroupSelect"
+        @refresh="handleGroupRefresh"
+      />
+    </div>
+
+    <!-- 右侧主内容区域，占80% -->
+    <div class="main-content">
+      <!-- 分组信息卡片，更紧凑 -->
+      <div class="group-info">
+        <group-info-card :group="selectedGroup" @refresh="handleGroupRefresh" />
       </div>
 
-      <!-- 右侧主内容区域，占80% -->
-      <div class="main-content">
-        <!-- 分组信息卡片，更紧凑 -->
-        <div class="group-info">
-          <group-info-card :group="selectedGroup" @refresh="handleGroupRefresh" />
-        </div>
-
-        <!-- 密钥表格区域，占主要空间 -->
-        <div class="key-table-section">
-          <key-table :selected-group="selectedGroup" />
-        </div>
+      <!-- 密钥表格区域，占主要空间 -->
+      <div class="key-table-section">
+        <key-table :selected-group="selectedGroup" />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.page-header {
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-}
-
-.keys-content {
+.keys-container {
   display: flex;
   gap: 12px;
-  flex: 1;
-  min-height: 0;
+  width: 100%;
 }
 
 .sidebar {
@@ -97,7 +85,6 @@ function handleGroupRefresh() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 0;
 }
 
 .group-info {
@@ -109,19 +96,5 @@ function handleGroupRefresh() {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-@media (max-width: 1024px) {
-  .keys-content {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-  }
-
-  .main-content {
-    width: 100%;
-  }
 }
 </style>

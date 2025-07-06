@@ -180,13 +180,4 @@ function handleClose() {
   border-radius: var(--border-radius-sm);
   margin-top: 8px;
 }
-
-@media (max-width: 768px) {
-  .global-task-progress {
-    left: 20px;
-    right: 20px;
-    width: auto;
-    top: 10px;
-  }
-}
 </style>

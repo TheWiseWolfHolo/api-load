@@ -99,19 +99,4 @@ import { NCard, NH3, NSpace, NTag, NText } from "naive-ui";
     transform: translateY(0);
   }
 }
-
-@media (max-width: 768px) {
-  .placeholder-card {
-    margin: 0 16px;
-    padding: 32px 24px;
-  }
-
-  .page-title {
-    font-size: 1.75rem;
-  }
-
-  .page-subtitle {
-    font-size: 1rem;
-  }
-}
 </style>

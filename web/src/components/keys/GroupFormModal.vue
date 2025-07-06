@@ -24,7 +24,7 @@ interface Props {
 
 interface Emits {
   (e: "update:show", value: boolean): void;
-  (e: "success"): void;
+  (e: "success", value: Group): void;
 }
 
 // 配置项类型
@@ -138,8 +138,8 @@ function loadGroupData() {
       : [{ url: "", weight: 1 }],
     channel_type: props.group.channel_type || "openai",
     sort: props.group.sort || 1,
-    test_model: props.group.config?.test_model || "",
-    param_overrides: JSON.stringify(props.group.config?.param_overrides || {}, null, 2),
+    test_model: props.group.test_model || "",
+    param_overrides: JSON.stringify(props.group.param_overrides || {}, null, 2),
     config: {},
     configItems,
   });
@@ -241,17 +241,18 @@ async function handleSubmit() {
       config,
     };
 
+    let res: Group;
     if (props.group?.id) {
       // 编辑模式
-      await keysApi.updateGroup(props.group.id, submitData);
+      res = await keysApi.updateGroup(props.group.id, submitData);
       message.success("分组更新成功");
     } else {
       // 新建模式
-      await keysApi.createGroup(submitData);
+      res = await keysApi.createGroup(submitData);
       message.success("分组创建成功");
     }
 
-    emit("success");
+    emit("success", res);
     handleClose();
   } finally {
     loading.value = false;

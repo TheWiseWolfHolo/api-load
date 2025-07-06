@@ -852,40 +852,4 @@ function changePageSize(size: number) {
   font-size: 12px;
   color: #6c757d;
 }
-
-/* 响应式设计 */
-@media (max-width: 1200px) {
-  .keys-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 1024px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .toolbar-left,
-  .toolbar-right {
-    justify-content: center;
-  }
-}
-
-@media (max-width: 768px) {
-  .keys-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .key-bottom {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .key-actions {
-    align-self: flex-end;
-  }
-}
 </style>

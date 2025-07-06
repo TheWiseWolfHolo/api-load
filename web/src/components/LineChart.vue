@@ -248,18 +248,4 @@ onMounted(() => {
   border-radius: 4px;
   backdrop-filter: blur(4px);
 }
-
-@media (max-width: 768px) {
-  .chart-legend {
-    gap: 16px;
-  }
-
-  .chart-area {
-    height: 200px;
-  }
-
-  .chart-svg {
-    height: 160px;
-  }
-}
 </style>

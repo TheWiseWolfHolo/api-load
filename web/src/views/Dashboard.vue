@@ -49,14 +49,4 @@ import { NSpace } from "naive-ui";
     transform: translateY(0);
   }
 }
-
-@media (max-width: 768px) {
-  .dashboard-title {
-    font-size: 1.75rem;
-  }
-
-  .dashboard-subtitle {
-    font-size: 1rem;
-  }
-}
 </style>

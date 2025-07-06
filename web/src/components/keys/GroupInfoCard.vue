@@ -7,25 +7,32 @@ import {
   NCard,
   NCollapse,
   NCollapseItem,
-  NDescriptions,
-  NDescriptionsItem,
-  NGrid,
-  NGridItem,
+  NFlex,
+  NForm,
+  NFormItem,
   NSpin,
   NTag,
   useMessage,
 } from "naive-ui";
 import { onMounted, ref, watch } from "vue";
+import GroupFormModal from "./GroupFormModal.vue";
 
 interface Props {
   group: Group | null;
 }
 
+interface Emits {
+  (e: "refresh", value: Group): void;
+}
+
 const props = defineProps<Props>();
+
+const emit = defineEmits<Emits>();
 
 const stats = ref<GroupStats | null>(null);
 const loading = ref(false);
 const message = useMessage();
+const showEditModal = ref(false);
 
 onMounted(() => {
   loadStats();
@@ -53,7 +60,14 @@ async function loadStats() {
 }
 
 function handleEdit() {
-  message.info("编辑分组功能开发中...");
+  showEditModal.value = true;
+}
+
+function handleGroupEdited(newGroup: Group) {
+  showEditModal.value = false;
+  if (newGroup) {
+    emit("refresh", newGroup);
+  }
 }
 
 function handleDelete() {
@@ -136,40 +150,27 @@ function copyUrl(url: string) {
       <!-- 统计摘要区 -->
       <div class="stats-summary">
         <n-spin :show="loading" size="small">
-          <n-grid :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
-            <n-grid-item span="1">
-              <n-card
-                :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`"
-                size="large"
-              >
-                <template #header-extra><span class="status-title">密钥数量</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card
-                class="status-card-failure"
-                :title="formatPercentage(stats?.failure_rate_24h || 0)"
-                size="large"
-              >
-                <template #header-extra><span class="status-title">失败率</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
-                <template #header-extra><span class="status-title">近1小时</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
-                <template #header-extra><span class="status-title">近24小时</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
-                <template #header-extra><span class="status-title">近7天</span></template>
-              </n-card>
-            </n-grid-item>
-          </n-grid>
+          <n-flex class="status-cards-container">
+            <n-card :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`" size="large">
+              <template #header-extra><span class="status-title">密钥数量</span></template>
+            </n-card>
+            <n-card
+              class="status-card-failure"
+              :title="formatPercentage(stats?.failure_rate_24h || 0)"
+              size="large"
+            >
+              <template #header-extra><span class="status-title">失败率</span></template>
+            </n-card>
+            <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
+              <template #header-extra><span class="status-title">近1小时</span></template>
+            </n-card>
+            <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
+              <template #header-extra><span class="status-title">近24小时</span></template>
+            </n-card>
+            <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
+              <template #header-extra><span class="status-title">近7天</span></template>
+            </n-card>
+          </n-flex>
         </n-spin>
       </div>
 
@@ -180,61 +181,73 @@ function copyUrl(url: string) {
             <div class="details-content">
               <div class="detail-section">
                 <h4 class="section-title">基础信息</h4>
-                <n-descriptions :column="2" size="small">
-                  <n-descriptions-item label="分组名称">
+                <n-form label-placement="left" label-width="100px">
+                  <n-form-item label="分组名称：">
                     {{ group?.name || "-" }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="渠道类型">
-                    {{ group?.channel_type || "openai" }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="排序">{{ group?.sort || 0 }}</n-descriptions-item>
-                  <n-descriptions-item v-if="group?.description || ''" label="描述" :span="2">
-                    {{ group?.description || "" }}
-                  </n-descriptions-item>
-                </n-descriptions>
+                  </n-form-item>
+                  <n-form-item label="显示名称：">
+                    {{ group?.display_name || "-" }}
+                  </n-form-item>
+                  <n-form-item label="描述：">
+                    {{ group?.description || "-" }}
+                  </n-form-item>
+                  <n-form-item label="渠道类型：">
+                    {{ group?.channel_type || "-" }}
+                  </n-form-item>
+                  <n-form-item label="测试模型：">
+                    {{ group?.test_model || "-" }}
+                  </n-form-item>
+                  <n-form-item label="排序：">
+                    {{ group?.sort || 0 }}
+                  </n-form-item>
+                </n-form>
               </div>
 
               <div class="detail-section">
                 <h4 class="section-title">上游地址</h4>
-                <n-descriptions :column="1" size="small">
-                  <n-descriptions-item
+                <n-form label-placement="left" label-width="100px">
+                  <n-form-item
                     v-for="(upstream, index) in group?.upstreams ?? []"
                     :key="index"
-                    :label="`上游 ${index + 1}`"
+                    :label="`上游 ${index + 1}:`"
                   >
                     <span class="upstream-url">{{ upstream.url }}</span>
                     <n-tag size="small" type="info" class="upstream-weight">
                       权重: {{ upstream.weight }}
                     </n-tag>
-                  </n-descriptions-item>
-                </n-descriptions>
+                  </n-form-item>
+                </n-form>
               </div>
 
-              <div class="detail-section">
-                <h4 class="section-title">配置信息</h4>
-                <n-descriptions :column="2" size="small">
-                  <n-descriptions-item v-if="group?.config?.test_model || ''" label="测试模型">
-                    {{ group?.config?.test_model || "" }}
-                  </n-descriptions-item>
-                  <n-descriptions-item v-if="group?.config?.request_timeout || 0" label="请求超时">
-                    {{ group?.config?.request_timeout || 0 }}ms
-                  </n-descriptions-item>
-                  <n-descriptions-item
-                    v-if="Object.keys(group?.config?.param_overrides || {}).length > 0"
-                    label="参数覆盖"
-                    :span="2"
+              <div
+                class="detail-section"
+                v-if="
+                  (group?.config && Object.keys(group.config).length > 0) || group?.param_overrides
+                "
+              >
+                <h4 class="section-title">高级配置</h4>
+                <n-form label-placement="left">
+                  <n-form-item
+                    v-for="(value, key) in group?.config || {}"
+                    :key="key"
+                    :label="`${key}:`"
                   >
+                    {{ value || "-" }}
+                  </n-form-item>
+                  <n-form-item v-if="group?.param_overrides" label="参数覆盖:" :span="2">
                     <pre class="config-json">{{
-                      JSON.stringify(group?.config?.param_overrides || "", null, 2)
+                      JSON.stringify(group?.param_overrides || "", null, 2)
                     }}</pre>
-                  </n-descriptions-item>
-                </n-descriptions>
+                  </n-form-item>
+                </n-form>
               </div>
             </div>
           </n-collapse-item>
         </n-collapse>
       </div>
     </n-card>
+
+    <group-form-modal v-model:show="showEditModal" :group="group" @success="handleGroupEdited" />
   </div>
 </template>
 
@@ -305,6 +318,10 @@ function copyUrl(url: string) {
   text-align: center;
 }
 
+.status-cards-container:deep(.n-card) {
+  width: 160px;
+}
+
 :deep(.status-card-failure .n-card-header__main) {
   color: #d03050;
 }
@@ -371,42 +388,7 @@ function copyUrl(url: string) {
   }
 }
 
-/* 响应式网格 */
-:deep(.n-grid) {
-  gap: 8px;
-}
-
-:deep(.n-grid-item) {
-  min-width: 0;
-}
-
-@media (max-width: 768px) {
-  :deep(.n-grid) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .group-title {
-    font-size: 1rem;
-  }
-
-  .section-title {
-    font-size: 0.9rem;
-  }
-}
-
-@media (max-width: 480px) {
-  :deep(.n-grid) {
-    grid-template-columns: 1fr;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .header-actions {
-    align-self: flex-end;
-  }
+:deep(.n-form-item-feedback-wrapper) {
+  min-height: 0;
 }
 </style>

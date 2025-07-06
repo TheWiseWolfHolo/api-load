@@ -15,7 +15,7 @@ export const keysApi = {
   },
 
   // 更新分组
-  async updateGroup(groupId: number, group: Partial<Group>): Promise<void> {
+  async updateGroup(groupId: number, group: Partial<Group>): Promise<Group> {
     const res = await http.put(`/groups/${groupId}`, group);
     return res.data;
   },

@@ -203,20 +203,4 @@ onMounted(() => {
 :deep(.n-grid-item) {
   min-width: 0;
 }
-
-@media (max-width: 1200px) {
-  :deep(.n-grid) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  :deep(.n-grid) {
-    grid-template-columns: 1fr;
-  }
-
-  .stat-value {
-    font-size: 2rem;
-  }
-}
 </style>

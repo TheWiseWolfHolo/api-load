@@ -265,18 +265,4 @@ function handleGroupCreated() {
 .groups-list::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.3);
 }
-
-@media (max-width: 768px) {
-  .group-item {
-    padding: 6px;
-  }
-
-  .group-name {
-    font-size: 11px;
-  }
-
-  .group-meta {
-    font-size: 9px;
-  }
-}
 </style>
