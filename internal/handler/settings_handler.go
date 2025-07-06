@@ -12,9 +12,8 @@ import (
 
 // GetSettings handles the GET /api/settings request.
 // It retrieves all system settings, groups them by category, and returns them.
-func GetSettings(c *gin.Context) {
-	settingsManager := config.GetSystemSettingsManager()
-	currentSettings := settingsManager.GetSettings()
+func (s *Server) GetSettings(c *gin.Context) {
+	currentSettings := s.SettingsManager.GetSettings()
 	settingsInfo := config.GenerateSettingsMetadata(&currentSettings)
 
 	// Group settings by category while preserving order
@@ -42,7 +41,7 @@ func GetSettings(c *gin.Context) {
 // UpdateSettings handles the PUT /api/settings request.
 // It receives a key-value JSON object and updates system settings.
 // After updating, it triggers a configuration reload.
-func UpdateSettings(c *gin.Context) {
+func (s *Server) UpdateSettings(c *gin.Context) {
 	var settingsMap map[string]any
 	if err := c.ShouldBindJSON(&settingsMap); err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
@@ -54,22 +53,20 @@ func UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	settingsManager := config.GetSystemSettingsManager()
-
 	// 更新配置
-	if err := settingsManager.UpdateSettings(settingsMap); err != nil {
+	if err := s.SettingsManager.UpdateSettings(settingsMap); err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, err.Error()))
 		return
 	}
 
 	// 重载系统配置
-	if err := settingsManager.LoadFromDatabase(); err != nil {
+	if err := s.SettingsManager.LoadFromDatabase(); err != nil {
 		logrus.Errorf("Failed to reload system settings: %v", err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Failed to reload system settings after update"))
 		return
 	}
 
-	settingsManager.DisplayCurrentSettings()
+	s.SettingsManager.DisplayCurrentSettings()
 
 	logrus.Info("Configuration reloaded successfully via API")
 	response.Success(c, gin.H{

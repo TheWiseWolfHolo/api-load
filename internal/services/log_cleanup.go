@@ -2,22 +2,26 @@ package services
 
 import (
 	"gpt-load/internal/config"
-	"gpt-load/internal/db"
 	"gpt-load/internal/models"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // LogCleanupService 负责清理过期的请求日志
 type LogCleanupService struct {
-	stopCh chan struct{}
+	db              *gorm.DB
+	settingsManager *config.SystemSettingsManager
+	stopCh          chan struct{}
 }
 
 // NewLogCleanupService 创建新的日志清理服务
-func NewLogCleanupService() *LogCleanupService {
+func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager) *LogCleanupService {
 	return &LogCleanupService{
-		stopCh: make(chan struct{}),
+		db:              db,
+		settingsManager: settingsManager,
+		stopCh:          make(chan struct{}),
 	}
 }
 
@@ -54,19 +58,8 @@ func (s *LogCleanupService) run() {
 
 // cleanupExpiredLogs 清理过期的请求日志
 func (s *LogCleanupService) cleanupExpiredLogs() {
-	if db.DB == nil {
-		logrus.Error("Database connection is not available for log cleanup")
-		return
-	}
-
 	// 获取日志保留天数配置
-	settingsManager := config.GetSystemSettingsManager()
-	if settingsManager == nil {
-		logrus.Error("System settings manager is not available for log cleanup")
-		return
-	}
-
-	settings := settingsManager.GetSettings()
+	settings := s.settingsManager.GetSettings()
 	retentionDays := settings.RequestLogRetentionDays
 
 	if retentionDays <= 0 {
@@ -78,7 +71,7 @@ func (s *LogCleanupService) cleanupExpiredLogs() {
 	cutoffTime := time.Now().AddDate(0, 0, -retentionDays).UTC()
 
 	// 执行删除操作
-	result := db.DB.Where("timestamp < ?", cutoffTime).Delete(&models.RequestLog{})
+	result := s.db.Where("timestamp < ?", cutoffTime).Delete(&models.RequestLog{})
 	if result.Error != nil {
 		logrus.WithError(result.Error).Error("Failed to cleanup expired request logs")
 		return

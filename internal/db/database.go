@@ -15,7 +15,7 @@ import (
 
 var DB *gorm.DB
 
-func InitDB(configManager types.ConfigManager) (*gorm.DB, error) {
+func NewDB(configManager types.ConfigManager) (*gorm.DB, error) {
 	dbConfig := configManager.GetDatabaseConfig()
 	if dbConfig.DSN == "" {
 		return nil, fmt.Errorf("DATABASE_DSN is not configured")

@@ -11,6 +11,7 @@ import (
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/dig"
 	"gorm.io/gorm"
 )
 
@@ -26,25 +27,30 @@ type Server struct {
 	CommonHandler              *CommonHandler
 }
 
-// NewServer creates a new handler instance
-func NewServer(
-	db *gorm.DB,
-	config types.ConfigManager,
-	settingsManager *config.SystemSettingsManager,
-	keyValidatorService *services.KeyValidatorService,
-	keyManualValidationService *services.KeyManualValidationService,
-	taskService *services.TaskService,
-	keyService *services.KeyService,
-) *Server {
+// NewServerParams defines the dependencies for the NewServer constructor.
+type NewServerParams struct {
+	dig.In
+	DB                         *gorm.DB
+	Config                     types.ConfigManager
+	SettingsManager            *config.SystemSettingsManager
+	KeyValidatorService        *services.KeyValidatorService
+	KeyManualValidationService *services.KeyManualValidationService
+	TaskService                *services.TaskService
+	KeyService                 *services.KeyService
+	CommonHandler              *CommonHandler
+}
+
+// NewServer creates a new handler instance with dependencies injected by dig.
+func NewServer(params NewServerParams) *Server {
 	return &Server{
-		DB:                         db,
-		config:                     config,
-		SettingsManager:            settingsManager,
-		KeyValidatorService:        keyValidatorService,
-		KeyManualValidationService: keyManualValidationService,
-		TaskService:                taskService,
-		KeyService:                 keyService,
-		CommonHandler:              NewCommonHandler(),
+		DB:                         params.DB,
+		config:                     params.Config,
+		SettingsManager:            params.SettingsManager,
+		KeyValidatorService:        params.KeyValidatorService,
+		KeyManualValidationService: params.KeyManualValidationService,
+		TaskService:                params.TaskService,
+		KeyService:                 params.KeyService,
+		CommonHandler:              params.CommonHandler,
 	}
 }
 

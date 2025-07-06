@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -36,7 +38,8 @@ var DefaultConstants = Constants{
 
 // Manager implements the ConfigManager interface
 type Manager struct {
-	config *Config
+	config          *Config
+	settingsManager *SystemSettingsManager
 }
 
 // Config represents the application configuration
@@ -52,8 +55,10 @@ type Config struct {
 }
 
 // NewManager creates a new configuration manager
-func NewManager() (types.ConfigManager, error) {
-	manager := &Manager{}
+func NewManager(settingsManager *SystemSettingsManager) (types.ConfigManager, error) {
+	manager := &Manager{
+		settingsManager: settingsManager,
+	}
 	if err := manager.ReloadConfig(); err != nil {
 		return nil, err
 	}
@@ -170,8 +175,7 @@ func (m *Manager) GetEffectiveServerConfig() types.ServerConfig {
 	config := m.config.Server
 
 	// Merge with system settings from database
-	settingsManager := GetSystemSettingsManager()
-	systemSettings := settingsManager.GetSettings()
+	systemSettings := m.settingsManager.GetSettings()
 
 	config.ReadTimeout = systemSettings.ServerReadTimeout
 	config.WriteTimeout = systemSettings.ServerWriteTimeout
@@ -312,4 +316,46 @@ func (s *SystemSettingsManager) GetInt(key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+
+// SetupLogger configures the logging system based on the provided configuration.
+func SetupLogger(configManager types.ConfigManager) {
+	logConfig := configManager.GetLogConfig()
+
+	// Set log level
+	level, err := logrus.ParseLevel(logConfig.Level)
+	if err != nil {
+		logrus.Warn("Invalid log level, using info")
+		level = logrus.InfoLevel
+	}
+	logrus.SetLevel(level)
+
+	// Set log format
+	if logConfig.Format == "json" {
+		logrus.SetFormatter(&logrus.JSONFormatter{
+			TimestampFormat: "2006-01-02T15:04:05.000Z07:00", // ISO 8601 format
+		})
+	} else {
+		logrus.SetFormatter(&logrus.TextFormatter{
+			ForceColors:     true,
+			FullTimestamp:   true,
+			TimestampFormat: "2006-01-02 15:04:05",
+		})
+	}
+
+	// Setup file logging if enabled
+	if logConfig.EnableFile {
+		logDir := filepath.Dir(logConfig.FilePath)
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			logrus.Warnf("Failed to create log directory: %v", err)
+		} else {
+			logFile, err := os.OpenFile(logConfig.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			if err != nil {
+				logrus.Warnf("Failed to open log file: %v", err)
+			} else {
+				logrus.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			}
+		}
+	}
 }

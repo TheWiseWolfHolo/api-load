@@ -117,8 +117,8 @@ type SystemSettingsManager struct {
 var globalSystemSettings *SystemSettingsManager
 var once sync.Once
 
-// GetSystemSettingsManager 获取全局系统配置管理器单例
-func GetSystemSettingsManager() *SystemSettingsManager {
+// NewSystemSettingsManager 获取全局系统配置管理器单例
+func NewSystemSettingsManager() *SystemSettingsManager {
 	once.Do(func() {
 		globalSystemSettings = &SystemSettingsManager{}
 	})

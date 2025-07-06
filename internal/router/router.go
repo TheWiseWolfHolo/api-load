@@ -36,7 +36,7 @@ func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
 	}
 }
 
-func New(
+func NewRouter(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
 	logCleanupHandler *handler.LogCleanupHandler,
@@ -142,8 +142,8 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	// 设置
 	settings := api.Group("/settings")
 	{
-		settings.GET("", handler.GetSettings)
-		settings.PUT("", handler.UpdateSettings)
+		settings.GET("", serverHandler.GetSettings)
+		settings.PUT("", serverHandler.UpdateSettings)
 	}
 }
 
