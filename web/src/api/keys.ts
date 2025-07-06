@@ -1,4 +1,4 @@
-import type { APIKey, Group, GroupConfigOption, TaskInfo } from "@/types/models";
+import type { APIKey, Group, GroupConfigOption, KeyStatus, TaskInfo } from "@/types/models";
 import http from "@/utils/http";
 
 export const keysApi = {
@@ -43,11 +43,12 @@ export const keysApi = {
     page: number;
     page_size: number;
     key?: string;
-    status?: "active" | "inactive";
+    status?: KeyStatus;
   }): Promise<{
     items: APIKey[];
     pagination: {
       total_items: number;
+      total_pages: number;
     };
   }> {
     const res = await http.get("/keys", { params });
@@ -70,7 +71,7 @@ export const keysApi = {
     return res.data;
   },
 
-  // 测试单个密钥
+  // 测试密钥
   async testKeys(
     group_id: number,
     keys_text: string

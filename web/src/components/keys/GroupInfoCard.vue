@@ -345,7 +345,7 @@ function copyUrl(url: string) {
 }
 
 .status-cards-container:deep(.n-card) {
-  width: 160px;
+  max-width: 160px;
 }
 
 :deep(.status-card-failure .n-card-header__main) {

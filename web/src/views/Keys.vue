@@ -5,10 +5,13 @@ import GroupList from "@/components/keys/GroupList.vue";
 import KeyTable from "@/components/keys/KeyTable.vue";
 import type { Group } from "@/types/models";
 import { onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const groups = ref<Group[]>([]);
 const loading = ref(false);
 const selectedGroup = ref<Group | null>(null);
+const router = useRouter();
+const route = useRoute();
 
 onMounted(async () => {
   await loadGroups();
@@ -18,24 +21,33 @@ async function loadGroups() {
   try {
     loading.value = true;
     groups.value = await keysApi.getGroups();
-    // 默认选择第一个分组
+    // 选择默认分组
     if (groups.value.length > 0 && !selectedGroup.value) {
-      selectedGroup.value = groups.value[0];
+      const groupId = route.query.groupId;
+      const found = groups.value.find(g => String(g.id) === String(groupId));
+      if (found) {
+        selectedGroup.value = found;
+      } else {
+        handleGroupSelect(groups.value[0]);
+      }
     }
   } finally {
     loading.value = false;
   }
 }
 
-function handleGroupSelect(group: Group) {
-  selectedGroup.value = group;
+function handleGroupSelect(group: Group | null) {
+  selectedGroup.value = group || null;
+  if (String(group?.id) !== String(route.query.groupId)) {
+    router.push({ name: "keys", query: { groupId: group?.id || "" } });
+  }
 }
 
 async function handleGroupRefresh() {
   await loadGroups();
   if (selectedGroup.value) {
     // 重新加载当前选中的分组信息
-    selectedGroup.value = groups.value.find(g => g.id === selectedGroup.value?.id) || null;
+    handleGroupSelect(groups.value.find(g => g.id === selectedGroup.value?.id) || null);
   }
 }
 
@@ -45,7 +57,7 @@ function handleGroupDelete(deletedGroup: Group) {
 
   // 如果删除的是当前选中的分组，则切换到第一个分组
   if (selectedGroup.value?.id === deletedGroup.id) {
-    selectedGroup.value = groups.value.length > 0 ? groups.value[0] : null;
+    handleGroupSelect(groups.value.length > 0 ? groups.value[0] : null);
   }
 }
 </script>

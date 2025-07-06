@@ -1,9 +1,12 @@
+// 密钥状态
+export type KeyStatus = "active" | "inactive" | undefined;
+
 // 数据模型定义
 export interface APIKey {
   id: number;
   group_id: number;
   key_value: string;
-  status: "active" | "inactive";
+  status: KeyStatus;
   request_count: number;
   failure_count: number;
   last_used_at?: string;

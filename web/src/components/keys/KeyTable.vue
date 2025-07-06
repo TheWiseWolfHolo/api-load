@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
-import type { APIKey, Group } from "@/types/models";
-import { AddCircleOutline, RemoveCircleOutline } from "@vicons/ionicons5";
+import type { APIKey, Group, KeyStatus } from "@/types/models";
+import {
+  AddCircleOutline,
+  CopyOutline,
+  EyeOffOutline,
+  EyeOutline,
+  RemoveCircleOutline,
+} from "@vicons/ionicons5";
 import { NButton, NDropdown, NEmpty, NIcon, NInput, NSelect, NSpace, NSpin } from "naive-ui";
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
+
+interface KeyRow extends APIKey {
+  is_visible: boolean;
+}
 
 interface Props {
   selectedGroup: Group | null;
@@ -11,21 +21,20 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const keys = ref<APIKey[]>([]);
+const keys = ref<KeyRow[]>([]);
 const loading = ref(false);
 const searchText = ref("");
 const statusFilter = ref<"all" | "valid" | "invalid">("all");
 const currentPage = ref(1);
-const pageSize = ref(20);
-const totalKeys = ref(0);
-
-const totalPages = computed(() => Math.ceil(totalKeys.value / pageSize.value));
+const pageSize = ref(9);
+const total = ref(0);
+const totalPages = ref(0);
 
 // 状态过滤选项
 const statusOptions = [
   { label: "全部", value: "all" },
-  { label: "有效", value: "valid" },
-  { label: "无效", value: "invalid" },
+  { label: "有效", value: "active" },
+  { label: "无效", value: "inactive" },
 ];
 
 // 更多操作下拉菜单选项
@@ -40,6 +49,9 @@ const moreOptions = [
   { label: "清空所有无效 Key", key: "clearInvalid", props: { style: { color: "#d03050" } } },
 ];
 
+// 防抖定时器
+let searchTimer: number | undefined = undefined;
+
 watch(
   () => props.selectedGroup,
   async newGroup => {
@@ -51,9 +63,22 @@ watch(
   { immediate: true }
 );
 
-watch([currentPage, pageSize, statusFilter, searchText], async () => {
+watch([currentPage, pageSize, statusFilter], async () => {
   await loadKeys();
 });
+
+// 处理搜索输入的防抖
+function handleSearchInput() {
+  // 清除之前的定时器
+  if (searchTimer) {
+    clearTimeout(searchTimer);
+  }
+
+  searchTimer = setTimeout(async () => {
+    currentPage.value = 1; // 搜索时重置到第一页
+    await loadKeys();
+  }, 500);
+}
 
 // 处理更多操作菜单
 function handleMoreAction(key: string) {
@@ -80,20 +105,22 @@ function handleMoreAction(key: string) {
 }
 
 async function loadKeys() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id) {
     return;
   }
 
   try {
     loading.value = true;
-    const result = await keysApi.getGroupKeys(
-      props.selectedGroup.id,
-      currentPage.value,
-      pageSize.value,
-      statusFilter.value === "all" ? undefined : statusFilter.value
-    );
-    keys.value = result.data;
-    totalKeys.value = result.total;
+    const result = await keysApi.getGroupKeys({
+      group_id: props.selectedGroup.id,
+      page: currentPage.value,
+      page_size: pageSize.value,
+      status: statusFilter.value === "all" ? undefined : (statusFilter.value as KeyStatus),
+      key: searchText.value.trim() || undefined,
+    });
+    keys.value = result.items as KeyRow[];
+    total.value = result.pagination.total_items;
+    totalPages.value = result.pagination.total_pages;
   } catch (_error) {
     window.$message.error("加载密钥失败");
   } finally {
@@ -108,7 +135,7 @@ function maskKey(key: string): string {
   return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
 }
 
-function copyKey(key: APIKey) {
+function copyKey(key: KeyRow) {
   navigator.clipboard
     .writeText(key.key_value)
     .then(() => {
@@ -119,26 +146,35 @@ function copyKey(key: APIKey) {
     });
 }
 
-async function testKey(_key: APIKey) {
+async function testKey(_key: KeyRow) {
+  if (!props.selectedGroup?.id || !_key.key_value) {
+    return;
+  }
+
+  const loadingMsg = window.$message.info("正在测试密钥...", {
+    duration: 0,
+  });
+
   try {
-    window.$message.info("正在测试密钥...");
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    const success = Math.random() > 0.3;
-    if (success) {
+    const res = await keysApi.testKeys(props.selectedGroup.id, _key.key_value);
+    const curValid = res?.[0] || {};
+    if (curValid.is_valid) {
       window.$message.success("密钥测试成功");
     } else {
-      window.$message.error("密钥测试失败: 无效的API密钥");
+      window.$message.error(curValid.error || "密钥测试失败: 无效的API密钥");
     }
   } catch (_error) {
-    window.$message.error("测试失败");
+    console.error("测试失败");
+  } finally {
+    loadingMsg.destroy();
   }
 }
 
-function toggleKeyVisibility(key: APIKey) {
-  window.$message.info(`切换密钥"${maskKey(key.key_value)}"显示状态功能开发中`);
+function toggleKeyVisibility(key: KeyRow) {
+  key.is_visible = !key.is_visible;
 }
 
-async function restoreKey(key: APIKey) {
+async function restoreKey(key: KeyRow) {
   // eslint-disable-next-line no-alert
   const confirmed = window.confirm(`确定要恢复密钥"${maskKey(key.key_value)}"吗？`);
   if (!confirmed) {
@@ -154,7 +190,7 @@ async function restoreKey(key: APIKey) {
   }
 }
 
-async function deleteKey(key: APIKey) {
+async function deleteKey(key: KeyRow) {
   // eslint-disable-next-line no-alert
   const confirmed = window.confirm(`确定要删除密钥"${maskKey(key.key_value)}"吗？`);
   if (!confirmed) {
@@ -186,7 +222,7 @@ function formatRelativeTime(date: string) {
   }
 }
 
-function getStatusClass(status: "active" | "inactive") {
+function getStatusClass(status: KeyStatus): string {
   switch (status) {
     case "active":
       return "status-valid";
@@ -362,6 +398,8 @@ function changePageSize(size: number) {
             placeholder="Key 模糊查询"
             size="small"
             style="width: 180px"
+            clearable
+            @input="handleSearchInput"
           />
           <n-dropdown :options="moreOptions" trigger="click" @select="handleMoreAction">
             <n-button size="small" secondary>
@@ -392,16 +430,21 @@ function changePageSize(size: number) {
               <div class="key-section">
                 <n-tag v-if="key.status === 'active'" type="info">有效</n-tag>
                 <n-tag v-else>无效</n-tag>
-                <span class="key-text" :title="key.key_value">{{ maskKey(key.key_value) }}</span>
+                <n-input
+                  class="key-text"
+                  :value="key.is_visible ? key.key_value : maskKey(key.key_value)"
+                  readonly
+                  size="small"
+                />
                 <div class="quick-actions">
                   <n-button size="tiny" text @click="toggleKeyVisibility(key)" title="显示/隐藏">
                     <template #icon>
-                      <span style="font-size: 12px">👁️</span>
+                      <n-icon :component="key.is_visible ? EyeOffOutline : EyeOutline" />
                     </template>
                   </n-button>
                   <n-button size="tiny" text @click="copyKey(key)" title="复制">
                     <template #icon>
-                      <span style="font-size: 12px">📋</span>
+                      <n-icon :component="CopyOutline" />
                     </template>
                   </n-button>
                 </div>
@@ -420,15 +463,23 @@ function changePageSize(size: number) {
                   <strong>{{ key.failure_count }}</strong>
                 </span>
                 <span class="stat-item">
-                  {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : "从未使用" }}
+                  {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : "未使用" }}
                 </span>
               </div>
-              <div class="key-actions">
-                <n-button type="info" size="tiny" @click="testKey(key)" title="测试密钥">
+              <n-button-group class="key-actions">
+                <n-button
+                  round
+                  tertiary
+                  type="info"
+                  size="tiny"
+                  @click="testKey(key)"
+                  title="测试密钥"
+                >
                   测试
                 </n-button>
                 <n-button
                   v-if="key.status !== 'active'"
+                  tertiary
                   size="tiny"
                   @click="restoreKey(key)"
                   title="恢复密钥"
@@ -436,10 +487,17 @@ function changePageSize(size: number) {
                 >
                   恢复
                 </n-button>
-                <n-button size="tiny" type="error" @click="deleteKey(key)" title="删除密钥">
+                <n-button
+                  round
+                  tertiary
+                  size="tiny"
+                  type="error"
+                  @click="deleteKey(key)"
+                  title="删除密钥"
+                >
                   删除
                 </n-button>
-              </div>
+              </n-button-group>
             </div>
           </div>
         </div>
@@ -449,14 +507,14 @@ function changePageSize(size: number) {
     <!-- 分页 -->
     <div class="pagination-container">
       <div class="pagination-info">
-        <span>共 {{ totalKeys }} 条记录</span>
+        <span>共 {{ total }} 条记录</span>
         <n-select
           v-model:value="pageSize"
           :options="[
-            { label: '10条/页', value: 10 },
-            { label: '20条/页', value: 20 },
-            { label: '50条/页', value: 50 },
-            { label: '100条/页', value: 100 },
+            { label: '9条/页', value: 9 },
+            { label: '18条/页', value: 18 },
+            { label: '36条/页', value: 36 },
+            { label: '72条/页', value: 72 },
           ]"
           size="small"
           style="width: 100px; margin-left: 12px"
@@ -717,23 +775,21 @@ function changePageSize(size: number) {
 }
 
 .key-actions {
-  display: flex;
-  gap: 4px;
   flex-shrink: 0;
+  &:deep(.n-button) {
+    padding: 0 4px;
+  }
 }
 
 .key-text {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  font-size: 14px;
   font-weight: 600;
   color: #495057;
   background: #fff;
-  padding: 4px 8px;
   border-radius: 4px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
