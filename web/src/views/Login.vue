@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAuthService } from "@/services/auth";
+import { LockClosedSharp } from "@vicons/ionicons5";
 import { NButton, NCard, NInput, NSpace, useMessage } from "naive-ui";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
@@ -57,11 +58,7 @@ const handleLogin = async () => {
             @keyup.enter="handleLogin"
           >
             <template #prefix>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path
-                  d="M6 10v-4a6 6 0 1 1 12 0v4h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm6-6a4 4 0 0 0-4 4v4h8v-4a4 4 0 0 0-4-4z"
-                />
-              </svg>
+              <n-icon :component="LockClosedSharp" />
             </template>
           </n-input>
 

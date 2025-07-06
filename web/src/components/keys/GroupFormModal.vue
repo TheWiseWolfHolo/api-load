@@ -2,6 +2,7 @@
 import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
 import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
+import { Add, Close, Remove } from "@vicons/ionicons5";
 import {
   NButton,
   NCard,
@@ -271,11 +272,7 @@ async function handleSubmit() {
       <template #header-extra>
         <n-button quaternary circle @click="handleClose">
           <template #icon>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-              />
-            </svg>
+            <n-icon :component="Close" />
           </template>
         </n-button>
       </template>
@@ -370,9 +367,7 @@ async function handleSubmit() {
                   style="margin-left: 10px"
                 >
                   <template #icon>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 13H5v-2h14v2z" />
-                    </svg>
+                    <n-icon :component="Remove" />
                   </template>
                 </n-button>
               </div>
@@ -382,9 +377,7 @@ async function handleSubmit() {
           <n-form-item>
             <n-button @click="addUpstream" dashed style="width: 100%">
               <template #icon>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                </svg>
+                <n-icon :component="Add" />
               </template>
               添加上游地址
             </n-button>
@@ -443,9 +436,7 @@ async function handleSubmit() {
                         style="margin-left: 10px"
                       >
                         <template #icon>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 13H5v-2h14v2z" />
-                          </svg>
+                          <n-icon :component="Remove" />
                         </template>
                       </n-button>
                     </div>
@@ -460,9 +451,7 @@ async function handleSubmit() {
                     :disabled="formData.configItems.length >= configOptions.length"
                   >
                     <template #icon>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                      </svg>
+                      <n-icon :component="Add" />
                     </template>
                     添加配置参数
                   </n-button>
