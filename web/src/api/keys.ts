@@ -118,17 +118,31 @@ export const keysApi = {
 
   // 清空所有无效密钥
   clearAllInvalidKeys(group_id: number): Promise<void> {
-    return http.post("/keys/clear-all-invalid", { group_id });
+    return http.post(
+      "/keys/clear-all-invalid",
+      { group_id },
+      {
+        hideMessage: true,
+      }
+    );
   },
 
   // 导出密钥
-  async exportKeys(
-    groupId: number,
-    filter: "all" | "valid" | "invalid" = "all"
-  ): Promise<{ keys: string[] }> {
-    const params: any = { filter };
-    const res = await http.get(`/groups/${groupId}/keys/export`, { params });
-    return res.data;
+  exportKeys(groupId: number, status: "all" | "active" | "inactive" = "all") {
+    let url = `${http.defaults.baseURL}/groups/${groupId}/keys/export`;
+    if (status !== "all") {
+      url += `?status=${status}`;
+    }
+
+    // 创建隐藏的 a 标签实现下载
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `group-${groupId}-keys-${status}.txt`;
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   },
 
   // 验证分组密钥

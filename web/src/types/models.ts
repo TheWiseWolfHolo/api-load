@@ -57,13 +57,16 @@ export interface GroupStats {
 
 export interface TaskInfo {
   is_running: boolean;
-  task_name?: string;
-  group_id?: number;
   group_name?: string;
   processed?: number;
   total?: number;
   started_at?: string;
-  message?: string;
+  finished_at?: string;
+  result?: {
+    invalid_keys: number;
+    total_keys: number;
+    valid_keys: number;
+  };
 }
 
 export interface RequestLog {

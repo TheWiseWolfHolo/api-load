@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { TaskInfo } from "@/types/models";
-import { NButton, NCard, NProgress, NText } from "naive-ui";
+import { NButton, NCard, NProgress, NText, useMessage } from "naive-ui";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const taskInfo = ref<TaskInfo>({ is_running: false });
 const visible = ref(false);
 let pollTimer: number | null = null;
+let isPolling = false; // 添加标志位
+const message = useMessage();
 
 onMounted(() => {
   startPolling();
@@ -18,18 +20,49 @@ onBeforeUnmount(() => {
 
 function startPolling() {
   stopPolling();
-  pollTimer = setInterval(async () => {
-    try {
-      const task = await keysApi.getTaskStatus();
-      taskInfo.value = task;
-      visible.value = task.is_running;
-    } catch (_error) {
-      // 错误已记录
+  isPolling = true;
+  pollOnce();
+}
+
+async function pollOnce() {
+  if (!isPolling) {
+    return;
+  }
+
+  try {
+    const task = await keysApi.getTaskStatus();
+    taskInfo.value = task;
+    visible.value = task.is_running;
+    if (!task.is_running) {
+      stopPolling();
+      if (task.result) {
+        const lastTask = localStorage.getItem("last_closed_task");
+        if (lastTask !== task.finished_at) {
+          const { total_keys, valid_keys, invalid_keys } = task.result;
+          const msg = `任务已完成，处理了 ${total_keys} 个密钥，其中 ${valid_keys} 个有效密钥，${invalid_keys} 个无效密钥。`;
+          message.info(msg, {
+            closable: true,
+            duration: 0,
+            onClose: () => {
+              localStorage.setItem("last_closed_task", task.finished_at || "");
+            },
+          });
+        }
+      }
+      return;
     }
-  }, 1000);
+  } catch (_error) {
+    // 错误已记录
+  }
+
+  // 如果仍在轮询状态，1秒后发起下一次请求
+  if (isPolling) {
+    pollTimer = setTimeout(pollOnce, 1000);
+  }
 }
 
 function stopPolling() {
+  isPolling = false;
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
@@ -61,7 +94,7 @@ function handleClose() {
           <span class="progress-icon">⚡</span>
           <div class="progress-details">
             <n-text strong class="progress-title">
-              {{ taskInfo.task_name || "正在处理任务" }}
+              正在处理分组 {{ taskInfo.group_name }} 的任务
             </n-text>
             <n-text depth="3" class="progress-subtitle">
               {{ getProgressText() }} ({{ getProgressPercentage() }}%)
@@ -156,6 +189,8 @@ function handleClose() {
 
 .progress-details {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .progress-title {

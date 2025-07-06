@@ -279,125 +279,104 @@ function getStatusClass(status: KeyStatus): string {
 }
 
 async function copyAllKeys() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id) {
     return;
   }
 
-  try {
-    const result = await keysApi.exportKeys(props.selectedGroup.id, "all");
-    const keysText = result.keys.join("\n");
-    navigator.clipboard
-      .writeText(keysText)
-      .then(() => {
-        window.$message.success(`已复制${result.keys.length}个密钥到剪贴板`);
-      })
-      .catch(() => {
-        window.$message.error("复制失败");
-      });
-  } catch (_error) {
-    // 错误已记录
-    window.$message.error("导出失败");
-  }
+  keysApi.exportKeys(props.selectedGroup.id, "all");
 }
 
 async function copyValidKeys() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id) {
     return;
   }
 
-  try {
-    const result = await keysApi.exportKeys(props.selectedGroup.id, "valid");
-    const keysText = result.keys.join("\n");
-    navigator.clipboard
-      .writeText(keysText)
-      .then(() => {
-        window.$message.success(`已复制${result.keys.length}个有效密钥到剪贴板`);
-      })
-      .catch(() => {
-        window.$message.error("复制失败");
-      });
-  } catch (_error) {
-    // 错误已记录
-    window.$message.error("导出失败");
-  }
+  keysApi.exportKeys(props.selectedGroup.id, "active");
 }
 
 async function copyInvalidKeys() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id) {
     return;
   }
 
-  try {
-    const result = await keysApi.exportKeys(props.selectedGroup.id, "invalid");
-    const keysText = result.keys.join("\n");
-    navigator.clipboard
-      .writeText(keysText)
-      .then(() => {
-        window.$message.success(`已复制${result.keys.length}个无效密钥到剪贴板`);
-      })
-      .catch(() => {
-        window.$message.error("复制失败");
-      });
-  } catch (_error) {
-    // 错误已记录
-    window.$message.error("导出失败");
-  }
+  keysApi.exportKeys(props.selectedGroup.id, "inactive");
 }
 
 async function restoreAllInvalid() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id || restoreMsg) {
     return;
   }
 
   dialog.warning({
-    // title: "恢复密钥",
+    title: "恢复密钥",
     content: "确定要恢复所有无效密钥吗？",
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      restoreMsg = window.$message.info("正在恢复密钥...", {
+        duration: 0,
+      });
+
       try {
-        window.$message.success("所有无效密钥已恢复");
+        await keysApi.restoreAllInvalidKeys(props.selectedGroup.id);
         await loadKeys();
       } catch (_error) {
-        // 错误已记录
-        window.$message.error("恢复失败");
+        console.error("恢复失败");
+      } finally {
+        restoreMsg?.destroy();
+        restoreMsg = null;
       }
     },
   });
 }
 
 async function validateAllKeys() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id || testingMsg) {
     return;
   }
 
+  testingMsg = window.$message.info("正在验证密钥...", {
+    duration: 0,
+  });
+
   try {
-    const result = await keysApi.validateGroupKeys(props.selectedGroup.id);
-    window.$message.success(`验证完成: 有效${result.valid_count}个，无效${result.invalid_count}个`);
+    await keysApi.validateGroupKeys(props.selectedGroup.id);
+    localStorage.removeItem("last_closed_task");
   } catch (_error) {
-    // 错误已记录
-    window.$message.error("验证失败");
+    console.error("测试失败");
+  } finally {
+    testingMsg?.destroy();
+    testingMsg = null;
   }
 }
 
 async function clearAllInvalid() {
-  if (!props.selectedGroup) {
+  if (!props.selectedGroup?.id || deleteMsg) {
     return;
   }
 
-  // eslint-disable-next-line no-alert
-  const confirmed = window.confirm("确定要清除所有无效密钥吗？此操作不可恢复！");
-  if (!confirmed) {
-    return;
-  }
+  dialog.warning({
+    title: "清除密钥",
+    content: "确定要清除所有无效密钥吗？此操作不可恢复！",
+    positiveText: "确定",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      deleteMsg = window.$message.info("正在清除密钥...", {
+        duration: 0,
+      });
 
-  try {
-    window.$message.success("所有无效密钥已清除");
-    await loadKeys();
-  } catch (_error) {
-    // 错误已记录
-    window.$message.error("清除失败");
-  }
+      try {
+        const { data } = await keysApi.clearAllInvalidKeys(props.selectedGroup.id);
+        window.$message.success(data?.message || "清除成功");
+        await loadKeys();
+      } catch (_error) {
+        console.error("删除失败");
+      } finally {
+        deleteMsg?.destroy();
+        deleteMsg = null;
+      }
+    },
+  });
 }
 
 function changePage(page: number) {
