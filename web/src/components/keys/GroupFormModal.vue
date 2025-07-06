@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
-import type { Group, GroupConfigOption, Upstream } from "@/types/models";
+import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
 import {
   NButton,
   NCard,
@@ -53,7 +53,7 @@ const formData = reactive<any>({
       url: "",
       weight: 1,
     },
-  ] as Upstream[],
+  ] as UpstreamInfo[],
   channel_type: "openai",
   sort: 1,
   test_model: "",
@@ -211,11 +211,13 @@ async function handleSubmit() {
 
     // 验证 JSON 格式
     let paramOverrides = {};
-    try {
-      paramOverrides = JSON.parse(formData.param_overrides);
-    } catch {
-      message.error("参数覆盖必须是有效的 JSON 格式");
-      return;
+    if (formData.param_overrides) {
+      try {
+        paramOverrides = JSON.parse(formData.param_overrides);
+      } catch {
+        message.error("参数覆盖必须是有效的 JSON 格式");
+        return;
+      }
     }
 
     // 将configItems转换为config对象
@@ -231,11 +233,11 @@ async function handleSubmit() {
       name: formData.name,
       display_name: formData.display_name,
       description: formData.description,
-      upstreams: formData.upstreams.filter(upstream => upstream.url.trim()),
+      upstreams: formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim()),
       channel_type: formData.channel_type,
       sort: formData.sort,
       test_model: formData.test_model,
-      param_overrides: paramOverrides,
+      param_overrides: formData.param_overrides ? paramOverrides : null,
       config,
     };
 

@@ -10,15 +10,6 @@ import NavBar from "@/components/NavBar.vue";
         <div class="header-brand">
           <div class="brand-icon">
             <img src="@/assets/logo.png" width="50" alt="" />
-            <!-- <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg> -->
           </div>
           <h1 class="brand-title">GPT Load</h1>
         </div>
@@ -45,7 +36,6 @@ import NavBar from "@/components/NavBar.vue";
 
 <style scoped>
 .main-layout {
-  /* height: 100vh; */
   background: transparent;
 }
 
@@ -66,8 +56,8 @@ import NavBar from "@/components/NavBar.vue";
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 100%;
-  padding: 0 8px;
+  padding: 8px;
+  overflow-x: auto;
 }
 
 .header-brand {
@@ -83,10 +73,6 @@ import NavBar from "@/components/NavBar.vue";
   justify-content: center;
   width: 40px;
   height: 40px;
-  /* background: var(--primary-gradient);
-  border-radius: var(--border-radius-md);
-  color: white;
-  box-shadow: var(--shadow-md); */
 }
 
 .brand-title {
@@ -100,19 +86,8 @@ import NavBar from "@/components/NavBar.vue";
   letter-spacing: -0.3px;
 }
 
-.header-nav {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 600px;
-  display: flex;
-  justify-content: center;
-}
-
 .header-actions {
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 .layout-content {
@@ -125,43 +100,5 @@ import NavBar from "@/components/NavBar.vue";
   width: 1400px;
   margin: 0 auto;
   padding: 24px 12px;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .header-content {
-    padding: 0 4px;
-  }
-
-  .brand-title {
-    font-size: 1.2rem;
-  }
-
-  .content-wrapper {
-    padding: 16px;
-  }
-
-  .header-nav {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .brand-title {
-    display: none;
-  }
-
-  .content-wrapper {
-    padding: 12px;
-  }
-}
-
-:deep(.n-layout-header) {
-  height: 64px;
-  padding: 0;
-}
-
-:deep(.n-layout-content) {
-  padding: 0;
 }
 </style>
