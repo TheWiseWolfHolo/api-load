@@ -38,6 +38,16 @@ async function handleGroupRefresh() {
     selectedGroup.value = groups.value.find(g => g.id === selectedGroup.value?.id) || null;
   }
 }
+
+function handleGroupDelete(deletedGroup: Group) {
+  // 从分组列表中移除已删除的分组
+  groups.value = groups.value.filter(g => g.id !== deletedGroup.id);
+
+  // 如果删除的是当前选中的分组，则切换到第一个分组
+  if (selectedGroup.value?.id === deletedGroup.id) {
+    selectedGroup.value = groups.value.length > 0 ? groups.value[0] : null;
+  }
+}
 </script>
 
 <template>
@@ -56,7 +66,11 @@ async function handleGroupRefresh() {
     <div class="main-content">
       <!-- 分组信息卡片，更紧凑 -->
       <div class="group-info">
-        <group-info-card :group="selectedGroup" @refresh="handleGroupRefresh" />
+        <group-info-card
+          :group="selectedGroup"
+          @refresh="handleGroupRefresh"
+          @delete="handleGroupDelete"
+        />
       </div>
 
       <!-- 密钥表格区域，占主要空间 -->

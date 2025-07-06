@@ -245,11 +245,9 @@ async function handleSubmit() {
     if (props.group?.id) {
       // 编辑模式
       res = await keysApi.updateGroup(props.group.id, submitData);
-      message.success("分组更新成功");
     } else {
       // 新建模式
       res = await keysApi.createGroup(submitData);
-      message.success("分组创建成功");
     }
 
     emit("success", res);
@@ -295,11 +293,7 @@ async function handleSubmit() {
           <h4 class="section-title">基础信息</h4>
 
           <n-form-item label="分组名称" path="name">
-            <n-input
-              v-model:value="formData.name"
-              placeholder="请输入分组名称，如：gemini"
-              :disabled="!!group"
-            />
+            <n-input v-model:value="formData.name" placeholder="请输入分组名称，如：gemini" />
           </n-form-item>
 
           <n-form-item label="显示名称" path="display_name">

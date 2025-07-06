@@ -30,6 +30,7 @@ export interface Group {
   upstreams: UpstreamInfo[];
   config: Record<string, unknown>;
   api_keys?: APIKey[];
+  endpoint?: string;
   param_overrides: any;
   created_at?: string;
   updated_at?: string;

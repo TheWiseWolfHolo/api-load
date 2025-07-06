@@ -7,12 +7,13 @@ import {
   NCard,
   NCollapse,
   NCollapseItem,
-  NFlex,
   NForm,
   NFormItem,
+  NGrid,
+  NGridItem,
   NSpin,
   NTag,
-  useMessage,
+  useDialog,
 } from "naive-ui";
 import { onMounted, ref, watch } from "vue";
 import GroupFormModal from "./GroupFormModal.vue";
@@ -23,6 +24,7 @@ interface Props {
 
 interface Emits {
   (e: "refresh", value: Group): void;
+  (e: "delete", value: Group): void;
 }
 
 const props = defineProps<Props>();
@@ -31,7 +33,7 @@ const emit = defineEmits<Emits>();
 
 const stats = ref<GroupStats | null>(null);
 const loading = ref(false);
-const message = useMessage();
+const dialog = useDialog();
 const showEditModal = ref(false);
 
 onMounted(() => {
@@ -53,7 +55,9 @@ async function loadStats() {
 
   try {
     loading.value = true;
-    stats.value = await keysApi.getGroupStats(props.group.id);
+    if (props.group?.id) {
+      stats.value = await keysApi.getGroupStats(props.group.id);
+    }
   } finally {
     loading.value = false;
   }
@@ -71,7 +75,26 @@ function handleGroupEdited(newGroup: Group) {
 }
 
 function handleDelete() {
-  message.info("删除分组功能开发中...");
+  if (!props.group) {
+    return;
+  }
+
+  dialog.warning({
+    title: "删除分组",
+    content: `确定要删除分组 "${getGroupDisplayName(props.group)}" 吗？此操作不可恢复。`,
+    positiveText: "确定",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      try {
+        if (props.group?.id) {
+          await keysApi.deleteGroup(props.group.id);
+          emit("delete", props.group);
+        }
+      } catch (error) {
+        console.error("删除分组失败:", error);
+      }
+    },
+  });
 }
 
 function formatNumber(num: number): string {
@@ -108,12 +131,8 @@ function copyUrl(url: string) {
           <div class="header-left">
             <h3 class="group-title">
               {{ group ? getGroupDisplayName(group) : "请选择分组" }}
-              <code
-                v-if="group"
-                class="group-url"
-                @click="copyUrl(`https://gpt-load.com/${group?.name}`)"
-              >
-                https://gpt-load.com/{{ group?.name }}
+              <code v-if="group" class="group-url" @click="copyUrl(group?.endpoint || '')">
+                {{ group.endpoint }}
               </code>
             </h3>
           </div>
@@ -134,6 +153,7 @@ function copyUrl(url: string) {
               @click="handleDelete"
               title="删除分组"
               type="error"
+              :disabled="!group"
             >
               <template #icon>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -150,27 +170,40 @@ function copyUrl(url: string) {
       <!-- 统计摘要区 -->
       <div class="stats-summary">
         <n-spin :show="loading" size="small">
-          <n-flex class="status-cards-container">
-            <n-card :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`" size="large">
-              <template #header-extra><span class="status-title">密钥数量</span></template>
-            </n-card>
-            <n-card
-              class="status-card-failure"
-              :title="formatPercentage(stats?.failure_rate_24h || 0)"
-              size="large"
-            >
-              <template #header-extra><span class="status-title">失败率</span></template>
-            </n-card>
-            <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
-              <template #header-extra><span class="status-title">近1小时</span></template>
-            </n-card>
-            <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
-              <template #header-extra><span class="status-title">近24小时</span></template>
-            </n-card>
-            <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
-              <template #header-extra><span class="status-title">近7天</span></template>
-            </n-card>
-          </n-flex>
+          <n-grid :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
+            <n-grid-item span="1">
+              <n-card
+                :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`"
+                size="large"
+              >
+                <template #header-extra><span class="status-title">密钥数量</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card
+                class="status-card-failure"
+                :title="formatPercentage(stats?.failure_rate_24h || 0)"
+                size="large"
+              >
+                <template #header-extra><span class="status-title">失败率</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
+                <template #header-extra><span class="status-title">近1小时</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
+                <template #header-extra><span class="status-title">近24小时</span></template>
+              </n-card>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
+                <template #header-extra><span class="status-title">近7天</span></template>
+              </n-card>
+            </n-grid-item>
+          </n-grid>
         </n-spin>
       </div>
 
