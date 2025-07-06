@@ -75,7 +75,7 @@ function handleGroupEdited(newGroup: Group) {
   }
 }
 
-function handleDelete() {
+async function handleDelete() {
   if (!props.group) {
     return;
   }

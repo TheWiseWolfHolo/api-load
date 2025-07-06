@@ -82,16 +82,30 @@ export const keysApi = {
       error: string;
     }[]
   > {
-    const res = await http.post("/keys/test-multiple", {
-      group_id,
-      keys_text,
-    });
+    const res = await http.post(
+      "/keys/test-multiple",
+      {
+        group_id,
+        keys_text,
+      },
+      {
+        hideMessage: true,
+      }
+    );
     return res.data;
   },
 
   // 删除密钥
   deleteKeys(group_id: number, keys_text: string): Promise<void> {
     return http.post("/keys/delete-multiple", {
+      group_id,
+      keys_text,
+    });
+  },
+
+  // 测试密钥
+  restoreKeys(group_id: number, keys_text: string): Promise<null> {
+    return http.post("/keys/restore-multiple", {
       group_id,
       keys_text,
     });

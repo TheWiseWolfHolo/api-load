@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
+import { getGroupDisplayName } from "@/utils/display";
 import {
   AddCircleOutline,
   CopyOutline,
@@ -8,8 +9,19 @@ import {
   EyeOutline,
   RemoveCircleOutline,
 } from "@vicons/ionicons5";
-import { NButton, NDropdown, NEmpty, NIcon, NInput, NSelect, NSpace, NSpin } from "naive-ui";
+import {
+  NButton,
+  NDropdown,
+  NEmpty,
+  NIcon,
+  NInput,
+  NSelect,
+  NSpace,
+  NSpin,
+  useDialog,
+} from "naive-ui";
 import { ref, watch } from "vue";
+import KeyCreateDialog from "./KeyCreateDialog.vue";
 
 interface KeyRow extends APIKey {
   is_visible: boolean;
@@ -29,6 +41,7 @@ const currentPage = ref(1);
 const pageSize = ref(9);
 const total = ref(0);
 const totalPages = ref(0);
+const dialog = useDialog();
 
 // 状态过滤选项
 const statusOptions = [
@@ -51,6 +64,11 @@ const moreOptions = [
 
 // 防抖定时器
 let searchTimer: number | undefined = undefined;
+let testingMsg: any = null;
+let restoreMsg: any = null;
+let deleteMsg: any = null;
+
+const createDialogShow = ref(false);
 
 watch(
   () => props.selectedGroup,
@@ -147,11 +165,11 @@ function copyKey(key: KeyRow) {
 }
 
 async function testKey(_key: KeyRow) {
-  if (!props.selectedGroup?.id || !_key.key_value) {
+  if (!props.selectedGroup?.id || !_key.key_value || testingMsg) {
     return;
   }
 
-  const loadingMsg = window.$message.info("正在测试密钥...", {
+  testingMsg = window.$message.info("正在测试密钥...", {
     duration: 0,
   });
 
@@ -166,7 +184,8 @@ async function testKey(_key: KeyRow) {
   } catch (_error) {
     console.error("测试失败");
   } finally {
-    loadingMsg.destroy();
+    testingMsg?.destroy();
+    testingMsg = null;
   }
 }
 
@@ -175,35 +194,59 @@ function toggleKeyVisibility(key: KeyRow) {
 }
 
 async function restoreKey(key: KeyRow) {
-  // eslint-disable-next-line no-alert
-  const confirmed = window.confirm(`确定要恢复密钥"${maskKey(key.key_value)}"吗？`);
-  if (!confirmed) {
+  if (!props.selectedGroup?.id || !key.key_value || restoreMsg) {
     return;
   }
 
-  try {
-    await keysApi.toggleKeyStatus(key.id.toString(), 1);
-    window.$message.success("密钥已恢复");
-    await loadKeys();
-  } catch (_error) {
-    window.$message.error("恢复失败");
-  }
+  dialog.warning({
+    title: "恢复密钥",
+    content: `确定要恢复密钥"${maskKey(key.key_value)}"吗？`,
+    positiveText: "确定",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      restoreMsg = window.$message.info("正在恢复密钥...", {
+        duration: 0,
+      });
+
+      try {
+        await keysApi.restoreKeys(props.selectedGroup.id, key.key_value);
+        await loadKeys();
+      } catch (_error) {
+        console.error("恢复失败");
+      } finally {
+        restoreMsg?.destroy();
+        restoreMsg = null;
+      }
+    },
+  });
 }
 
 async function deleteKey(key: KeyRow) {
-  // eslint-disable-next-line no-alert
-  const confirmed = window.confirm(`确定要删除密钥"${maskKey(key.key_value)}"吗？`);
-  if (!confirmed) {
+  if (!props.selectedGroup?.id || !key.key_value || deleteMsg) {
     return;
   }
 
-  try {
-    await keysApi.deleteKeyById(key.id.toString());
-    window.$message.success("密钥已删除");
-    await loadKeys();
-  } catch (_error) {
-    window.$message.error("删除失败");
-  }
+  dialog.warning({
+    title: "删除密钥",
+    content: `确定要删除密钥"${maskKey(key.key_value)}"吗？`,
+    positiveText: "确定",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      deleteMsg = window.$message.info("正在删除密钥...", {
+        duration: 0,
+      });
+
+      try {
+        await keysApi.deleteKeys(props.selectedGroup.id, key.key_value);
+        await loadKeys();
+      } catch (_error) {
+        console.error("删除失败");
+      } finally {
+        deleteMsg?.destroy();
+        deleteMsg = null;
+      }
+    },
+  });
 }
 
 function formatRelativeTime(date: string) {
@@ -234,7 +277,7 @@ function getStatusClass(status: KeyStatus): string {
 }
 
 function addKey() {
-  window.$message.info("添加密钥功能开发中");
+  createDialogShow.value = true;
 }
 
 async function copyAllKeys() {
@@ -308,19 +351,21 @@ async function restoreAllInvalid() {
     return;
   }
 
-  // eslint-disable-next-line no-alert
-  const confirmed = window.confirm("确定要恢复所有无效密钥吗？");
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    window.$message.success("所有无效密钥已恢复");
-    await loadKeys();
-  } catch (_error) {
-    // 错误已记录
-    window.$message.error("恢复失败");
-  }
+  dialog.warning({
+    // title: "恢复密钥",
+    content: "确定要恢复所有无效密钥吗？",
+    positiveText: "确定",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      try {
+        window.$message.success("所有无效密钥已恢复");
+        await loadKeys();
+      } catch (_error) {
+        // 错误已记录
+        window.$message.error("恢复失败");
+      }
+    },
+  });
 }
 
 async function validateAllKeys() {
@@ -535,6 +580,14 @@ function changePageSize(size: number) {
         </n-button>
       </div>
     </div>
+
+    <key-create-dialog
+      v-if="selectedGroup?.id"
+      v-model:show="createDialogShow"
+      :group-id="selectedGroup.id"
+      :group-name="getGroupDisplayName(selectedGroup!)"
+      @success="loadKeys"
+    />
   </div>
 </template>
 

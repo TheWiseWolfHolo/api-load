@@ -2,6 +2,12 @@ import { useAuthService } from "@/services/auth";
 import axios from "axios";
 import { appState } from "./app-state";
 
+declare module "axios" {
+  interface AxiosRequestConfig {
+    hideMessage?: boolean;
+  }
+}
+
 const http = axios.create({
   baseURL: "/api",
   timeout: 10000,
@@ -22,7 +28,7 @@ http.interceptors.request.use(config => {
 http.interceptors.response.use(
   response => {
     appState.loading = false;
-    if (response.config.method !== "get") {
+    if (response.config.method !== "get" && !response.config.hideMessage) {
       window.$message.success("操作成功");
     }
     return response.data;
