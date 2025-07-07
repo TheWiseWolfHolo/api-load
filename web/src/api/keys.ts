@@ -26,7 +26,8 @@ export const keysApi = {
   },
 
   // 获取分组统计信息
-  async getGroupStats(groupId: number): Promise<GroupStats> {
+  async getGroupStats(): Promise<any> {
+    // 传参补充groupId
     await new Promise(resolve => setTimeout(resolve, 200));
     return {};
   },
@@ -96,11 +97,15 @@ export const keysApi = {
   },
 
   // 删除密钥
-  deleteKeys(group_id: number, keys_text: string): Promise<void> {
-    return http.post("/keys/delete-multiple", {
+  async deleteKeys(
+    group_id: number,
+    keys_text: string
+  ): Promise<{ deleted_count: number; ignored_count: number; total_in_group: number }> {
+    const res = await http.post("/keys/delete-multiple", {
       group_id,
       keys_text,
     });
+    return res.data;
   },
 
   // 测试密钥
@@ -117,7 +122,7 @@ export const keysApi = {
   },
 
   // 清空所有无效密钥
-  clearAllInvalidKeys(group_id: number): Promise<void> {
+  clearAllInvalidKeys(group_id: number): Promise<{ data: { message: string } }> {
     return http.post(
       "/keys/clear-all-invalid",
       { group_id },

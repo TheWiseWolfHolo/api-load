@@ -121,10 +121,6 @@ function handleClose() {
         border-radius="3px"
         class="progress-bar"
       />
-
-      <n-text v-if="taskInfo.message" depth="3" class="progress-message">
-        {{ taskInfo.message }}
-      </n-text>
     </div>
   </n-card>
 </template>
