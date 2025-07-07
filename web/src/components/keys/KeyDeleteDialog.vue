@@ -52,8 +52,8 @@ async function handleSubmit() {
   try {
     loading.value = true;
 
-    const { data } = await keysApi.deleteKeys(props.groupId, keysText.value);
-    const { deleted_count, ignored_count, total_in_group } = data || {};
+    const res = await keysApi.deleteKeys(props.groupId, keysText.value);
+    const { deleted_count, ignored_count, total_in_group } = res || {};
     const msg = `成功删除 ${deleted_count} 个密钥，忽略 ${ignored_count} 个密钥。当前分组共有 ${total_in_group} 个密钥。`;
     message.info(msg, {
       closable: true,

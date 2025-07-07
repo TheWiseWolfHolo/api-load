@@ -37,7 +37,7 @@ const props = defineProps<Props>();
 const keys = ref<KeyRow[]>([]);
 const loading = ref(false);
 const searchText = ref("");
-const statusFilter = ref<"all" | "valid" | "invalid">("all");
+const statusFilter = ref<"all" | "active" | "inactive">("all");
 const currentPage = ref(1);
 const pageSize = ref(9);
 const total = ref(0);
@@ -64,7 +64,7 @@ const moreOptions = [
 ];
 
 // 防抖定时器
-let searchTimer: number | undefined = undefined;
+let searchTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 let testingMsg: any = null;
 let restoreMsg: any = null;
 let deleteMsg: any = null;
@@ -206,6 +206,9 @@ async function restoreKey(key: KeyRow) {
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      if (!props.selectedGroup?.id) {
+        return;
+      }
       restoreMsg = window.$message.info("正在恢复密钥...", {
         duration: 0,
       });
@@ -234,6 +237,9 @@ async function deleteKey(key: KeyRow) {
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      if (!props.selectedGroup?.id) {
+        return;
+      }
       deleteMsg = window.$message.info("正在删除密钥...", {
         duration: 0,
       });
@@ -313,6 +319,9 @@ async function restoreAllInvalid() {
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      if (!props.selectedGroup?.id) {
+        return;
+      }
       restoreMsg = window.$message.info("正在恢复密钥...", {
         duration: 0,
       });
@@ -361,6 +370,9 @@ async function clearAllInvalid() {
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      if (!props.selectedGroup?.id) {
+        return;
+      }
       deleteMsg = window.$message.info("正在清除密钥...", {
         duration: 0,
       });

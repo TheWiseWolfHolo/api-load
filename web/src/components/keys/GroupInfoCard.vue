@@ -49,7 +49,7 @@ watch(
 );
 
 async function loadStats() {
-  if (!props.group) {
+  if (!props.group?.id) {
     stats.value = null;
     return;
   }
@@ -57,7 +57,7 @@ async function loadStats() {
   try {
     loading.value = true;
     if (props.group?.id) {
-      stats.value = await keysApi.getGroupStats(props.group.id);
+      stats.value = await keysApi.getGroupStats();
     }
   } finally {
     loading.value = false;

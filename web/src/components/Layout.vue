@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GlobalTaskProgressBar from "@/components/GlobalTaskProgressBar.vue";
 import Logout from "@/components/Logout.vue";
 import NavBar from "@/components/NavBar.vue";
 </script>
@@ -32,6 +33,9 @@ import NavBar from "@/components/NavBar.vue";
       </div>
     </n-layout-content>
   </n-layout>
+
+  <!-- 全局任务进度条 -->
+  <global-task-progress-bar />
 </template>
 
 <style scoped>

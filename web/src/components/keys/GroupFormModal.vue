@@ -15,6 +15,7 @@ import {
   NModal,
   NSelect,
   useMessage,
+  type FormRules,
 } from "naive-ui";
 import { reactive, ref, watch } from "vue";
 
@@ -67,28 +68,36 @@ const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
 
 // 表单验证规则
-const rules = {
-  name: {
-    required: true,
-    message: "请输入分组名称",
-    trigger: ["blur", "input"],
-  },
-  channel_type: {
-    required: true,
-    message: "请选择渠道类型",
-    trigger: ["blur", "change"],
-  },
-  test_model: {
-    required: true,
-    message: "请输入测试模型",
-    trigger: ["blur", "input"],
-  },
-  upstreams: {
-    type: "array",
-    min: 1,
-    message: "至少需要一个上游地址",
-    trigger: ["blur", "change"],
-  },
+const rules: FormRules = {
+  name: [
+    {
+      required: true,
+      message: "请输入分组名称",
+      trigger: ["blur", "input"],
+    },
+  ],
+  channel_type: [
+    {
+      required: true,
+      message: "请选择渠道类型",
+      trigger: ["blur", "change"],
+    },
+  ],
+  test_model: [
+    {
+      required: true,
+      message: "请输入测试模型",
+      trigger: ["blur", "input"],
+    },
+  ],
+  upstreams: [
+    {
+      type: "array",
+      min: 1,
+      message: "至少需要一个上游地址",
+      trigger: ["blur", "change"],
+    },
+  ],
 };
 
 // 监听弹窗显示状态
@@ -223,7 +232,7 @@ async function handleSubmit() {
 
     // 将configItems转换为config对象
     const config: Record<string, number> = {};
-    formData.configItems.forEach(item => {
+    formData.configItems.forEach((item: any) => {
       if (item.key && item.key.trim()) {
         config[item.key] = item.value;
       }
@@ -412,8 +421,9 @@ async function handleSubmit() {
                             label: opt.name,
                             value: opt.key,
                             disabled:
-                              formData.configItems.map(item => item.key)?.includes(opt.key) &&
-                              opt.key !== configItem.key,
+                              formData.configItems
+                                .map((item: any) => item.key)
+                                ?.includes(opt.key) && opt.key !== configItem.key,
                           }))
                         "
                         placeholder="请选择配置参数"
