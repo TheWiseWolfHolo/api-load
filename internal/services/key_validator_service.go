@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 
 	"github.com/sirupsen/logrus"
+	"go.uber.org/dig"
 	"gorm.io/gorm"
 )
 
@@ -23,14 +25,24 @@ type KeyValidatorService struct {
 	DB              *gorm.DB
 	channelFactory  *channel.Factory
 	SettingsManager *config.SystemSettingsManager
+	keypoolProvider *keypool.KeyProvider
+}
+
+type KeyValidatorServiceParams struct {
+	dig.In
+	DB              *gorm.DB
+	ChannelFactory  *channel.Factory
+	SettingsManager *config.SystemSettingsManager
+	KeypoolProvider *keypool.KeyProvider
 }
 
 // NewKeyValidatorService creates a new KeyValidatorService.
-func NewKeyValidatorService(db *gorm.DB, factory *channel.Factory, settingsManager *config.SystemSettingsManager) *KeyValidatorService {
+func NewKeyValidatorService(params KeyValidatorServiceParams) *KeyValidatorService {
 	return &KeyValidatorService{
-		DB:              db,
-		channelFactory:  factory,
-		SettingsManager: settingsManager,
+		DB:              params.DB,
+		channelFactory:  params.ChannelFactory,
+		SettingsManager: params.SettingsManager,
+		keypoolProvider: params.KeypoolProvider,
 	}
 }
 
@@ -42,43 +54,28 @@ func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models
 
 	ch, err := s.channelFactory.GetChannel(group)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"group_id":     group.ID,
-			"group_name":   group.Name,
-			"channel_type": group.ChannelType,
-			"error":        err,
-		}).Error("Failed to get channel for key validation")
 		return false, fmt.Errorf("failed to get channel for group %s: %w", group.Name, err)
 	}
 
-	effectiveSettings := s.SettingsManager.GetEffectiveConfig(group.Config)
-	retries := effectiveSettings.BlacklistThreshold
-	if retries <= 0 {
-		retries = 1
-	}
+	isValid, validationErr := ch.ValidateKey(ctx, key.KeyValue)
 
-	var lastErr error
-	for range retries {
-		isValid, validationErr := ch.ValidateKey(ctx, key.KeyValue)
-		if validationErr == nil && isValid {
-			logrus.WithFields(logrus.Fields{
-				"key_id":   key.ID,
-				"is_valid": isValid,
-			}).Debug("Key validation successful")
-			return true, nil
-		}
+	s.keypoolProvider.UpdateStatus(key.ID, group.ID, isValid)
 
-		lastErr = validationErr
+	if !isValid {
+		logrus.WithFields(logrus.Fields{
+			"error":    validationErr,
+			"key_id":   key.ID,
+			"group_id": group.ID,
+		}).Debug("Key validation failed")
+		return false, validationErr
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"error":       lastErr,
-		"key_id":      key.ID,
-		"group_id":    group.ID,
-		"max_retries": retries,
-	}).Debug("Key validation failed after all retries")
+		"key_id":   key.ID,
+		"is_valid": isValid,
+	}).Debug("Key validation successful")
 
-	return false, lastErr
+	return true, nil
 }
 
 // TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.
