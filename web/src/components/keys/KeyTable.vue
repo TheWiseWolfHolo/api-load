@@ -37,7 +37,7 @@ const props = defineProps<Props>();
 const keys = ref<KeyRow[]>([]);
 const loading = ref(false);
 const searchText = ref("");
-const statusFilter = ref<"all" | "active" | "inactive">("all");
+const statusFilter = ref<"all" | "active" | "invalid">("all");
 const currentPage = ref(1);
 const pageSize = ref(9);
 const total = ref(0);
@@ -48,7 +48,7 @@ const dialog = useDialog();
 const statusOptions = [
   { label: "全部", value: "all" },
   { label: "有效", value: "active" },
-  { label: "无效", value: "inactive" },
+  { label: "无效", value: "invalid" },
 ];
 
 // 更多操作下拉菜单选项
@@ -277,7 +277,7 @@ function getStatusClass(status: KeyStatus): string {
   switch (status) {
     case "active":
       return "status-valid";
-    case "inactive":
+    case "invalid":
       return "status-invalid";
     default:
       return "status-unknown";
@@ -305,7 +305,7 @@ async function copyInvalidKeys() {
     return;
   }
 
-  keysApi.exportKeys(props.selectedGroup.id, "inactive");
+  keysApi.exportKeys(props.selectedGroup.id, "invalid");
 }
 
 async function restoreAllInvalid() {

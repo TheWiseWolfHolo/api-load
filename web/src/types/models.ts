@@ -1,5 +1,5 @@
 // 密钥状态
-export type KeyStatus = "active" | "inactive" | undefined;
+export type KeyStatus = "active" | "invalid" | undefined;
 
 // 数据模型定义
 export interface APIKey {

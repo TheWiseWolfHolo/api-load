@@ -133,7 +133,7 @@ export const keysApi = {
   },
 
   // 导出密钥
-  exportKeys(groupId: number, status: "all" | "active" | "inactive" = "all") {
+  exportKeys(groupId: number, status: "all" | "active" | "invalid" = "all") {
     let url = `${http.defaults.baseURL}/groups/${groupId}/keys/export`;
     if (status !== "all") {
       url += `?status=${status}`;
