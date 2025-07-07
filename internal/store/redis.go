@@ -61,8 +61,8 @@ func (s *RedisStore) Close() error {
 
 // --- HASH operations ---
 
-func (s *RedisStore) HSet(key, field string, value any) error {
-	return s.client.HSet(context.Background(), key, field, value).Err()
+func (s *RedisStore) HSet(key string, values map[string]any) error {
+	return s.client.HSet(context.Background(), key, values).Err()
 }
 
 func (s *RedisStore) HGetAll(key string) (map[string]string, error) {

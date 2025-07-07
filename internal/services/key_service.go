@@ -20,9 +20,9 @@ type AddKeysResult struct {
 
 // DeleteKeysResult holds the result of deleting multiple keys.
 type DeleteKeysResult struct {
-	DeletedCount  int   `json:"deleted_count"`
-	IgnoredCount  int   `json:"ignored_count"`
-	TotalInGroup  int64 `json:"total_in_group"`
+	DeletedCount int   `json:"deleted_count"`
+	IgnoredCount int   `json:"ignored_count"`
+	TotalInGroup int64 `json:"total_in_group"`
 }
 
 // KeyService provides services related to API keys.
@@ -80,26 +80,21 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 	}
 
 	if len(newKeysToCreate) == 0 {
-		var totalInGroup int64
-		s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup)
 		return &AddKeysResult{
 			AddedCount:   0,
 			IgnoredCount: len(keys),
-			TotalInGroup: totalInGroup,
+			TotalInGroup: int64(len(existingKeys)),
 		}, nil
 	}
 
-	// 4. Use KeyProvider to add keys, which handles DB and cache
+	// 4. Use KeyProvider to add keys
 	err := s.KeyProvider.AddKeys(groupID, newKeysToCreate)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Get the new total count
-	var totalInGroup int64
-	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
-		return nil, err
-	}
+	// 5. Calculate new total count
+	totalInGroup := int64(len(existingKeys) + len(newKeysToCreate))
 
 	return &AddKeysResult{
 		AddedCount:   len(newKeysToCreate),
@@ -171,13 +166,11 @@ func (s *KeyService) ClearAllInvalidKeys(groupID uint) (int64, error) {
 
 // DeleteMultipleKeys handles the business logic of deleting keys from a text block.
 func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteKeysResult, error) {
-	// 1. Parse keys from the text block
 	keysToDelete := s.ParseKeysFromText(keysText)
 	if len(keysToDelete) == 0 {
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	// 2. Use KeyProvider to delete keys, which handles DB and cache
 	deletedCount, err := s.KeyProvider.RemoveKeys(groupID, keysToDelete)
 	if err != nil {
 		return nil, err
@@ -185,7 +178,6 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 
 	ignoredCount := len(keysToDelete) - int(deletedCount)
 
-	// 3. Get the new total count
 	var totalInGroup int64
 	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
 		return nil, err
@@ -199,7 +191,6 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 }
 
 // ListKeysInGroupQuery builds a query to list all keys within a specific group, filtered by status.
-// It returns a GORM query builder, allowing the handler to apply pagination.
 func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, searchKeyword string) *gorm.DB {
 	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID)
 
@@ -208,7 +199,6 @@ func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, sea
 	}
 
 	if searchKeyword != "" {
-		// Use LIKE for fuzzy search on the key_value
 		query = query.Where("key_value LIKE ?", "%"+searchKeyword+"%")
 	}
 

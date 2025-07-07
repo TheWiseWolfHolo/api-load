@@ -33,7 +33,7 @@ type Store interface {
 	SetNX(key string, value []byte, ttl time.Duration) (bool, error)
 
 	// HASH operations
-	HSet(key, field string, value any) error
+	HSet(key string, values map[string]any) error
 	HGetAll(key string) (map[string]string, error)
 	HIncrBy(key, field string, incr int64) (int64, error)
 

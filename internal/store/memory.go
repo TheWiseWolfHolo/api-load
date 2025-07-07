@@ -37,7 +37,6 @@ func (s *MemoryStore) Close() error {
 	return nil
 }
 
-
 // Set stores a key-value pair.
 func (s *MemoryStore) Set(key string, value []byte, ttl time.Duration) error {
 	s.mu.Lock()
@@ -147,7 +146,7 @@ func (s *MemoryStore) SetNX(key string, value []byte, ttl time.Duration) (bool, 
 
 // --- HASH operations ---
 
-func (s *MemoryStore) HSet(key, field string, value any) error {
+func (s *MemoryStore) HSet(key string, values map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -164,7 +163,9 @@ func (s *MemoryStore) HSet(key, field string, value any) error {
 		}
 	}
 
-	hash[field] = fmt.Sprint(value)
+	for field, value := range values {
+		hash[field] = fmt.Sprint(value)
+	}
 	return nil
 }
 

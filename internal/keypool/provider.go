@@ -103,7 +103,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 		return
 	}
 
-	if err := p.store.HSet(keyHashKey, "failure_count", 0); err != nil {
+	if err := p.store.HSet(keyHashKey, map[string]any{"failure_count": 0}); err != nil {
 		logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to reset failure count in store, aborting DB update.")
 		return
 	}
@@ -112,7 +112,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 
 	if isInvalid {
 		logrus.WithField("keyID", keyID).Info("Key has recovered and is being restored to active pool.")
-		if err := p.store.HSet(keyHashKey, "status", models.KeyStatusActive); err != nil {
+		if err := p.store.HSet(keyHashKey, map[string]any{"status": models.KeyStatusActive}); err != nil {
 			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to update key status to active in store, aborting DB update.")
 			return
 		}
@@ -160,7 +160,7 @@ func (p *KeyProvider) handleFailure(keyID uint, keyHashKey, activeKeysListKey st
 			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to LRem key from active list, aborting DB update.")
 			return
 		}
-		if err := p.store.HSet(keyHashKey, "status", models.KeyStatusInvalid); err != nil {
+		if err := p.store.HSet(keyHashKey, map[string]any{"status": models.KeyStatusInvalid}); err != nil {
 			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to update key status to invalid in store, aborting DB update.")
 			return
 		}
@@ -222,10 +222,8 @@ func (p *KeyProvider) LoadKeysFromDB() error {
 			if pipeline != nil {
 				pipeline.HSet(keyHashKey, keyDetails)
 			} else {
-				for field, value := range keyDetails {
-					if err := p.store.HSet(keyHashKey, field, value); err != nil {
-						logrus.WithFields(logrus.Fields{"keyID": key.ID, "error": err}).Error("Failed to HSet key details")
-					}
+				if err := p.store.HSet(keyHashKey, keyDetails); err != nil {
+					logrus.WithFields(logrus.Fields{"keyID": key.ID, "error": err}).Error("Failed to HSet key details")
 				}
 			}
 
@@ -307,7 +305,9 @@ func (p *KeyProvider) RemoveKeys(groupID uint, keyValues []string) (int64, error
 			return nil
 		}
 
-		result := tx.Where("group_id = ? AND key_value IN ?", groupID, keyValues).Delete(&models.APIKey{})
+		keyIDsToDelete := pluckIDs(keysToDelete)
+
+		result := tx.Where("id IN ?", keyIDsToDelete).Delete(&models.APIKey{})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -394,17 +394,13 @@ func (p *KeyProvider) addKeyToStore(key *models.APIKey) error {
 	// 1. Store key details in HASH
 	keyHashKey := fmt.Sprintf("key:%d", key.ID)
 	keyDetails := p.apiKeyToMap(key)
-	for field, value := range keyDetails {
-		if err := p.store.HSet(keyHashKey, field, value); err != nil {
-			return fmt.Errorf("failed to HSet key details for key %d: %w", key.ID, err)
-		}
+	if err := p.store.HSet(keyHashKey, keyDetails); err != nil {
+		return fmt.Errorf("failed to HSet key details for key %d: %w", key.ID, err)
 	}
 
 	// 2. If active, add to the active LIST
 	if key.Status == models.KeyStatusActive {
 		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", key.GroupID)
-		// To prevent duplicates, first remove any existing instance of the key from the list.
-		// This makes the add operation idempotent regarding the list.
 		if err := p.store.LRem(activeKeysListKey, 0, key.ID); err != nil {
 			return fmt.Errorf("failed to LRem key %d before LPush for group %d: %w", key.ID, key.GroupID, err)
 		}
@@ -432,7 +428,7 @@ func (p *KeyProvider) removeKeyFromStore(keyID, groupID uint) error {
 // apiKeyToMap converts an APIKey model to a map for HSET.
 func (p *KeyProvider) apiKeyToMap(key *models.APIKey) map[string]any {
 	return map[string]any{
-		"id":            fmt.Sprint(key.ID), // Use fmt.Sprint for consistency in pipeline
+		"id":            fmt.Sprint(key.ID),
 		"key_string":    key.KeyValue,
 		"status":        key.Status,
 		"failure_count": key.FailureCount,
