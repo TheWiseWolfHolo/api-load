@@ -34,8 +34,8 @@ type SystemSettings struct {
 	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求超时" desc:"空闲连接的超时时间（秒）" validate:"min=1"`
 
 	// 密钥配置
-	BlacklistThreshold              int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"密钥配置" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
 	MaxRetries                      int `json:"max_retries" default:"3" name:"最大重试次数" category:"密钥配置" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
+	BlacklistThreshold              int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"密钥配置" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
 	KeyValidationIntervalMinutes    int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥配置" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
 	KeyValidationTaskTimeoutMinutes int `json:"key_validation_task_timeout_minutes" default:"60" name:"手动验证超时" category:"密钥配置" desc:"手动触发的全量验证任务的超时时间（分钟）" validate:"min=10"`
 }

@@ -97,9 +97,9 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 	}
 
 	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-	isInvalid := keyDetails["status"] == models.KeyStatusInvalid
+	isActive := keyDetails["status"] == models.KeyStatusActive
 
-	if failureCount == 0 && !isInvalid {
+	if failureCount == 0 && isActive {
 		return
 	}
 
@@ -110,7 +110,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 
 	updates := map[string]any{"failure_count": 0}
 
-	if isInvalid {
+	if !isActive {
 		logrus.WithField("keyID", keyID).Info("Key has recovered and is being restored to active pool.")
 		if err := p.store.HSet(keyHashKey, map[string]any{"status": models.KeyStatusActive}); err != nil {
 			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to update key status to active in store, aborting DB update.")
