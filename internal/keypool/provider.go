@@ -339,7 +339,11 @@ func (p *KeyProvider) RestoreKeys(groupID uint) (int64, error) {
 			return nil
 		}
 
-		result := tx.Model(&models.APIKey{}).Where("group_id = ? AND status = ?", groupID, models.KeyStatusInvalid).Update("status", models.KeyStatusActive)
+		updates := map[string]any{
+			"status":        models.KeyStatusActive,
+			"failure_count": 0,
+		}
+		result := tx.Model(&models.APIKey{}).Where("group_id = ? AND status = ?", groupID, models.KeyStatusInvalid).Updates(updates)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -347,6 +351,7 @@ func (p *KeyProvider) RestoreKeys(groupID uint) (int64, error) {
 
 		for _, key := range invalidKeys {
 			key.Status = models.KeyStatusActive
+			key.FailureCount = 0
 			if err := p.addKeyToStore(&key); err != nil {
 				logrus.WithFields(logrus.Fields{"keyID": key.ID, "error": err}).Error("Failed to restore key in store after DB update")
 			}
