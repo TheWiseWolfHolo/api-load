@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"regexp"
 	"strings"
@@ -26,12 +27,16 @@ type DeleteKeysResult struct {
 
 // KeyService provides services related to API keys.
 type KeyService struct {
-	DB *gorm.DB
+	DB          *gorm.DB
+	KeyProvider *keypool.KeyProvider
 }
 
 // NewKeyService creates a new KeyService.
-func NewKeyService(db *gorm.DB) *KeyService {
-	return &KeyService{DB: db}
+func NewKeyService(db *gorm.DB, keyProvider *keypool.KeyProvider) *KeyService {
+	return &KeyService{
+		DB:          db,
+		KeyProvider: keyProvider,
+	}
 }
 
 // AddMultipleKeys handles the business logic of creating new keys from a text block.
@@ -42,13 +47,7 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	// 2. Get the group information for validation
-	var group models.Group
-	if err := s.DB.First(&group, groupID).Error; err != nil {
-		return nil, fmt.Errorf("failed to find group: %w", err)
-	}
-
-	// 3. Get existing keys in the group for deduplication
+	// 2. Get existing keys in the group for deduplication
 	var existingKeys []models.APIKey
 	if err := s.DB.Where("group_id = ?", groupID).Select("key_value").Find(&existingKeys).Error; err != nil {
 		return nil, err
@@ -58,7 +57,7 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 		existingKeyMap[k.KeyValue] = true
 	}
 
-	// 4. Prepare new keys with basic validation only
+	// 3. Prepare new keys for creation
 	var newKeysToCreate []models.APIKey
 	uniqueNewKeys := make(map[string]bool)
 
@@ -67,43 +66,44 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 		if trimmedKey == "" {
 			continue
 		}
-
-		// Check if key already exists
 		if existingKeyMap[trimmedKey] || uniqueNewKeys[trimmedKey] {
 			continue
 		}
-
-		// 通用验证：只做基础格式检查，不做渠道特定验证
 		if s.isValidKeyFormat(trimmedKey) {
 			uniqueNewKeys[trimmedKey] = true
 			newKeysToCreate = append(newKeysToCreate, models.APIKey{
 				GroupID:  groupID,
 				KeyValue: trimmedKey,
-				Status:   "active",
+				Status:   models.KeyStatusActive,
 			})
 		}
 	}
 
-	addedCount := len(newKeysToCreate)
-	// 更准确的忽略计数：包括重复的和无效的
-	ignoredCount := len(keys) - addedCount
-
-	// 5. Insert new keys if any
-	if addedCount > 0 {
-		if err := s.DB.Create(&newKeysToCreate).Error; err != nil {
-			return nil, err
-		}
+	if len(newKeysToCreate) == 0 {
+		var totalInGroup int64
+		s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup)
+		return &AddKeysResult{
+			AddedCount:   0,
+			IgnoredCount: len(keys),
+			TotalInGroup: totalInGroup,
+		}, nil
 	}
 
-	// 6. Get the new total count
+	// 4. Use KeyProvider to add keys, which handles DB and cache
+	err := s.KeyProvider.AddKeys(groupID, newKeysToCreate)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. Get the new total count
 	var totalInGroup int64
 	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
 		return nil, err
 	}
 
 	return &AddKeysResult{
-		AddedCount:   addedCount,
-		IgnoredCount: ignoredCount,
+		AddedCount:   len(newKeysToCreate),
+		IgnoredCount: len(keys) - len(newKeysToCreate),
 		TotalInGroup: totalInGroup,
 	}, nil
 }
@@ -161,14 +161,12 @@ func (s *KeyService) isValidKeyFormat(key string) bool {
 
 // RestoreAllInvalidKeys sets the status of all 'inactive' keys in a group to 'active'.
 func (s *KeyService) RestoreAllInvalidKeys(groupID uint) (int64, error) {
-	result := s.DB.Model(&models.APIKey{}).Where("group_id = ? AND status = ?", groupID, "inactive").Update("status", "active")
-	return result.RowsAffected, result.Error
+	return s.KeyProvider.RestoreKeys(groupID)
 }
 
 // ClearAllInvalidKeys deletes all 'inactive' keys from a group.
 func (s *KeyService) ClearAllInvalidKeys(groupID uint) (int64, error) {
-	result := s.DB.Where("group_id = ? AND status = ?", groupID, "inactive").Delete(&models.APIKey{})
-	return result.RowsAffected, result.Error
+	return s.KeyProvider.RemoveInvalidKeys(groupID)
 }
 
 // DeleteMultipleKeys handles the business logic of deleting keys from a text block.
@@ -179,16 +177,13 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	// 2. Perform the deletion
-	// GORM's batch delete doesn't easily return which ones were deleted vs. ignored.
-	// We perform a bulk delete and then count the remaining to calculate the result.
-	result := s.DB.Where("group_id = ? AND key_value IN ?", groupID, keysToDelete).Delete(&models.APIKey{})
-	if result.Error != nil {
-		return nil, result.Error
+	// 2. Use KeyProvider to delete keys, which handles DB and cache
+	deletedCount, err := s.KeyProvider.RemoveKeys(groupID, keysToDelete)
+	if err != nil {
+		return nil, err
 	}
 
-	deletedCount := int(result.RowsAffected)
-	ignoredCount := len(keysToDelete) - deletedCount
+	ignoredCount := len(keysToDelete) - int(deletedCount)
 
 	// 3. Get the new total count
 	var totalInGroup int64
@@ -197,7 +192,7 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 	}
 
 	return &DeleteKeysResult{
-		DeletedCount: deletedCount,
+		DeletedCount: int(deletedCount),
 		IgnoredCount: ignoredCount,
 		TotalInGroup: totalInGroup,
 	}, nil
@@ -219,4 +214,3 @@ func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, sea
 
 	return query
 }
-

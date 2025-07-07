@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gpt-load/internal/config"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"gpt-load/internal/proxy"
 	"gpt-load/internal/services"
@@ -29,6 +30,7 @@ type App struct {
 	logCleanupService *services.LogCleanupService
 	keyCronService    *services.KeyCronService
 	keyValidationPool *services.KeyValidationPool
+	keyPoolProvider   *keypool.KeyProvider
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -46,6 +48,7 @@ type AppParams struct {
 	LogCleanupService *services.LogCleanupService
 	KeyCronService    *services.KeyCronService
 	KeyValidationPool *services.KeyValidationPool
+	KeyPoolProvider   *keypool.KeyProvider
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -61,6 +64,7 @@ func NewApp(params AppParams) *App {
 		logCleanupService: params.LogCleanupService,
 		keyCronService:    params.KeyCronService,
 		keyValidationPool: params.KeyValidationPool,
+		keyPoolProvider:   params.KeyPoolProvider,
 		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
@@ -75,6 +79,11 @@ func (a *App) Start() error {
 		return fmt.Errorf("failed to initialize system settings: %w", err)
 	}
 	logrus.Info("System settings initialized")
+
+	logrus.Info("Loading API keys into the key pool...")
+	if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
+		return fmt.Errorf("failed to load keys into key pool: %w", err)
+	}
 	a.settingsManager.DisplayCurrentSettings()
 	a.configManager.DisplayConfig()
 

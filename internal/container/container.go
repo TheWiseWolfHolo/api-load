@@ -7,6 +7,7 @@ import (
 	"gpt-load/internal/config"
 	"gpt-load/internal/db"
 	"gpt-load/internal/handler"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/proxy"
 	"gpt-load/internal/router"
 	"gpt-load/internal/services"
@@ -56,6 +57,9 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(services.NewLogCleanupService); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(keypool.NewProvider); err != nil {
 		return nil, err
 	}
 

@@ -49,7 +49,71 @@ func (s *RedisStore) Exists(key string) (bool, error) {
 	return val > 0, nil
 }
 
+// SetNX sets a key-value pair in Redis if the key does not already exist.
+func (s *RedisStore) SetNX(key string, value []byte, ttl time.Duration) (bool, error) {
+	return s.client.SetNX(context.Background(), key, value, ttl).Result()
+}
+
 // Close closes the Redis client connection.
 func (s *RedisStore) Close() error {
 	return s.client.Close()
+}
+
+// --- HASH operations ---
+
+func (s *RedisStore) HSet(key, field string, value any) error {
+	return s.client.HSet(context.Background(), key, field, value).Err()
+}
+
+func (s *RedisStore) HGetAll(key string) (map[string]string, error) {
+	return s.client.HGetAll(context.Background(), key).Result()
+}
+
+func (s *RedisStore) HIncrBy(key, field string, incr int64) (int64, error) {
+	return s.client.HIncrBy(context.Background(), key, field, incr).Result()
+}
+
+// --- LIST operations ---
+
+func (s *RedisStore) LPush(key string, values ...any) error {
+	return s.client.LPush(context.Background(), key, values...).Err()
+}
+
+func (s *RedisStore) LRem(key string, count int64, value any) error {
+	return s.client.LRem(context.Background(), key, count, value).Err()
+}
+
+func (s *RedisStore) Rotate(key string) (string, error) {
+	val, err := s.client.RPopLPush(context.Background(), key, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return val, nil
+}
+
+// --- Pipeliner implementation ---
+
+type redisPipeliner struct {
+	pipe redis.Pipeliner
+}
+
+// HSet adds an HSET command to the pipeline.
+func (p *redisPipeliner) HSet(key string, values map[string]any) {
+	p.pipe.HSet(context.Background(), key, values)
+}
+
+// Exec executes all commands in the pipeline.
+func (p *redisPipeliner) Exec() error {
+	_, err := p.pipe.Exec(context.Background())
+	return err
+}
+
+// Pipeline creates a new pipeline.
+func (s *RedisStore) Pipeline() Pipeliner {
+	return &redisPipeliner{
+		pipe: s.client.Pipeline(),
+	}
 }

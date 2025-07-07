@@ -28,6 +28,31 @@ type Store interface {
 	// Exists checks if a key exists in the store.
 	Exists(key string) (bool, error)
 
+	// SetNX sets a key-value pair if the key does not already exist.
+	// It returns true if the key was set, false otherwise.
+	SetNX(key string, value []byte, ttl time.Duration) (bool, error)
+
+	// HASH operations
+	HSet(key, field string, value any) error
+	HGetAll(key string) (map[string]string, error)
+	HIncrBy(key, field string, incr int64) (int64, error)
+
+	// LIST operations
+	LPush(key string, values ...any) error
+	LRem(key string, count int64, value any) error
+	Rotate(key string) (string, error)
+
 	// Close closes the store and releases any underlying resources.
 	Close() error
+}
+
+// Pipeliner defines an interface for executing a batch of commands.
+type Pipeliner interface {
+	HSet(key string, values map[string]any)
+	Exec() error
+}
+
+// RedisPipeliner is an optional interface that a Store can implement to provide pipelining.
+type RedisPipeliner interface {
+	Pipeline() Pipeliner
 }
