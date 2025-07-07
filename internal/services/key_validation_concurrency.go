@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"gpt-load/internal/types"
 	"sync"
@@ -27,7 +28,7 @@ type ValidationResult struct {
 
 // KeyValidationPool manages a global worker pool for key validation.
 type KeyValidationPool struct {
-	validator     *KeyValidatorService
+	validator     *keypool.KeyValidator
 	configManager types.ConfigManager
 	jobs          chan ValidationJob
 	results       chan ValidationResult // 定时任务结果
@@ -36,7 +37,7 @@ type KeyValidationPool struct {
 }
 
 // NewKeyValidationPool creates a new KeyValidationPool.
-func NewKeyValidationPool(validator *KeyValidatorService, configManager types.ConfigManager) *KeyValidationPool {
+func NewKeyValidationPool(validator *keypool.KeyValidator, configManager types.ConfigManager) *KeyValidationPool {
 	return &KeyValidationPool{
 		validator:     validator,
 		configManager: configManager,

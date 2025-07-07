@@ -1,11 +1,10 @@
-package services
+package keypool
 
 import (
 	"context"
 	"fmt"
 	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
-	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 
 	"github.com/sirupsen/logrus"
@@ -20,25 +19,25 @@ type KeyTestResult struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// KeyValidatorService provides methods to validate API keys.
-type KeyValidatorService struct {
+// KeyValidator provides methods to validate API keys.
+type KeyValidator struct {
 	DB              *gorm.DB
 	channelFactory  *channel.Factory
 	SettingsManager *config.SystemSettingsManager
-	keypoolProvider *keypool.KeyProvider
+	keypoolProvider *KeyProvider
 }
 
-type KeyValidatorServiceParams struct {
+type KeyValidatorParams struct {
 	dig.In
 	DB              *gorm.DB
 	ChannelFactory  *channel.Factory
 	SettingsManager *config.SystemSettingsManager
-	KeypoolProvider *keypool.KeyProvider
+	KeypoolProvider *KeyProvider
 }
 
-// NewKeyValidatorService creates a new KeyValidatorService.
-func NewKeyValidatorService(params KeyValidatorServiceParams) *KeyValidatorService {
-	return &KeyValidatorService{
+// NewKeyValidator creates a new KeyValidator.
+func NewKeyValidator(params KeyValidatorParams) *KeyValidator {
+	return &KeyValidator{
 		DB:              params.DB,
 		channelFactory:  params.ChannelFactory,
 		SettingsManager: params.SettingsManager,
@@ -47,7 +46,7 @@ func NewKeyValidatorService(params KeyValidatorServiceParams) *KeyValidatorServi
 }
 
 // ValidateSingleKey performs a validation check on a single API key.
-func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models.APIKey, group *models.Group) (bool, error) {
+func (s *KeyValidator) ValidateSingleKey(ctx context.Context, key *models.APIKey, group *models.Group) (bool, error) {
 	if ctx.Err() != nil {
 		return false, fmt.Errorf("context cancelled or timed out: %w", ctx.Err())
 	}
@@ -79,7 +78,7 @@ func (s *KeyValidatorService) ValidateSingleKey(ctx context.Context, key *models
 }
 
 // TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.
-func (s *KeyValidatorService) TestMultipleKeys(ctx context.Context, group *models.Group, keyValues []string) ([]KeyTestResult, error) {
+func (s *KeyValidator) TestMultipleKeys(ctx context.Context, group *models.Group, keyValues []string) ([]KeyTestResult, error) {
 	results := make([]KeyTestResult, len(keyValues))
 
 	// Find which of the provided keys actually exist in the database for this group

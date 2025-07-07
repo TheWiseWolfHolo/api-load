@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gpt-load/internal/config"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"gpt-load/internal/types"
 	"sync"
@@ -23,14 +24,14 @@ type ManualValidationResult struct {
 // KeyManualValidationService handles user-initiated key validation for a group.
 type KeyManualValidationService struct {
 	DB              *gorm.DB
-	Validator       *KeyValidatorService
+	Validator       *keypool.KeyValidator
 	TaskService     *TaskService
 	SettingsManager *config.SystemSettingsManager
 	ConfigManager   types.ConfigManager
 }
 
 // NewKeyManualValidationService creates a new KeyManualValidationService.
-func NewKeyManualValidationService(db *gorm.DB, validator *KeyValidatorService, taskService *TaskService, settingsManager *config.SystemSettingsManager, configManager types.ConfigManager) *KeyManualValidationService {
+func NewKeyManualValidationService(db *gorm.DB, validator *keypool.KeyValidator, taskService *TaskService, settingsManager *config.SystemSettingsManager, configManager types.ConfigManager) *KeyManualValidationService {
 	return &KeyManualValidationService{
 		DB:              db,
 		Validator:       validator,

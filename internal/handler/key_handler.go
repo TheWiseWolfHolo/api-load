@@ -182,7 +182,7 @@ func (s *Server) TestMultipleKeys(c *gin.Context) {
 		return
 	}
 
-	results, err := s.KeyValidatorService.TestMultipleKeys(c.Request.Context(), group, keysToTest)
+	results, err := s.KeyValidator.TestMultipleKeys(c.Request.Context(), group, keysToTest)
 	if err != nil {
 		response.Error(c, app_errors.ParseDBError(err))
 		return

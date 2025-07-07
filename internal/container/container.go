@@ -41,9 +41,6 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(services.NewTaskService); err != nil {
 		return nil, err
 	}
-	if err := container.Provide(services.NewKeyValidatorService); err != nil {
-		return nil, err
-	}
 	if err := container.Provide(services.NewKeyValidationPool); err != nil {
 		return nil, err
 	}
@@ -60,6 +57,9 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(keypool.NewProvider); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(keypool.NewKeyValidator); err != nil {
 		return nil, err
 	}
 
