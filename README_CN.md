@@ -264,7 +264,7 @@ make help       # 显示所有命令
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=tbphp/gpt-load&type=Date)](https://star-history.com/#tbphp/gpt-load&Date)
+[![Stargazers over time](https://starchart.cc/tbphp/gpt-load.svg?variant=adaptive)](https://starchart.cc/tbphp/gpt-load)
 
 ## 许可证
 

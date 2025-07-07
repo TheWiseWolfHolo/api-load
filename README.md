@@ -270,7 +270,7 @@ CDN acceleration and security protection for this project are sponsored by Tence
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=tbphp/gpt-load&type=Date)](https://star-history.com/#tbphp/gpt-load&Date)
+[![Stargazers over time](https://starchart.cc/tbphp/gpt-load.svg?variant=adaptive)](https://starchart.cc/tbphp/gpt-load)
 
 ## License
 
