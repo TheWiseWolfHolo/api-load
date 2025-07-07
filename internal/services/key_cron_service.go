@@ -135,7 +135,6 @@ func (s *KeyCronService) runAsLeader() {
 	}
 }
 
-
 // submitValidationJobs finds groups and keys that need validation and submits them to the pool.
 func (s *KeyCronService) submitValidationJobs() {
 	logrus.Info("KeyCronService: Starting validation submission cycle.")
