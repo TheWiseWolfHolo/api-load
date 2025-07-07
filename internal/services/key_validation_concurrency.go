@@ -19,19 +19,11 @@ type ValidationJob struct {
 	CancelFunc context.CancelFunc
 }
 
-// ValidationResult holds the outcome of a validation job.
-type ValidationResult struct {
-	Job     ValidationJob
-	IsValid bool
-	Error   error
-}
-
 // KeyValidationPool manages a global worker pool for key validation.
 type KeyValidationPool struct {
 	validator     *keypool.KeyValidator
 	configManager types.ConfigManager
 	jobs          chan ValidationJob
-	results       chan ValidationResult // 定时任务结果
 	stopChan      chan struct{}
 	wg            sync.WaitGroup
 }
@@ -41,9 +33,8 @@ func NewKeyValidationPool(validator *keypool.KeyValidator, configManager types.C
 	return &KeyValidationPool{
 		validator:     validator,
 		configManager: configManager,
-		jobs:          make(chan ValidationJob, 1024),
-		results:       make(chan ValidationResult, 1024),
-		stopChan:      make(chan struct{}),
+		jobs:     make(chan ValidationJob, 1024),
+		stopChan: make(chan struct{}),
 	}
 }
 
@@ -70,9 +61,6 @@ func (p *KeyValidationPool) Stop() {
 	close(p.jobs)
 	p.wg.Wait()
 
-	// 关闭结果通道
-	close(p.results)
-
 	logrus.Info("KeyValidationPool stopped.")
 }
 
@@ -89,23 +77,9 @@ func (p *KeyValidationPool) worker() {
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			isValid, err := p.validator.ValidateSingleKey(ctx, &job.Key, job.Group)
+			p.validator.ValidateSingleKey(ctx, &job.Key, job.Group)
 			if job.CancelFunc != nil {
 				job.CancelFunc()
-			}
-			result := ValidationResult{
-				Job:     job,
-				IsValid: isValid,
-				Error:   err,
-			}
-
-			// Block until the result can be sent or the pool is stopped.
-			// This provides back-pressure and prevents result loss.
-			select {
-			case p.results <- result:
-			case <-p.stopChan:
-				logrus.Infof("Worker stopping, discarding result for key %d", job.Key.ID)
-				return
 			}
 		case <-p.stopChan:
 			return
@@ -116,9 +90,4 @@ func (p *KeyValidationPool) worker() {
 // SubmitJob adds a new validation job to the pool.
 func (p *KeyValidationPool) SubmitJob(job ValidationJob) {
 	p.jobs <- job
-}
-
-// ResultsChannel returns the channel for reading validation results.
-func (p *KeyValidationPool) ResultsChannel() <-chan ValidationResult {
-	return p.results
 }

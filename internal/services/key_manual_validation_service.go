@@ -80,7 +80,7 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go s.validationWorker(&wg, group, jobs, results)
 	}
