@@ -172,14 +172,14 @@ func (s *KeyCronService) processResults() {
 			var newErrorReason string
 
 			if result.Error != nil {
-				newStatus = "inactive"
+				newStatus = models.KeyStatusInvalid
 				newErrorReason = result.Error.Error()
 			} else {
 				if result.IsValid {
-					newStatus = "active"
+					newStatus = models.KeyStatusActive
 					newErrorReason = ""
 				} else {
-					newStatus = "inactive"
+					newStatus = models.KeyStatusInvalid
 					newErrorReason = "Validation returned false without a specific error."
 				}
 			}

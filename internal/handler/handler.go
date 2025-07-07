@@ -103,7 +103,7 @@ func (s *Server) Login(c *gin.Context) {
 func (s *Server) Health(c *gin.Context) {
 	var totalKeys, healthyKeys int64
 	s.DB.Model(&models.APIKey{}).Count(&totalKeys)
-	s.DB.Model(&models.APIKey{}).Where("status = ?", "active").Count(&healthyKeys)
+	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusActive).Count(&healthyKeys)
 
 	status := "healthy"
 	httpStatus := http.StatusOK

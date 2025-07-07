@@ -6,6 +6,12 @@ import (
 	"gorm.io/datatypes"
 )
 
+// Key状态
+const (
+	KeyStatusActive  = "active"
+	KeyStatusInvalid = "invalid"
+)
+
 // SystemSetting 对应 system_settings 表
 type SystemSetting struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`

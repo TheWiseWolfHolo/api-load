@@ -108,7 +108,7 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 	}
 
 	statusFilter := c.Query("status")
-	if statusFilter != "" && statusFilter != "active" && statusFilter != "inactive" {
+	if statusFilter != "" && statusFilter != models.KeyStatusActive && statusFilter != models.KeyStatusInvalid {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid status filter"))
 		return
 	}
@@ -254,4 +254,3 @@ func (s *Server) ClearAllInvalidKeys(c *gin.Context) {
 
 	response.Success(c, gin.H{"message": fmt.Sprintf("%d invalid keys cleared.", rowsAffected)})
 }
-
