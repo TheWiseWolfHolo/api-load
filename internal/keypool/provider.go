@@ -218,19 +218,14 @@ func (p *KeyProvider) LoadKeysFromDB() error {
 	// 3. 分批从数据库加载并使用 Pipeline 写入 Redis
 	allActiveKeyIDs := make(map[uint][]any)
 	batchSize := 1000
+	var batchKeys []*models.APIKey
 
-	err = p.db.Model(&models.APIKey{}).FindInBatches(&[]*models.APIKey{}, batchSize, func(tx *gorm.DB, batch int) error {
-		keys := tx.RowsAffected
-		logrus.Infof("Processing batch %d with %d keys...", batch, keys)
+	err = p.db.Model(&models.APIKey{}).FindInBatches(&batchKeys, batchSize, func(tx *gorm.DB, batch int) error {
+		logrus.Infof("Processing batch %d with %d keys...", batch, len(batchKeys))
 
 		var pipeline store.Pipeliner
 		if redisStore, ok := p.store.(store.RedisPipeliner); ok {
 			pipeline = redisStore.Pipeline()
-		}
-
-		var batchKeys []*models.APIKey
-		if err := tx.Find(&batchKeys).Error; err != nil {
-			return err
 		}
 
 		for _, key := range batchKeys {
