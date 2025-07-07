@@ -362,6 +362,55 @@ func (p *KeyProvider) RestoreKeys(groupID uint) (int64, error) {
 	return restoredCount, err
 }
 
+// RestoreMultipleKeys 恢复指定的 Key。
+func (p *KeyProvider) RestoreMultipleKeys(groupID uint, keyValues []string) (int64, error) {
+	if len(keyValues) == 0 {
+		return 0, nil
+	}
+
+	var keysToRestore []models.APIKey
+	var restoredCount int64
+
+	err := p.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 查找要恢复的密钥
+		if err := tx.Where("group_id = ? AND key_value IN ? AND status = ?", groupID, keyValues, models.KeyStatusInvalid).Find(&keysToRestore).Error; err != nil {
+			return err
+		}
+
+		if len(keysToRestore) == 0 {
+			return nil
+		}
+
+		keyIDsToRestore := pluckIDs(keysToRestore)
+
+		// 2. 更新数据库中的状态
+		updates := map[string]any{
+			"status":        models.KeyStatusActive,
+			"failure_count": 0,
+		}
+		result := tx.Model(&models.APIKey{}).Where("id IN ?", keyIDsToRestore).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		restoredCount = result.RowsAffected
+
+		// 3. 将密钥添加回 Redis
+		for _, key := range keysToRestore {
+			key.Status = models.KeyStatusActive
+			key.FailureCount = 0
+			if err := p.addKeyToStore(&key); err != nil {
+				// 在事务中，单个失败会回滚整个事务，但这里的日志记录仍然有用
+				logrus.WithFields(logrus.Fields{"keyID": key.ID, "error": err}).Error("Failed to restore key in store after DB update")
+				return err // 返回错误以回滚事务
+			}
+		}
+
+		return nil
+	})
+
+	return restoredCount, err
+}
+
 // RemoveInvalidKeys 移除组内所有无效的 Key。
 func (p *KeyProvider) RemoveInvalidKeys(groupID uint) (int64, error) {
 	var invalidKeys []models.APIKey

@@ -25,6 +25,13 @@ type DeleteKeysResult struct {
 	TotalInGroup int64 `json:"total_in_group"`
 }
 
+// RestoreKeysResult holds the result of restoring multiple keys.
+type RestoreKeysResult struct {
+	RestoredCount int   `json:"restored_count"`
+	IgnoredCount  int   `json:"ignored_count"`
+	TotalInGroup  int64 `json:"total_in_group"`
+}
+
 // KeyService provides services related to API keys.
 type KeyService struct {
 	DB          *gorm.DB
@@ -152,6 +159,32 @@ func (s *KeyService) isValidKeyFormat(key string) bool {
 
 	validChars := regexp.MustCompile(`^[a-zA-Z0-9_\-./+=:]+$`)
 	return validChars.MatchString(key)
+}
+
+// RestoreMultipleKeys handles the business logic of restoring keys from a text block.
+func (s *KeyService) RestoreMultipleKeys(groupID uint, keysText string) (*RestoreKeysResult, error) {
+	keysToRestore := s.ParseKeysFromText(keysText)
+	if len(keysToRestore) == 0 {
+		return nil, fmt.Errorf("no valid keys found in the input text")
+	}
+
+	restoredCount, err := s.KeyProvider.RestoreMultipleKeys(groupID, keysToRestore)
+	if err != nil {
+		return nil, err
+	}
+
+	ignoredCount := len(keysToRestore) - int(restoredCount)
+
+	var totalInGroup int64
+	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
+		return nil, err
+	}
+
+	return &RestoreKeysResult{
+		RestoredCount: int(restoredCount),
+		IgnoredCount:  ignoredCount,
+		TotalInGroup:  totalInGroup,
+	}, nil
 }
 
 // RestoreAllInvalidKeys sets the status of all 'inactive' keys in a group to 'active'.

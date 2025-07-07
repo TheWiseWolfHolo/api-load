@@ -157,6 +157,36 @@ func (s *Server) DeleteMultipleKeys(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// RestoreMultipleKeys handles restoring keys from a text block within a specific group.
+func (s *Server) RestoreMultipleKeys(c *gin.Context) {
+	var req KeyTextRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+
+	if _, ok := s.findGroupByID(c, req.GroupID); !ok {
+		return
+	}
+
+	if err := validateKeysText(req.KeysText); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		return
+	}
+
+	result, err := s.KeyService.RestoreMultipleKeys(req.GroupID, req.KeysText)
+	if err != nil {
+		if err.Error() == "no valid keys found in the input text" {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else {
+			response.Error(c, app_errors.ParseDBError(err))
+		}
+		return
+	}
+
+	response.Success(c, result)
+}
+
 // TestMultipleKeys handles a one-off validation test for multiple keys.
 func (s *Server) TestMultipleKeys(c *gin.Context) {
 	var req KeyTextRequest
