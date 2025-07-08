@@ -459,6 +459,44 @@ func (p *KeyProvider) RemoveInvalidKeys(groupID uint) (int64, error) {
 	return removedCount, err
 }
 
+// RemoveKeysFromStore 直接从内存存储中移除指定的键，不涉及数据库操作
+// 这个方法适用于数据库已经删除但需要清理内存存储的场景
+func (p *KeyProvider) RemoveKeysFromStore(groupID uint, keyIDs []uint) error {
+	if len(keyIDs) == 0 {
+		return nil
+	}
+
+	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
+
+	// 第一步：直接删除整个 active_keys 列表
+	if err := p.store.Delete(activeKeysListKey); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"groupID": groupID,
+			"error":   err,
+		}).Error("Failed to delete active keys list")
+		// 继续执行hash删除，因为即使列表删除失败，hash仍然需要清理
+	}
+
+	// 第二步：批量删除所有相关的key hash
+	for _, keyID := range keyIDs {
+		keyHashKey := fmt.Sprintf("key:%d", keyID)
+		if err := p.store.Delete(keyHashKey); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"keyID": keyID,
+				"error": err,
+			}).Error("Failed to delete key hash")
+			// 继续删除其他keys，不因单个失败而中断
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"groupID":  groupID,
+		"keyCount": len(keyIDs),
+	}).Info("Successfully cleaned up group keys from store")
+
+	return nil
+}
+
 // addKeyToStore is a helper to add a single key to the cache.
 func (p *KeyProvider) addKeyToStore(key *models.APIKey) error {
 	// 1. Store key details in HASH

@@ -19,6 +19,7 @@ import (
 	"gpt-load/internal/channel"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 )
 
@@ -345,20 +346,20 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 
 // GroupResponse defines the structure for a group response, excluding sensitive or large fields.
 type GroupResponse struct {
-	ID             uint              `json:"id"`
-	Name           string            `json:"name"`
-	Endpoint       string            `json:"endpoint"`
-	DisplayName    string            `json:"display_name"`
-	Description    string            `json:"description"`
-	Upstreams      datatypes.JSON    `json:"upstreams"`
-	ChannelType    string            `json:"channel_type"`
-	Sort           int               `json:"sort"`
-	TestModel      string            `json:"test_model"`
-	ParamOverrides datatypes.JSONMap `json:"param_overrides"`
-	Config         datatypes.JSONMap `json:"config"`
-	LastValidatedAt *time.Time       `json:"last_validated_at"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	ID              uint              `json:"id"`
+	Name            string            `json:"name"`
+	Endpoint        string            `json:"endpoint"`
+	DisplayName     string            `json:"display_name"`
+	Description     string            `json:"description"`
+	Upstreams       datatypes.JSON    `json:"upstreams"`
+	ChannelType     string            `json:"channel_type"`
+	Sort            int               `json:"sort"`
+	TestModel       string            `json:"test_model"`
+	ParamOverrides  datatypes.JSONMap `json:"param_overrides"`
+	Config          datatypes.JSONMap `json:"config"`
+	LastValidatedAt *time.Time        `json:"last_validated_at"`
+	CreatedAt       time.Time         `json:"created_at"`
+	UpdatedAt       time.Time         `json:"updated_at"`
 }
 
 // newGroupResponse creates a new GroupResponse from a models.Group.
@@ -391,13 +392,25 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 	}
 }
 
-
 // DeleteGroup handles deleting a group.
 func (s *Server) DeleteGroup(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
 		return
+	}
+
+	// First, get all API keys for this group to clean up from memory store
+	var apiKeys []models.APIKey
+	if err := s.DB.Where("group_id = ?", id).Find(&apiKeys).Error; err != nil {
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+
+	// Extract key IDs for memory store cleanup
+	var keyIDs []uint
+	for _, key := range apiKeys {
+		keyIDs = append(keyIDs, key.ID)
 	}
 
 	// Use a transaction to ensure atomicity
@@ -412,20 +425,25 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		}
 	}()
 
-	// Also delete associated API keys
+	// First check if the group exists
+	var group models.Group
+	if err := tx.First(&group, id).Error; err != nil {
+		tx.Rollback()
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+
+	// Delete associated API keys first due to foreign key constraint
 	if err := tx.Where("group_id = ?", id).Delete(&models.APIKey{}).Error; err != nil {
 		tx.Rollback()
 		response.Error(c, app_errors.ErrDatabase)
 		return
 	}
 
-	if result := tx.Delete(&models.Group{}, id); result.Error != nil {
+	// Then delete the group
+	if err := tx.Delete(&models.Group{}, id).Error; err != nil {
 		tx.Rollback()
-		response.Error(c, app_errors.ParseDBError(result.Error))
-		return
-	} else if result.RowsAffected == 0 {
-		tx.Rollback()
-		response.Error(c, app_errors.ErrResourceNotFound)
+		response.Error(c, app_errors.ParseDBError(err))
 		return
 	}
 
@@ -435,15 +453,34 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		return
 	}
 
+	// Clean up memory store (Redis) - this is done after successful DB transaction
+	// to maintain consistency. If this fails, the keys will be cleaned up during
+	// the next key pool reload.
+	if len(keyIDs) > 0 {
+		if err := s.KeyService.KeyProvider.RemoveKeysFromStore(uint(id), keyIDs); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"groupID":  id,
+				"keyCount": len(keyIDs),
+				"error":    err,
+			}).Error("Failed to remove keys from memory store")
+
+			response.Success(c, gin.H{
+				"message": "Group and associated keys deleted successfully",
+				"warning": "Some keys may remain in memory cache and will be cleaned up during next restart",
+			})
+			return
+		}
+	}
+
 	response.Success(c, gin.H{"message": "Group and associated keys deleted successfully"})
 }
 
 // ConfigOption represents a single configurable option for a group.
 type ConfigOption struct {
-	Key          string    `json:"key"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	DefaultValue any       `json:"default_value"`
+	Key          string `json:"key"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	DefaultValue any    `json:"default_value"`
 }
 
 // GetGroupConfigOptions returns a list of available configuration options for groups.
