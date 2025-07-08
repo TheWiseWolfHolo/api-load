@@ -64,11 +64,9 @@ func NewLeaderService(s store.Store) *LeaderService {
 // Start performs an initial leader election and starts the background leadership maintenance loop.
 func (s *LeaderService) Start() error {
 	if s.isSingleNode {
-		logrus.Info("In single-node mode, leadership is assumed. Skipping election process.")
 		return nil
 	}
 
-	logrus.WithField("nodeID", s.nodeID).Info("Performing initial leader election...")
 	if err := s.tryToBeLeader(); err != nil {
 		return fmt.Errorf("initial leader election failed: %w", err)
 	}

@@ -79,7 +79,6 @@ func (s *KeyCronService) runLoop() {
 
 // submitValidationJobs finds groups and keys that need validation and submits them to the pool.
 func (s *KeyCronService) submitValidationJobs() {
-	logrus.Info("KeyCronService: Starting validation submission cycle.")
 	var groups []models.Group
 	if err := s.DB.Find(&groups).Error; err != nil {
 		logrus.Errorf("KeyCronService: Failed to get groups: %v", err)
