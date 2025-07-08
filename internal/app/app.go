@@ -77,9 +77,8 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
-	// Perform leader election first. This is a blocking call.
-	if err := a.leaderService.ElectLeader(); err != nil {
-		return fmt.Errorf("leader election failed: %w", err)
+	if err := a.leaderService.Start(); err != nil {
+		return fmt.Errorf("leader service failed to start: %w", err)
 	}
 
 	if a.leaderService.IsLeader() {
