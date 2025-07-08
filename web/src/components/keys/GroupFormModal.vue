@@ -75,6 +75,11 @@ const rules: FormRules = {
       message: "请输入分组名称",
       trigger: ["blur", "input"],
     },
+    {
+      pattern: /^[a-z]+$/,
+      message: "只能输入小写字母",
+      trigger: ["blur", "input"],
+    },
   ],
   channel_type: [
     {
@@ -214,6 +219,10 @@ function handleClose() {
 
 // 提交表单
 async function handleSubmit() {
+  if (loading.value) {
+    return;
+  }
+
   try {
     await formRef.value?.validate();
 
@@ -306,17 +315,6 @@ async function handleSubmit() {
             <n-input v-model:value="formData.display_name" placeholder="可选，用于显示的友好名称" />
           </n-form-item>
 
-          <n-form-item label="描述" path="description">
-            <n-input
-              v-model:value="formData.description"
-              type="textarea"
-              placeholder="可选，分组描述信息"
-              :rows="2"
-              :autosize="{ minRows: 2, maxRows: 2 }"
-              style="resize: none"
-            />
-          </n-form-item>
-
           <n-form-item label="渠道类型" path="channel_type">
             <n-select
               v-model:value="formData.channel_type"
@@ -334,6 +332,17 @@ async function handleSubmit() {
               v-model:value="formData.sort"
               :min="0"
               placeholder="排序值，数字越小越靠前"
+            />
+          </n-form-item>
+
+          <n-form-item label="描述" path="description">
+            <n-input
+              v-model:value="formData.description"
+              type="textarea"
+              placeholder="可选，分组描述信息"
+              :rows="2"
+              :autosize="{ minRows: 2, maxRows: 2 }"
+              style="resize: none"
             />
           </n-form-item>
         </div>
