@@ -117,3 +117,8 @@ func (s *RedisStore) Pipeline() Pipeliner {
 		pipe: s.client.Pipeline(),
 	}
 }
+
+// Eval executes a Lua script on Redis.
+func (s *RedisStore) Eval(script string, keys []string, args ...interface{}) (interface{}, error) {
+	return s.client.Eval(context.Background(), script, keys, args...).Result()
+}

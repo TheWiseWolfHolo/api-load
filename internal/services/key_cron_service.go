@@ -55,6 +55,10 @@ func (s *KeyCronService) Stop() {
 func (s *KeyCronService) runLoop() {
 	defer s.wg.Done()
 
+	if s.LeaderService.IsLeader() {
+		s.submitValidationJobs()
+	}
+
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
