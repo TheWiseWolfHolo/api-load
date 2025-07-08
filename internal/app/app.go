@@ -28,9 +28,10 @@ type App struct {
 	configManager     types.ConfigManager
 	settingsManager   *config.SystemSettingsManager
 	logCleanupService *services.LogCleanupService
-	keyCronService    *services.KeyCronService
-	keyValidationPool *services.KeyValidationPool
-	keyPoolProvider   *keypool.KeyProvider
+	keyCronService             *services.KeyCronService
+	keyValidationPool          *services.KeyValidationPool
+	keyPoolProvider            *keypool.KeyProvider
+	leaderService              *services.LeaderService
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -45,10 +46,11 @@ type AppParams struct {
 	Engine            *gin.Engine
 	ConfigManager     types.ConfigManager
 	SettingsManager   *config.SystemSettingsManager
-	LogCleanupService *services.LogCleanupService
-	KeyCronService    *services.KeyCronService
-	KeyValidationPool *services.KeyValidationPool
-	KeyPoolProvider   *keypool.KeyProvider
+	LogCleanupService        *services.LogCleanupService
+	KeyCronService           *services.KeyCronService
+	KeyValidationPool        *services.KeyValidationPool
+	KeyPoolProvider          *keypool.KeyProvider
+	LeaderService            *services.LeaderService
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -61,11 +63,12 @@ func NewApp(params AppParams) *App {
 		engine:            params.Engine,
 		configManager:     params.ConfigManager,
 		settingsManager:   params.SettingsManager,
-		logCleanupService: params.LogCleanupService,
-		keyCronService:    params.KeyCronService,
-		keyValidationPool: params.KeyValidationPool,
-		keyPoolProvider:   params.KeyPoolProvider,
-		proxyServer:       params.ProxyServer,
+		logCleanupService:        params.LogCleanupService,
+		keyCronService:           params.KeyCronService,
+		keyValidationPool:        params.KeyValidationPool,
+		keyPoolProvider:          params.KeyPoolProvider,
+		leaderService:            params.LeaderService,
+		proxyServer:              params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
 		requestLogChan:    params.RequestLogChan,
@@ -90,6 +93,7 @@ func (a *App) Start() error {
 	// Start background services
 	a.startRequestLogger()
 	a.logCleanupService.Start()
+	a.leaderService.Start()
 	a.keyValidationPool.Start()
 	a.keyCronService.Start()
 
@@ -131,6 +135,7 @@ func (a *App) Stop(ctx context.Context) {
 	// Stop background services
 	a.keyCronService.Stop()
 	a.keyValidationPool.Stop()
+	a.leaderService.Stop()
 	a.logCleanupService.Stop()
 
 	// Close resources

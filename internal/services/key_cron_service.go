@@ -4,7 +4,6 @@ import (
 	"context"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"sync"
 	"time"
 
@@ -12,38 +11,37 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	leaderLockKey = "cron:leader:key_validation"
-	leaderLockTTL = 10 * time.Minute
-)
-
 // KeyCronService is responsible for periodically submitting keys for validation.
 type KeyCronService struct {
 	DB              *gorm.DB
 	SettingsManager *config.SystemSettingsManager
 	Pool            *KeyValidationPool
-	Store           store.Store
+	LeaderService   *LeaderService
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 }
 
 // NewKeyCronService creates a new KeyCronService.
-func NewKeyCronService(db *gorm.DB, settingsManager *config.SystemSettingsManager, pool *KeyValidationPool, store store.Store) *KeyCronService {
+func NewKeyCronService(
+	db *gorm.DB,
+	settingsManager *config.SystemSettingsManager,
+	pool *KeyValidationPool,
+	leaderService *LeaderService,
+) *KeyCronService {
 	return &KeyCronService{
 		DB:              db,
 		SettingsManager: settingsManager,
 		Pool:            pool,
-		Store:           store,
+		LeaderService:   leaderService,
 		stopChan:        make(chan struct{}),
 	}
 }
 
-// Start begins the leader election and cron job execution.
+// Start begins the cron job execution.
 func (s *KeyCronService) Start() {
-	logrus.Info("Starting KeyCronService with leader election...")
+	logrus.Info("Starting KeyCronService...")
 	s.wg.Add(1)
-	go s.leaderElectionLoop()
-
+	go s.runLoop()
 }
 
 // Stop stops the cron job.
@@ -54,80 +52,20 @@ func (s *KeyCronService) Stop() {
 	logrus.Info("KeyCronService stopped.")
 }
 
-// leaderElectionLoop is the main loop that attempts to acquire leadership.
-func (s *KeyCronService) leaderElectionLoop() {
+func (s *KeyCronService) runLoop() {
 	defer s.wg.Done()
-
-	for {
-		select {
-		case <-s.stopChan:
-			return
-		default:
-			isLeader, err := s.tryAcquireLock()
-			if err != nil {
-				logrus.Errorf("KeyCronService: Error trying to acquire leader lock: %v. Retrying in 1 minute.", err)
-				time.Sleep(1 * time.Minute)
-				continue
-			}
-
-			if isLeader {
-				s.runAsLeader()
-			} else {
-				logrus.Debug("KeyCronService: Not the leader. Standing by.")
-				time.Sleep(leaderLockTTL)
-			}
-		}
-	}
-}
-
-// tryAcquireLock attempts to set a key in the store, effectively acquiring a lock.
-func (s *KeyCronService) tryAcquireLock() (bool, error) {
-	exists, err := s.Store.Exists(leaderLockKey)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return false, nil // Lock is held by another node
-	}
-
-	lockValue := []byte(time.Now().String())
-	err = s.Store.Set(leaderLockKey, lockValue, leaderLockTTL)
-	if err != nil {
-		return false, err
-	}
-
-	logrus.Info("KeyCronService: Successfully acquired leader lock.")
-	return true, nil
-}
-
-func (s *KeyCronService) runAsLeader() {
-	logrus.Info("KeyCronService: Running as leader.")
-	defer func() {
-		if err := s.Store.Delete(leaderLockKey); err != nil {
-			logrus.Errorf("KeyCronService: Failed to release leader lock: %v", err)
-		}
-		logrus.Info("KeyCronService: Released leader lock.")
-	}()
-
-	// Run once on start
-	s.submitValidationJobs()
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	heartbeat := time.NewTicker(leaderLockTTL / 2)
-	defer heartbeat.Stop()
-
 	for {
 		select {
 		case <-ticker.C:
-			s.submitValidationJobs()
-		case <-heartbeat.C:
-			logrus.Debug("KeyCronService: Renewing leader lock.")
-			err := s.Store.Set(leaderLockKey, []byte(time.Now().String()), leaderLockTTL)
-			if err != nil {
-				logrus.Errorf("KeyCronService: Failed to renew leader lock: %v. Relinquishing leadership.", err)
-				return
+			if s.LeaderService.IsLeader() {
+				logrus.Info("KeyCronService: Running as leader, submitting validation jobs.")
+				s.submitValidationJobs()
+			} else {
+				logrus.Debug("KeyCronService: Not the leader. Standing by.")
 			}
 		case <-s.stopChan:
 			return
