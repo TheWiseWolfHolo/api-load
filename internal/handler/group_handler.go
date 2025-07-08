@@ -447,29 +447,28 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		response.Error(c, app_errors.ErrDatabase)
-		return
-	}
-
-	// Clean up memory store (Redis) - this is done after successful DB transaction
-	// to maintain consistency. If this fails, the keys will be cleaned up during
-	// the next key pool reload.
+	// Clean up memory store (Redis) within the transaction to ensure atomicity
+	// If Redis cleanup fails, the entire transaction will be rolled back
 	if len(keyIDs) > 0 {
 		if err := s.KeyService.KeyProvider.RemoveKeysFromStore(uint(id), keyIDs); err != nil {
+			tx.Rollback()
 			logrus.WithFields(logrus.Fields{
 				"groupID":  id,
 				"keyCount": len(keyIDs),
 				"error":    err,
-			}).Error("Failed to remove keys from memory store")
+			}).Error("Failed to remove keys from memory store, rolling back transaction")
 
-			response.Success(c, gin.H{
-				"message": "Group and associated keys deleted successfully",
-				"warning": "Some keys may remain in memory cache and will be cleaned up during next restart",
-			})
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase,
+				"Failed to delete group: unable to clean up cache"))
 			return
 		}
+	}
+
+	// Commit the transaction only if both DB and Redis operations succeed
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		response.Error(c, app_errors.ErrDatabase)
+		return
 	}
 
 	response.Success(c, gin.H{"message": "Group and associated keys deleted successfully"})

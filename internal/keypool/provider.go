@@ -474,7 +474,7 @@ func (p *KeyProvider) RemoveKeysFromStore(groupID uint, keyIDs []uint) error {
 			"groupID": groupID,
 			"error":   err,
 		}).Error("Failed to delete active keys list")
-		// 继续执行hash删除，因为即使列表删除失败，hash仍然需要清理
+		return err
 	}
 
 	// 第二步：批量删除所有相关的key hash
@@ -485,7 +485,6 @@ func (p *KeyProvider) RemoveKeysFromStore(groupID uint, keyIDs []uint) error {
 				"keyID": keyID,
 				"error": err,
 			}).Error("Failed to delete key hash")
-			// 继续删除其他keys，不因单个失败而中断
 		}
 	}
 
