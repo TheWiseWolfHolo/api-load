@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"gpt-load/internal/keypool"
@@ -9,6 +10,11 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+)
+
+const (
+	maxRequestKeys = 5000
+	chunkSize      = 1000
 )
 
 // AddKeysResult holds the result of adding multiple keys.
@@ -34,15 +40,17 @@ type RestoreKeysResult struct {
 
 // KeyService provides services related to API keys.
 type KeyService struct {
-	DB          *gorm.DB
-	KeyProvider *keypool.KeyProvider
+	DB           *gorm.DB
+	KeyProvider  *keypool.KeyProvider
+	KeyValidator *keypool.KeyValidator
 }
 
 // NewKeyService creates a new KeyService.
-func NewKeyService(db *gorm.DB, keyProvider *keypool.KeyProvider) *KeyService {
+func NewKeyService(db *gorm.DB, keyProvider *keypool.KeyProvider, keyValidator *keypool.KeyValidator) *KeyService {
 	return &KeyService{
-		DB:          db,
-		KeyProvider: keyProvider,
+		DB:           db,
+		KeyProvider:  keyProvider,
+		KeyValidator: keyValidator,
 	}
 }
 
@@ -50,6 +58,9 @@ func NewKeyService(db *gorm.DB, keyProvider *keypool.KeyProvider) *KeyService {
 func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysResult, error) {
 	// 1. Parse keys from the text block
 	keys := s.ParseKeysFromText(keysText)
+	if len(keys) > maxRequestKeys {
+		return nil, fmt.Errorf("batch size exceeds the limit of %d keys, got %d", maxRequestKeys, len(keys))
+	}
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
@@ -94,10 +105,16 @@ func (s *KeyService) AddMultipleKeys(groupID uint, keysText string) (*AddKeysRes
 		}, nil
 	}
 
-	// 4. Use KeyProvider to add keys
-	err := s.KeyProvider.AddKeys(groupID, newKeysToCreate)
-	if err != nil {
-		return nil, err
+	// 4. Use KeyProvider to add keys in chunks
+	for i := 0; i < len(newKeysToCreate); i += chunkSize {
+		end := i + chunkSize
+		if end > len(newKeysToCreate) {
+			end = len(newKeysToCreate)
+		}
+		chunk := newKeysToCreate[i:end]
+		if err := s.KeyProvider.AddKeys(groupID, chunk); err != nil {
+			return nil, err
+		}
 	}
 
 	// 5. Calculate new total count
@@ -164,16 +181,28 @@ func (s *KeyService) isValidKeyFormat(key string) bool {
 // RestoreMultipleKeys handles the business logic of restoring keys from a text block.
 func (s *KeyService) RestoreMultipleKeys(groupID uint, keysText string) (*RestoreKeysResult, error) {
 	keysToRestore := s.ParseKeysFromText(keysText)
+	if len(keysToRestore) > maxRequestKeys {
+		return nil, fmt.Errorf("batch size exceeds the limit of %d keys, got %d", maxRequestKeys, len(keysToRestore))
+	}
 	if len(keysToRestore) == 0 {
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	restoredCount, err := s.KeyProvider.RestoreMultipleKeys(groupID, keysToRestore)
-	if err != nil {
-		return nil, err
+	var totalRestoredCount int64
+	for i := 0; i < len(keysToRestore); i += chunkSize {
+		end := i + chunkSize
+		if end > len(keysToRestore) {
+			end = len(keysToRestore)
+		}
+		chunk := keysToRestore[i:end]
+		restoredCount, err := s.KeyProvider.RestoreMultipleKeys(groupID, chunk)
+		if err != nil {
+			return nil, err
+		}
+		totalRestoredCount += restoredCount
 	}
 
-	ignoredCount := len(keysToRestore) - int(restoredCount)
+	ignoredCount := len(keysToRestore) - int(totalRestoredCount)
 
 	var totalInGroup int64
 	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
@@ -181,7 +210,7 @@ func (s *KeyService) RestoreMultipleKeys(groupID uint, keysText string) (*Restor
 	}
 
 	return &RestoreKeysResult{
-		RestoredCount: int(restoredCount),
+		RestoredCount: int(totalRestoredCount),
 		IgnoredCount:  ignoredCount,
 		TotalInGroup:  totalInGroup,
 	}, nil
@@ -200,16 +229,28 @@ func (s *KeyService) ClearAllInvalidKeys(groupID uint) (int64, error) {
 // DeleteMultipleKeys handles the business logic of deleting keys from a text block.
 func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteKeysResult, error) {
 	keysToDelete := s.ParseKeysFromText(keysText)
+	if len(keysToDelete) > maxRequestKeys {
+		return nil, fmt.Errorf("batch size exceeds the limit of %d keys, got %d", maxRequestKeys, len(keysToDelete))
+	}
 	if len(keysToDelete) == 0 {
 		return nil, fmt.Errorf("no valid keys found in the input text")
 	}
 
-	deletedCount, err := s.KeyProvider.RemoveKeys(groupID, keysToDelete)
-	if err != nil {
-		return nil, err
+	var totalDeletedCount int64
+	for i := 0; i < len(keysToDelete); i += chunkSize {
+		end := i + chunkSize
+		if end > len(keysToDelete) {
+			end = len(keysToDelete)
+		}
+		chunk := keysToDelete[i:end]
+		deletedCount, err := s.KeyProvider.RemoveKeys(groupID, chunk)
+		if err != nil {
+			return nil, err
+		}
+		totalDeletedCount += deletedCount
 	}
 
-	ignoredCount := len(keysToDelete) - int(deletedCount)
+	ignoredCount := len(keysToDelete) - int(totalDeletedCount)
 
 	var totalInGroup int64
 	if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalInGroup).Error; err != nil {
@@ -217,7 +258,7 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 	}
 
 	return &DeleteKeysResult{
-		DeletedCount: int(deletedCount),
+		DeletedCount: int(totalDeletedCount),
 		IgnoredCount: ignoredCount,
 		TotalInGroup: totalInGroup,
 	}, nil
@@ -236,4 +277,33 @@ func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, sea
 	}
 
 	return query
+}
+
+// TestMultipleKeys handles a one-off validation test for multiple keys.
+func (s *KeyService) TestMultipleKeys(ctx context.Context, group *models.Group, keysText string) ([]keypool.KeyTestResult, error) {
+	keysToTest := s.ParseKeysFromText(keysText)
+	if len(keysToTest) > maxRequestKeys {
+		return nil, fmt.Errorf("batch size exceeds the limit of %d keys, got %d", maxRequestKeys, len(keysToTest))
+	}
+	if len(keysToTest) == 0 {
+		return nil, fmt.Errorf("no valid keys found in the input text")
+	}
+
+	var allResults []keypool.KeyTestResult
+	for i := 0; i < len(keysToTest); i += chunkSize {
+		end := i + chunkSize
+		if end > len(keysToTest) {
+			end = len(keysToTest)
+		}
+		chunk := keysToTest[i:end]
+		results, err := s.KeyValidator.TestMultipleKeys(ctx, group, chunk)
+		if err != nil {
+			// If one chunk fails, we might want to stop or collect partial results.
+			// For now, let's stop and return the error.
+			return nil, err
+		}
+		allResults = append(allResults, results...)
+	}
+
+	return allResults, nil
 }

@@ -84,7 +84,9 @@ func (s *Server) AddMultipleKeys(c *gin.Context) {
 
 	result, err := s.KeyService.AddMultipleKeys(req.GroupID, req.KeysText)
 	if err != nil {
-		if err.Error() == "no valid keys found in the input text" {
+		if strings.Contains(err.Error(), "batch size exceeds the limit") {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else if err.Error() == "no valid keys found in the input text" {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
 		} else {
 			response.Error(c, app_errors.ParseDBError(err))
@@ -146,7 +148,9 @@ func (s *Server) DeleteMultipleKeys(c *gin.Context) {
 
 	result, err := s.KeyService.DeleteMultipleKeys(req.GroupID, req.KeysText)
 	if err != nil {
-		if err.Error() == "no valid keys found in the input text" {
+		if strings.Contains(err.Error(), "batch size exceeds the limit") {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else if err.Error() == "no valid keys found in the input text" {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
 		} else {
 			response.Error(c, app_errors.ParseDBError(err))
@@ -176,7 +180,9 @@ func (s *Server) RestoreMultipleKeys(c *gin.Context) {
 
 	result, err := s.KeyService.RestoreMultipleKeys(req.GroupID, req.KeysText)
 	if err != nil {
-		if err.Error() == "no valid keys found in the input text" {
+		if strings.Contains(err.Error(), "batch size exceeds the limit") {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else if err.Error() == "no valid keys found in the input text" {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
 		} else {
 			response.Error(c, app_errors.ParseDBError(err))
@@ -205,16 +211,15 @@ func (s *Server) TestMultipleKeys(c *gin.Context) {
 		return
 	}
 
-	// Re-use the parsing logic from the key service
-	keysToTest := s.KeyService.ParseKeysFromText(req.KeysText)
-	if len(keysToTest) == 0 {
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "no valid keys found in the input text"))
-		return
-	}
-
-	results, err := s.KeyValidator.TestMultipleKeys(c.Request.Context(), group, keysToTest)
+	results, err := s.KeyService.TestMultipleKeys(c.Request.Context(), group, req.KeysText)
 	if err != nil {
-		response.Error(c, app_errors.ParseDBError(err))
+		if strings.Contains(err.Error(), "batch size exceeds the limit") {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else if err.Error() == "no valid keys found in the input text" {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		} else {
+			response.Error(c, app_errors.ParseDBError(err))
+		}
 		return
 	}
 
