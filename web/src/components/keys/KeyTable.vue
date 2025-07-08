@@ -4,10 +4,13 @@ import type { APIKey, Group, KeyStatus } from "@/types/models";
 import { getGroupDisplayName } from "@/utils/display";
 import {
   AddCircleOutline,
+  AlertCircleOutline,
+  CheckmarkCircle,
   CopyOutline,
   EyeOffOutline,
   EyeOutline,
   RemoveCircleOutline,
+  Search,
 } from "@vicons/ionicons5";
 import {
   NButton,
@@ -63,11 +66,9 @@ const moreOptions = [
   { label: "清空所有无效 Key", key: "clearInvalid", props: { style: { color: "#d03050" } } },
 ];
 
-// 防抖定时器
-let searchTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 let testingMsg: any = null;
-let restoreMsg: any = null;
-let deleteMsg: any = null;
+const isDeling = ref(false);
+const isRestoring = ref(false);
 
 const createDialogShow = ref(false);
 const deleteDialogShow = ref(false);
@@ -76,7 +77,7 @@ watch(
   () => props.selectedGroup,
   async newGroup => {
     if (newGroup) {
-      currentPage.value = 1;
+      resetPage();
       await loadKeys();
     }
   },
@@ -89,15 +90,8 @@ watch([currentPage, pageSize, statusFilter], async () => {
 
 // 处理搜索输入的防抖
 function handleSearchInput() {
-  // 清除之前的定时器
-  if (searchTimer) {
-    clearTimeout(searchTimer);
-  }
-
-  searchTimer = setTimeout(async () => {
-    currentPage.value = 1; // 搜索时重置到第一页
-    await loadKeys();
-  }, 500);
+  currentPage.value = 1; // 搜索时重置到第一页
+  loadKeys();
 }
 
 // 处理更多操作菜单
@@ -178,6 +172,7 @@ async function testKey(_key: KeyRow) {
   try {
     const res = await keysApi.testKeys(props.selectedGroup.id, _key.key_value);
     const curValid = res?.[0] || {};
+    _key.status = curValid.is_valid ? "active" : "invalid";
     if (curValid.is_valid) {
       window.$message.success("密钥测试成功");
     } else {
@@ -196,11 +191,11 @@ function toggleKeyVisibility(key: KeyRow) {
 }
 
 async function restoreKey(key: KeyRow) {
-  if (!props.selectedGroup?.id || !key.key_value || restoreMsg) {
+  if (!props.selectedGroup?.id || !key.key_value || isRestoring.value) {
     return;
   }
 
-  dialog.warning({
+  const d = dialog.warning({
     title: "恢复密钥",
     content: `确定要恢复密钥"${maskKey(key.key_value)}"吗？`,
     positiveText: "确定",
@@ -209,9 +204,9 @@ async function restoreKey(key: KeyRow) {
       if (!props.selectedGroup?.id) {
         return;
       }
-      restoreMsg = window.$message.info("正在恢复密钥...", {
-        duration: 0,
-      });
+
+      isRestoring.value = true;
+      d.loading = true;
 
       try {
         await keysApi.restoreKeys(props.selectedGroup.id, key.key_value);
@@ -219,19 +214,19 @@ async function restoreKey(key: KeyRow) {
       } catch (_error) {
         console.error("恢复失败");
       } finally {
-        restoreMsg?.destroy();
-        restoreMsg = null;
+        d.loading = false;
+        isRestoring.value = false;
       }
     },
   });
 }
 
 async function deleteKey(key: KeyRow) {
-  if (!props.selectedGroup?.id || !key.key_value || deleteMsg) {
+  if (!props.selectedGroup?.id || !key.key_value || isDeling.value) {
     return;
   }
 
-  dialog.warning({
+  const d = dialog.warning({
     title: "删除密钥",
     content: `确定要删除密钥"${maskKey(key.key_value)}"吗？`,
     positiveText: "确定",
@@ -240,9 +235,9 @@ async function deleteKey(key: KeyRow) {
       if (!props.selectedGroup?.id) {
         return;
       }
-      deleteMsg = window.$message.info("正在删除密钥...", {
-        duration: 0,
-      });
+
+      d.loading = true;
+      isDeling.value = true;
 
       try {
         await keysApi.deleteKeys(props.selectedGroup.id, key.key_value);
@@ -250,8 +245,8 @@ async function deleteKey(key: KeyRow) {
       } catch (_error) {
         console.error("删除失败");
       } finally {
-        deleteMsg?.destroy();
-        deleteMsg = null;
+        d.loading = false;
+        isDeling.value = false;
       }
     },
   });
@@ -309,11 +304,11 @@ async function copyInvalidKeys() {
 }
 
 async function restoreAllInvalid() {
-  if (!props.selectedGroup?.id || restoreMsg) {
+  if (!props.selectedGroup?.id || isRestoring.value) {
     return;
   }
 
-  dialog.warning({
+  const d = dialog.warning({
     title: "恢复密钥",
     content: "确定要恢复所有无效密钥吗？",
     positiveText: "确定",
@@ -322,18 +317,17 @@ async function restoreAllInvalid() {
       if (!props.selectedGroup?.id) {
         return;
       }
-      restoreMsg = window.$message.info("正在恢复密钥...", {
-        duration: 0,
-      });
 
+      isRestoring.value = true;
+      d.loading = true;
       try {
         await keysApi.restoreAllInvalidKeys(props.selectedGroup.id);
         await loadKeys();
       } catch (_error) {
         console.error("恢复失败");
       } finally {
-        restoreMsg?.destroy();
-        restoreMsg = null;
+        d.loading = false;
+        isRestoring.value = false;
       }
     },
   });
@@ -360,11 +354,11 @@ async function validateAllKeys() {
 }
 
 async function clearAllInvalid() {
-  if (!props.selectedGroup?.id || deleteMsg) {
+  if (!props.selectedGroup?.id || isDeling.value) {
     return;
   }
 
-  dialog.warning({
+  const d = dialog.warning({
     title: "清除密钥",
     content: "确定要清除所有无效密钥吗？此操作不可恢复！",
     positiveText: "确定",
@@ -373,10 +367,9 @@ async function clearAllInvalid() {
       if (!props.selectedGroup?.id) {
         return;
       }
-      deleteMsg = window.$message.info("正在清除密钥...", {
-        duration: 0,
-      });
 
+      isDeling.value = true;
+      d.loading = true;
       try {
         const { data } = await keysApi.clearAllInvalidKeys(props.selectedGroup.id);
         window.$message.success(data?.message || "清除成功");
@@ -384,8 +377,8 @@ async function clearAllInvalid() {
       } catch (_error) {
         console.error("删除失败");
       } finally {
-        deleteMsg?.destroy();
-        deleteMsg = null;
+        d.loading = false;
+        isDeling.value = false;
       }
     },
   });
@@ -398,6 +391,12 @@ function changePage(page: number) {
 function changePageSize(size: number) {
   pageSize.value = size;
   currentPage.value = 1;
+}
+
+function resetPage() {
+  currentPage.value = 1;
+  searchText.value = "";
+  statusFilter.value = "all";
 }
 </script>
 
@@ -427,14 +426,19 @@ function changePageSize(size: number) {
             size="small"
             style="width: 100px"
           />
-          <n-input
-            v-model:value="searchText"
-            placeholder="Key 模糊查询"
-            size="small"
-            style="width: 180px"
-            clearable
-            @input="handleSearchInput"
-          />
+          <n-input-group>
+            <n-input
+              v-model:value="searchText"
+              placeholder="Key 模糊查询"
+              size="small"
+              style="width: 180px"
+              clearable
+              @keyup.enter="handleSearchInput"
+            />
+            <n-button ghost size="small" :disabled="loading" @click="handleSearchInput">
+              <n-icon :component="Search" />
+            </n-button>
+          </n-input-group>
           <n-dropdown :options="moreOptions" trigger="click" @select="handleMoreAction">
             <n-button size="small" secondary>
               <template #icon>
@@ -462,8 +466,18 @@ function changePageSize(size: number) {
             <!-- 主要信息行：Key + 快速操作 -->
             <div class="key-main">
               <div class="key-section">
-                <n-tag v-if="key.status === 'active'" type="info">有效</n-tag>
-                <n-tag v-else>无效</n-tag>
+                <n-tag v-if="key.status === 'active'" type="success" :bordered="false" round>
+                  <template #icon>
+                    <n-icon :component="CheckmarkCircle" />
+                  </template>
+                  有效
+                </n-tag>
+                <n-tag v-else :bordered="false" round>
+                  <template #icon>
+                    <n-icon :component="AlertCircleOutline" />
+                  </template>
+                  无效
+                </n-tag>
                 <n-input
                   class="key-text"
                   :value="key.is_visible ? key.key_value : maskKey(key.key_value)"
@@ -773,8 +787,8 @@ function changePageSize(size: number) {
 }
 
 .key-card.status-invalid {
-  border-color: #d030503b;
-  background: #d0305014;
+  border-color: #ddd;
+  background: rgb(250, 250, 252);
 }
 
 .key-card.status-error {

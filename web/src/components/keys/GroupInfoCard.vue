@@ -36,6 +36,8 @@ const stats = ref<GroupStats | null>(null);
 const loading = ref(false);
 const dialog = useDialog();
 const showEditModal = ref(false);
+const delLoading = ref(false);
+const expandedName = ref<string[]>([]);
 
 onMounted(() => {
   loadStats();
@@ -44,6 +46,7 @@ onMounted(() => {
 watch(
   () => props.group,
   () => {
+    resetPage();
     loadStats();
   }
 );
@@ -76,16 +79,19 @@ function handleGroupEdited(newGroup: Group) {
 }
 
 async function handleDelete() {
-  if (!props.group) {
+  if (!props.group || delLoading.value) {
     return;
   }
 
-  dialog.warning({
+  const d = dialog.warning({
     title: "删除分组",
     content: `确定要删除分组 "${getGroupDisplayName(props.group)}" 吗？此操作不可恢复。`,
     positiveText: "确定",
     negativeText: "取消",
     onPositiveClick: async () => {
+      d.loading = true;
+      delLoading.value = true;
+
       try {
         if (props.group?.id) {
           await keysApi.deleteGroup(props.group.id);
@@ -93,6 +99,9 @@ async function handleDelete() {
         }
       } catch (error) {
         console.error("删除分组失败:", error);
+      } finally {
+        d.loading = false;
+        delLoading.value = false;
       }
     },
   });
@@ -121,6 +130,11 @@ function copyUrl(url: string) {
     .catch(() => {
       window.$message.error("复制失败");
     });
+}
+
+function resetPage() {
+  showEditModal.value = false;
+  expandedName.value = [];
 }
 </script>
 
@@ -202,30 +216,44 @@ function copyUrl(url: string) {
 
       <!-- 详细信息区（可折叠） -->
       <div class="details-section">
-        <n-collapse>
+        <n-collapse accordion v-model:expanded-names="expandedName">
           <n-collapse-item title="详细信息" name="details">
             <div class="details-content">
               <div class="detail-section">
                 <h4 class="section-title">基础信息</h4>
-                <n-form label-placement="left" label-width="100px">
-                  <n-form-item label="分组名称：">
-                    {{ group?.name || "-" }}
-                  </n-form-item>
-                  <n-form-item label="显示名称：">
-                    {{ group?.display_name || "-" }}
-                  </n-form-item>
-                  <n-form-item label="描述：">
-                    {{ group?.description || "-" }}
-                  </n-form-item>
-                  <n-form-item label="渠道类型：">
-                    {{ group?.channel_type || "-" }}
-                  </n-form-item>
-                  <n-form-item label="测试模型：">
-                    {{ group?.test_model || "-" }}
-                  </n-form-item>
-                  <n-form-item label="排序：">
-                    {{ group?.sort || 0 }}
-                  </n-form-item>
+                <n-form label-placement="left" label-width="85px" label-align="right">
+                  <n-grid :cols="2">
+                    <n-grid-item>
+                      <n-form-item label="分组名称：">
+                        {{ group?.name || "-" }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="显示名称：">
+                        {{ group?.display_name || "-" }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="渠道类型：">
+                        {{ group?.channel_type || "-" }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="测试模型：">
+                        {{ group?.test_model || "-" }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="排序：">
+                        {{ group?.sort || 0 }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="描述：">
+                        {{ group?.description || "-" }}
+                      </n-form-item>
+                    </n-grid-item>
+                  </n-grid>
                 </n-form>
               </div>
 
@@ -235,12 +263,13 @@ function copyUrl(url: string) {
                   <n-form-item
                     v-for="(upstream, index) in group?.upstreams ?? []"
                     :key="index"
+                    class="upstream-item"
                     :label="`上游 ${index + 1}:`"
                   >
-                    <span class="upstream-url">{{ upstream.url }}</span>
-                    <n-tag size="small" type="info" class="upstream-weight">
-                      权重: {{ upstream.weight }}
-                    </n-tag>
+                    <span class="upstream-weight">
+                      <n-tag size="small" type="info">权重: {{ upstream.weight }}</n-tag>
+                    </span>
+                    <n-input class="upstream-url" :value="upstream.url" readonly size="small" />
                   </n-form-item>
                 </n-form>
               </div>
@@ -386,11 +415,11 @@ function copyUrl(url: string) {
   font-family: monospace;
   font-size: 0.9rem;
   color: #374151;
-  margin-right: 8px;
+  margin-left: 5px;
 }
 
 .upstream-weight {
-  margin-left: 8px;
+  min-width: 70px;
 }
 
 .config-json {

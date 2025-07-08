@@ -10,7 +10,7 @@ import NavBar from "@/components/NavBar.vue";
       <div class="header-content">
         <div class="header-brand">
           <div class="brand-icon">
-            <img src="@/assets/logo.png" width="50" alt="" />
+            <img src="@/assets/logo.png" alt="" />
           </div>
           <h1 class="brand-title">GPT Load</h1>
         </div>
@@ -75,8 +75,11 @@ import NavBar from "@/components/NavBar.vue";
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 35px;
+  height: 35px;
+  img {
+    height: 100%;
+  }
 }
 
 .brand-title {
