@@ -197,7 +197,7 @@ func (sm *SystemSettingsManager) LoadFromDatabase() error {
 	sm.settings = DefaultSystemSettings()
 	sm.mapToStruct(settingsMap, &sm.settings)
 
-	logrus.Info("System settings loaded from database")
+	logrus.Debug("System settings loaded from database")
 	return nil
 }
 

@@ -28,10 +28,10 @@ type App struct {
 	configManager     types.ConfigManager
 	settingsManager   *config.SystemSettingsManager
 	logCleanupService *services.LogCleanupService
-	keyCronService             *services.KeyCronService
-	keyValidationPool          *services.KeyValidationPool
-	keyPoolProvider            *keypool.KeyProvider
-	leaderService              *services.LeaderService
+	keyCronService    *services.KeyCronService
+	keyValidationPool *services.KeyValidationPool
+	keyPoolProvider   *keypool.KeyProvider
+	leaderService     *services.LeaderService
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -46,11 +46,11 @@ type AppParams struct {
 	Engine            *gin.Engine
 	ConfigManager     types.ConfigManager
 	SettingsManager   *config.SystemSettingsManager
-	LogCleanupService        *services.LogCleanupService
-	KeyCronService           *services.KeyCronService
-	KeyValidationPool        *services.KeyValidationPool
-	KeyPoolProvider          *keypool.KeyProvider
-	LeaderService            *services.LeaderService
+	LogCleanupService *services.LogCleanupService
+	KeyCronService    *services.KeyCronService
+	KeyValidationPool *services.KeyValidationPool
+	KeyPoolProvider   *keypool.KeyProvider
+	LeaderService     *services.LeaderService
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -63,12 +63,12 @@ func NewApp(params AppParams) *App {
 		engine:            params.Engine,
 		configManager:     params.ConfigManager,
 		settingsManager:   params.SettingsManager,
-		logCleanupService:        params.LogCleanupService,
-		keyCronService:           params.KeyCronService,
-		keyValidationPool:        params.KeyValidationPool,
-		keyPoolProvider:          params.KeyPoolProvider,
-		leaderService:            params.LeaderService,
-		proxyServer:              params.ProxyServer,
+		logCleanupService: params.LogCleanupService,
+		keyCronService:    params.KeyCronService,
+		keyValidationPool: params.KeyValidationPool,
+		keyPoolProvider:   params.KeyPoolProvider,
+		leaderService:     params.LeaderService,
+		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
 		requestLogChan:    params.RequestLogChan,
@@ -77,13 +77,21 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
-	// Initialize system settings
-	if err := a.settingsManager.InitializeSystemSettings(); err != nil {
-		return fmt.Errorf("failed to initialize system settings: %w", err)
+	// Perform leader election first. This is a blocking call.
+	if err := a.leaderService.ElectLeader(); err != nil {
+		return fmt.Errorf("leader election failed: %w", err)
 	}
-	logrus.Info("System settings initialized")
 
-	logrus.Info("Loading API keys into the key pool...")
+	if a.leaderService.IsLeader() {
+		if err := a.settingsManager.InitializeSystemSettings(); err != nil {
+			return fmt.Errorf("failed to initialize system settings: %w", err)
+		}
+		logrus.Info("System settings initialized by leader.")
+	} else {
+		logrus.Info("This node is not the leader. Skipping leader-only initialization tasks.")
+	}
+
+	logrus.Debug("Loading API keys into the key pool...")
 	if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
 		return fmt.Errorf("failed to load keys into key pool: %w", err)
 	}
@@ -93,7 +101,6 @@ func (a *App) Start() error {
 	// Start background services
 	a.startRequestLogger()
 	a.logCleanupService.Start()
-	a.leaderService.Start()
 	a.keyValidationPool.Start()
 	a.keyCronService.Start()
 
@@ -105,7 +112,7 @@ func (a *App) Start() error {
 		ReadTimeout:    time.Duration(serverConfig.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(serverConfig.WriteTimeout) * time.Second,
 		IdleTimeout:    time.Duration(serverConfig.IdleTimeout) * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1MB header limit
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	// Start HTTP server in a new goroutine
