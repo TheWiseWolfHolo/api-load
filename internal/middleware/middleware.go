@@ -134,7 +134,7 @@ func Auth(config types.AuthConfig) gin.HandlerFunc {
 
 		// Skip authentication for management endpoints
 		path := c.Request.URL.Path
-		if path == "/health" || path == "/stats" || path == "/blacklist" || path == "/reset-keys" {
+		if path == "/health" || path == "/stats" {
 			c.Next()
 			return
 		}
@@ -208,7 +208,7 @@ func ErrorHandler() gin.HandlerFunc {
 
 // isMonitoringEndpoint checks if the path is a monitoring endpoint
 func isMonitoringEndpoint(path string) bool {
-	monitoringPaths := []string{"/health", "/stats", "/blacklist", "/reset-keys"}
+	monitoringPaths := []string{"/health", "/stats"}
 	for _, monitoringPath := range monitoringPaths {
 		if path == monitoringPath {
 			return true
