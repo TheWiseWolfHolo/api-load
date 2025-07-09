@@ -120,7 +120,7 @@ func (ps *ProxyServer) logRequest(c *gin.Context, group *models.Group, key *mode
 
 // Close cleans up resources
 func (ps *ProxyServer) Close() {
-	// Nothing to close for now
+	close(ps.requestLogChan)
 }
 
 func (ps *ProxyServer) applyParamOverrides(c *gin.Context, group *models.Group) error {
@@ -129,7 +129,7 @@ func (ps *ProxyServer) applyParamOverrides(c *gin.Context, group *models.Group) 
 	if err != nil {
 		return fmt.Errorf("failed to read request body: %w", err)
 	}
-	c.Request.Body.Close() // Close the original body
+	c.Request.Body.Close()
 
 	// If body is empty, nothing to override, just restore the body
 	if len(bodyBytes) == 0 {
