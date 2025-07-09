@@ -82,44 +82,63 @@ func (a *App) Start() error {
 		return fmt.Errorf("leader service failed to start: %w", err)
 	}
 
-	// 2. Leader 节点执行不依赖配置的“写”操作
+	// 2. Leader 节点执行初始化，Follower 节点等待
 	if a.leaderService.IsLeader() {
 		logrus.Info("Leader mode. Performing initial one-time tasks...")
-
-		// 2.1. 数据库迁移
-		if err := a.db.AutoMigrate(
-			&models.RequestLog{},
-			&models.APIKey{},
-			&models.SystemSetting{},
-			&models.Group{},
-		); err != nil {
-			return fmt.Errorf("database auto-migration failed: %w", err)
+		acquired, err := a.leaderService.AcquireInitializingLock()
+		if err != nil {
+			return fmt.Errorf("failed to acquire initializing lock: %w", err)
 		}
-		logrus.Info("Database auto-migration completed.")
+		if !acquired {
+			logrus.Warn("Could not acquire initializing lock, another leader might be active. Switching to follower mode for initialization.")
+			if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
+				return fmt.Errorf("failed to wait for initialization as a fallback follower: %w", err)
+			}
+		} else {
+			// Release the lock when the initialization is done.
+			defer a.leaderService.ReleaseInitializingLock()
 
-		// 2.2. 初始化系统设置
-		if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
-			return fmt.Errorf("failed to initialize system settings: %w", err)
+			// 2.1. 数据库迁移
+			if err := a.db.AutoMigrate(
+				&models.RequestLog{},
+				&models.APIKey{},
+				&models.SystemSetting{},
+				&models.Group{},
+			); err != nil {
+				return fmt.Errorf("database auto-migration failed: %w", err)
+			}
+			logrus.Info("Database auto-migration completed.")
+
+			// 2.2. 初始化系统设置
+			if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
+				return fmt.Errorf("failed to initialize system settings: %w", err)
+			}
+			logrus.Info("System settings initialized in DB.")
+
+			// 2.3. 加载配置到内存 (Leader 先行)
+			if err := a.settingsManager.LoadFromDatabase(); err != nil {
+				return fmt.Errorf("leader failed to load system settings from database: %w", err)
+			}
+			logrus.Info("System settings loaded into memory by leader.")
+
+			// 2.4. 从数据库加载密钥到 Redis
+			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
+				return fmt.Errorf("failed to load keys into key pool: %w", err)
+			}
+			logrus.Info("API keys loaded into Redis cache by leader.")
 		}
-		logrus.Info("System settings initialized in DB.")
 	} else {
-		logrus.Info("Follower Mode. Skipping initial one-time tasks.")
+		logrus.Info("Follower Mode. Waiting for leader to complete initialization.")
+		if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
+			return fmt.Errorf("follower failed to start: %w", err)
+		}
 	}
 
-	// 3. 所有节点从数据库加载配置到内存
+	// 3. 所有节点加载或重新加载配置以确保一致性
 	if err := a.settingsManager.LoadFromDatabase(); err != nil {
 		return fmt.Errorf("failed to load system settings from database: %w", err)
 	}
 	logrus.Info("System settings loaded into memory.")
-
-	// 4. Leader 节点执行依赖配置的“写”操作
-	if a.leaderService.IsLeader() {
-		// 4.1. 从数据库加载密钥到 Redis
-		if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
-			return fmt.Errorf("failed to load keys into key pool: %w", err)
-		}
-		logrus.Info("API keys loaded into Redis cache by leader.")
-	}
 
 	// 5. 显示配置并启动所有后台服务
 	a.settingsManager.DisplayCurrentSettings()

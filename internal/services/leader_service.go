@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +18,8 @@ const (
 	leaderLockKey         = "cluster:leader"
 	leaderLockTTL         = 30 * time.Second
 	leaderRenewalInterval = 10 * time.Second
+	initializingLockKey   = "cluster:initializing"
+	initializingLockTTL   = 5 * time.Minute
 )
 
 const renewLockScript = `
@@ -95,6 +98,70 @@ func (s *LeaderService) Stop() {
 // IsLeader returns true if the current node is the leader.
 func (s *LeaderService) IsLeader() bool {
 	return s.isLeader.Load()
+}
+
+// AcquireInitializingLock sets a temporary lock to indicate that initialization is in progress.
+func (s *LeaderService) AcquireInitializingLock() (bool, error) {
+	if !s.IsLeader() {
+		return false, nil
+	}
+	logrus.Debug("Leader acquiring initialization lock...")
+	return s.store.SetNX(initializingLockKey, []byte(s.nodeID), initializingLockTTL)
+}
+
+// ReleaseInitializingLock removes the initialization lock.
+func (s *LeaderService) ReleaseInitializingLock() {
+	if !s.IsLeader() {
+		return
+	}
+	logrus.Debug("Leader releasing initialization lock...")
+	if err := s.store.Delete(initializingLockKey); err != nil {
+		logrus.WithError(err).Error("Failed to release initialization lock.")
+	}
+}
+
+// WaitForInitializationToComplete waits until the initialization lock is released.
+func (s *LeaderService) WaitForInitializationToComplete() error {
+	if s.isSingleNode || s.IsLeader() {
+		return nil
+	}
+
+	logrus.Debug("Follower waiting for leader to complete initialization...")
+
+	time.Sleep(2 * time.Second)
+
+	// Use a context with timeout to prevent indefinite waiting.
+	ctx, cancel := context.WithTimeout(context.Background(), initializingLockTTL+1*time.Minute)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	// Initial check before starting the loop
+	exists, err := s.store.Exists(initializingLockKey)
+	if err != nil {
+		logrus.WithError(err).Warn("Initial check for initialization lock failed, will proceed to loop.")
+	} else if !exists {
+		logrus.Debug("Initialization lock not found on initial check. Assuming initialization is complete.")
+		return nil
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for leader initialization after %v", initializingLockTTL)
+		case <-ticker.C:
+			exists, err := s.store.Exists(initializingLockKey)
+			if err != nil {
+				logrus.WithError(err).Warn("Error checking initialization lock, will retry...")
+				continue
+			}
+			if !exists {
+				logrus.Debug("Initialization lock released. Follower proceeding with startup.")
+				return nil
+			}
+		}
+	}
 }
 
 // maintainLeadershipLoop is the background process that keeps trying to acquire or renew the lock.
