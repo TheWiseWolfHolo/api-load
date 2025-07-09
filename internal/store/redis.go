@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -121,4 +122,50 @@ func (s *RedisStore) Pipeline() Pipeliner {
 // Eval executes a Lua script on Redis.
 func (s *RedisStore) Eval(script string, keys []string, args ...interface{}) (interface{}, error) {
 	return s.client.Eval(context.Background(), script, keys, args...).Result()
+}
+
+// --- Pub/Sub operations ---
+
+// redisSubscription wraps the redis.PubSub to implement the Subscription interface.
+type redisSubscription struct {
+	pubsub *redis.PubSub
+}
+
+// Channel returns a channel that receives messages from the subscription.
+// It handles the conversion from redis.Message to our internal Message type.
+func (rs *redisSubscription) Channel() <-chan *Message {
+	ch := make(chan *Message)
+	go func() {
+		defer close(ch)
+		for redisMsg := range rs.pubsub.Channel() {
+			ch <- &Message{
+				Channel: redisMsg.Channel,
+				Payload: []byte(redisMsg.Payload),
+			}
+		}
+	}()
+	return ch
+}
+
+// Close closes the subscription.
+func (rs *redisSubscription) Close() error {
+	return rs.pubsub.Close()
+}
+
+// Publish sends a message to a given channel.
+func (s *RedisStore) Publish(channel string, message []byte) error {
+	return s.client.Publish(context.Background(), channel, message).Err()
+}
+
+// Subscribe listens for messages on a given channel.
+func (s *RedisStore) Subscribe(channel string) (Subscription, error) {
+	pubsub := s.client.Subscribe(context.Background(), channel)
+
+	// Wait for confirmation that subscription is created.
+	_, err := pubsub.Receive(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to channel %s: %w", channel, err)
+	}
+
+	return &redisSubscription{pubsub: pubsub}, nil
 }

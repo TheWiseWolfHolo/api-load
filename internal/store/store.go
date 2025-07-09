@@ -8,6 +8,20 @@ import (
 // ErrNotFound is the error returned when a key is not found in the store.
 var ErrNotFound = errors.New("store: key not found")
 
+// Message is the struct for received pub/sub messages.
+type Message struct {
+	Channel string
+	Payload []byte
+}
+
+// Subscription represents an active subscription to a pub/sub channel.
+type Subscription interface {
+	// Channel returns the channel for receiving messages.
+	Channel() <-chan *Message
+	// Close unsubscribes and releases any resources associated with the subscription.
+	Close() error
+}
+
 // Store is a generic key-value store interface.
 // Implementations of this interface must be safe for concurrent use.
 type Store interface {
@@ -44,6 +58,13 @@ type Store interface {
 
 	// Close closes the store and releases any underlying resources.
 	Close() error
+
+	// Publish sends a message to a given channel.
+	Publish(channel string, message []byte) error
+
+	// Subscribe listens for messages on a given channel.
+	// It returns a Subscription object that can be used to receive messages and to close the subscription.
+	Subscribe(channel string) (Subscription, error)
 }
 
 // Pipeliner defines an interface for executing a batch of commands.

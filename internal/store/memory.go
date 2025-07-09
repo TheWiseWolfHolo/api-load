@@ -16,15 +16,19 @@ type memoryStoreItem struct {
 // MemoryStore is an in-memory key-value store that is safe for concurrent use.
 // It now supports simple K/V, HASH, and LIST data types.
 type MemoryStore struct {
-	mu sync.RWMutex
-	// Using 'any' to store different data structures (memoryStoreItem, map[string]string, []string)
+	mu   sync.RWMutex
 	data map[string]any
+
+	// For Pub/Sub
+	muSubscribers sync.RWMutex
+	subscribers   map[string]map[chan *Message]struct{}
 }
 
 // NewMemoryStore creates and returns a new MemoryStore instance.
 func NewMemoryStore() *MemoryStore {
 	s := &MemoryStore{
-		data: make(map[string]any),
+		data:        make(map[string]any),
+		subscribers: make(map[string]map[chan *Message]struct{}),
 	}
 	// The cleanup loop was removed as it's not compatible with multiple data types
 	// without a unified expiration mechanism, and the KeyPool feature does not rely on TTLs.
@@ -303,4 +307,78 @@ func (s *MemoryStore) Rotate(key string) (string, error) {
 	s.data[key] = newList
 
 	return item, nil
+}
+
+// --- Pub/Sub operations ---
+
+// memorySubscription implements the Subscription interface for the in-memory store.
+type memorySubscription struct {
+	store   *MemoryStore
+	channel string
+	msgChan chan *Message
+}
+
+// Channel returns the message channel for the subscription.
+func (ms *memorySubscription) Channel() <-chan *Message {
+	return ms.msgChan
+}
+
+// Close removes the subscription from the store.
+func (ms *memorySubscription) Close() error {
+	ms.store.muSubscribers.Lock()
+	defer ms.store.muSubscribers.Unlock()
+
+	if subs, ok := ms.store.subscribers[ms.channel]; ok {
+		delete(subs, ms.msgChan)
+		if len(subs) == 0 {
+			delete(ms.store.subscribers, ms.channel)
+		}
+	}
+	close(ms.msgChan)
+	return nil
+}
+
+// Publish sends a message to all subscribers of a channel.
+func (s *MemoryStore) Publish(channel string, message []byte) error {
+	s.muSubscribers.RLock()
+	defer s.muSubscribers.RUnlock()
+
+	msg := &Message{
+		Channel: channel,
+		Payload: message,
+	}
+
+	if subs, ok := s.subscribers[channel]; ok {
+		for subCh := range subs {
+			// Non-blocking send
+			go func(c chan *Message) {
+				select {
+				case c <- msg:
+				case <-time.After(1 * time.Second): // Prevent goroutine leak if receiver is stuck
+				}
+			}(subCh)
+		}
+	}
+	return nil
+}
+
+// Subscribe listens for messages on a given channel.
+func (s *MemoryStore) Subscribe(channel string) (Subscription, error) {
+	s.muSubscribers.Lock()
+	defer s.muSubscribers.Unlock()
+
+	msgChan := make(chan *Message, 10) // Buffered channel
+
+	if _, ok := s.subscribers[channel]; !ok {
+		s.subscribers[channel] = make(map[chan *Message]struct{})
+	}
+	s.subscribers[channel][msgChan] = struct{}{}
+
+	sub := &memorySubscription{
+		store:   s,
+		channel: channel,
+		msgChan: msgChan,
+	}
+
+	return sub, nil
 }
