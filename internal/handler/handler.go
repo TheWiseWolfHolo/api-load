@@ -20,6 +20,7 @@ type Server struct {
 	DB                         *gorm.DB
 	config                     types.ConfigManager
 	SettingsManager            *config.SystemSettingsManager
+	GroupManager               *services.GroupManager
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
 	KeyService                 *services.KeyService
@@ -32,6 +33,7 @@ type NewServerParams struct {
 	DB                         *gorm.DB
 	Config                     types.ConfigManager
 	SettingsManager            *config.SystemSettingsManager
+	GroupManager               *services.GroupManager
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
 	KeyService                 *services.KeyService
@@ -44,6 +46,7 @@ func NewServer(params NewServerParams) *Server {
 		DB:                         params.DB,
 		config:                     params.Config,
 		SettingsManager:            params.SettingsManager,
+		GroupManager:               params.GroupManager,
 		KeyManualValidationService: params.KeyManualValidationService,
 		TaskService:                params.TaskService,
 		KeyService:                 params.KeyService,

@@ -27,6 +27,7 @@ type App struct {
 	engine            *gin.Engine
 	configManager     types.ConfigManager
 	settingsManager   *config.SystemSettingsManager
+	groupManager      *services.GroupManager
 	logCleanupService *services.LogCleanupService
 	keyCronService    *services.KeyCronService
 	keyValidationPool *services.KeyValidationPool
@@ -46,6 +47,7 @@ type AppParams struct {
 	Engine            *gin.Engine
 	ConfigManager     types.ConfigManager
 	SettingsManager   *config.SystemSettingsManager
+	GroupManager      *services.GroupManager
 	LogCleanupService *services.LogCleanupService
 	KeyCronService    *services.KeyCronService
 	KeyValidationPool *services.KeyValidationPool
@@ -63,6 +65,7 @@ func NewApp(params AppParams) *App {
 		engine:            params.Engine,
 		configManager:     params.ConfigManager,
 		settingsManager:   params.SettingsManager,
+		groupManager:      params.GroupManager,
 		logCleanupService: params.LogCleanupService,
 		keyCronService:    params.KeyCronService,
 		keyValidationPool: params.KeyValidationPool,
@@ -130,6 +133,8 @@ func (a *App) Start() error {
 		}
 		a.settingsManager.Initialize(a.storage)
 	}
+
+	a.groupManager.Initialize()
 
 	// 显示配置并启动所有后台服务
 	a.configManager.DisplayConfig()

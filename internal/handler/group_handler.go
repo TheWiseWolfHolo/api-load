@@ -210,6 +210,9 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
+	if err := s.GroupManager.Invalidate(); err != nil {
+		logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to invalidate group cache")
+	}
 	response.Success(c, s.newGroupResponse(&group))
 }
 
@@ -341,6 +344,9 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	}
 
+	if err := s.GroupManager.Invalidate(); err != nil {
+		logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to invalidate group cache")
+	}
 	response.Success(c, s.newGroupResponse(&group))
 }
 
@@ -471,6 +477,9 @@ func (s *Server) DeleteGroup(c *gin.Context) {
 		return
 	}
 
+	if err := s.GroupManager.Invalidate(); err != nil {
+		logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to invalidate group cache")
+	}
 	response.Success(c, gin.H{"message": "Group and associated keys deleted successfully"})
 }
 
