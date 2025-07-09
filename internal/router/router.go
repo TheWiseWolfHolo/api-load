@@ -167,7 +167,7 @@ func registerFrontendRoutes(router *gin.Engine, buildFS embed.FS, indexPage []by
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "Method not allowed"})
 	})
 
-	router.Use(static.Serve("/", EmbedFolder(buildFS, "dist")))
+	router.Use(static.Serve("/", EmbedFolder(buildFS, "web/dist")))
 	router.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/proxy") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not Found"})

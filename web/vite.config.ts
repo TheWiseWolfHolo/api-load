@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
     },
     // 构建配置
     build: {
-      outDir: "../cmd/gpt-load/dist",
+      outDir: "dist",
       assetsDir: "assets",
     },
   };

@@ -1,6 +1,6 @@
 # 变量定义
 BINARY_NAME=gpt-load
-MAIN_PATH=./cmd/gpt-load
+MAIN_PATH=./
 BUILD_DIR=./build
 VERSION=2.0.0
 LDFLAGS=-ldflags "-X main.Version=$(VERSION) -s -w"
@@ -43,7 +43,7 @@ build-all: clean ## 为所有支持的平台构建二进制文件
 .PHONY: run
 run: ## 构建前端并运行服务器
 	@echo "--- Building frontend... ---"
-	@rm -rf cmd/gpt-load/dist
+	@rm -rf web/dist
 	cd web && pnpm install && pnpm run build
 	@echo "--- Preparing backend... ---"
 	@echo "--- Starting backend... ---"

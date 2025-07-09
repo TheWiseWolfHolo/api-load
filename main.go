@@ -18,10 +18,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-//go:embed dist
+//go:embed web/dist
 var buildFS embed.FS
 
-//go:embed dist/index.html
+//go:embed web/dist/index.html
 var indexPage []byte
 
 func main() {
