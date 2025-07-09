@@ -84,20 +84,9 @@ node_modules/
 .cache
 .parcel-cache
 
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
 # Gatsby files
 .cache/
 public
-
-# Storybook build outputs
-.out
-.storybook-out
 
 # Temporary folders
 tmp/
@@ -226,5 +215,3 @@ charts/*.tgz
 run-local.sh
 start-local.sh
 dev-setup.sh
-
-cmd/gpt-load/dist
