@@ -42,7 +42,7 @@ const loading = ref(false);
 const searchText = ref("");
 const statusFilter = ref<"all" | "active" | "invalid">("all");
 const currentPage = ref(1);
-const pageSize = ref(9);
+const pageSize = ref(15);
 const total = ref(0);
 const totalPages = ref(0);
 const dialog = useDialog();
@@ -56,14 +56,14 @@ const statusOptions = [
 
 // 更多操作下拉菜单选项
 const moreOptions = [
-  { label: "复制所有 Key", key: "copyAll" },
-  { label: "复制有效 Key", key: "copyValid" },
-  { label: "复制无效 Key", key: "copyInvalid" },
+  { label: "导出所有密钥", key: "copyAll" },
+  { label: "导出有效密钥", key: "copyValid" },
+  { label: "导出无效密钥", key: "copyInvalid" },
   { type: "divider" },
-  { label: "恢复所有无效 Key", key: "restoreAll" },
-  { label: "验证所有 Key", key: "validateAll" },
+  { label: "恢复所有无效密钥", key: "restoreAll" },
+  { label: "清空所有无效密钥", key: "clearInvalid", props: { style: { color: "#d03050" } } },
   { type: "divider" },
-  { label: "清空所有无效 Key", key: "clearInvalid", props: { style: { color: "#d03050" } } },
+  { label: "验证所有密钥", key: "validateAll" },
 ];
 
 let testingMsg: any = null;
@@ -559,10 +559,10 @@ function resetPage() {
         <n-select
           v-model:value="pageSize"
           :options="[
-            { label: '9条/页', value: 9 },
-            { label: '18条/页', value: 18 },
-            { label: '36条/页', value: 36 },
-            { label: '72条/页', value: 72 },
+            { label: '15条/页', value: 15 },
+            { label: '30条/页', value: 30 },
+            { label: '60条/页', value: 60 },
+            { label: '120条/页', value: 120 },
           ]"
           size="small"
           style="width: 100px; margin-left: 12px"
