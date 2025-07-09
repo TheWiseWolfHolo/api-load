@@ -156,6 +156,9 @@ func (sm *SystemSettingsManager) Initialize(store store.Store) error {
 				}
 			}
 		}
+
+		sm.DisplayCurrentSettings(settings)
+
 		return settings, nil
 	}
 
@@ -375,8 +378,7 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) er
 }
 
 // DisplayCurrentSettings 显示当前系统配置信息
-func (sm *SystemSettingsManager) DisplayCurrentSettings() {
-	settings := sm.GetSettings()
+func (sm *SystemSettingsManager) DisplayCurrentSettings(settings SystemSettings) {
 	logrus.Info("Current System Settings:")
 	logrus.Infof("   App URL: %s", settings.AppUrl)
 	logrus.Infof("   Blacklist threshold: %d", settings.BlacklistThreshold)

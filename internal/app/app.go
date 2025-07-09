@@ -132,7 +132,6 @@ func (a *App) Start() error {
 	}
 
 	// 显示配置并启动所有后台服务
-	a.settingsManager.DisplayCurrentSettings()
 	a.configManager.DisplayConfig()
 
 	a.startRequestLogger()

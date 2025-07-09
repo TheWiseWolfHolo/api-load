@@ -5,9 +5,9 @@ import (
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 // GetSettings handles the GET /api/settings request.
@@ -39,8 +39,6 @@ func (s *Server) GetSettings(c *gin.Context) {
 }
 
 // UpdateSettings handles the PUT /api/settings request.
-// It receives a key-value JSON object and updates system settings.
-// After updating, it triggers a configuration reload.
 func (s *Server) UpdateSettings(c *gin.Context) {
 	var settingsMap map[string]any
 	if err := c.ShouldBindJSON(&settingsMap); err != nil {
@@ -59,9 +57,8 @@ func (s *Server) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	s.SettingsManager.DisplayCurrentSettings()
+	time.Sleep(100 * time.Millisecond) // 等待异步更新配置
 
-	logrus.Info("Settings update request processed. Invalidation notification sent.")
 	response.Success(c, gin.H{
 		"message": "Settings updated successfully. Configuration will be reloaded in the background across all instances.",
 	})

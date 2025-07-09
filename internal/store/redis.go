@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -128,23 +129,26 @@ func (s *RedisStore) Eval(script string, keys []string, args ...interface{}) (in
 
 // redisSubscription wraps the redis.PubSub to implement the Subscription interface.
 type redisSubscription struct {
-	pubsub *redis.PubSub
+	pubsub  *redis.PubSub
+	msgChan chan *Message
+	once    sync.Once
 }
 
 // Channel returns a channel that receives messages from the subscription.
-// It handles the conversion from redis.Message to our internal Message type.
 func (rs *redisSubscription) Channel() <-chan *Message {
-	ch := make(chan *Message)
-	go func() {
-		defer close(ch)
-		for redisMsg := range rs.pubsub.Channel() {
-			ch <- &Message{
-				Channel: redisMsg.Channel,
-				Payload: []byte(redisMsg.Payload),
+	rs.once.Do(func() {
+		rs.msgChan = make(chan *Message, 10)
+		go func() {
+			defer close(rs.msgChan)
+			for redisMsg := range rs.pubsub.Channel() {
+				rs.msgChan <- &Message{
+					Channel: redisMsg.Channel,
+					Payload: []byte(redisMsg.Payload),
+				}
 			}
-		}
-	}()
-	return ch
+		}()
+	})
+	return rs.msgChan
 }
 
 // Close closes the subscription.

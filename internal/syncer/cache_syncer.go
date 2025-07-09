@@ -60,7 +60,6 @@ func (s *CacheSyncer[T]) Get() T {
 // Invalidate publishes a notification to all instances to reload their cache.
 func (s *CacheSyncer[T]) Invalidate() error {
 	s.logger.Debug("publishing invalidation notification")
-	s.reload()
 	return s.store.Publish(s.channelName, []byte("reload"))
 }
 
@@ -125,7 +124,7 @@ func (s *CacheSyncer[T]) listenForUpdates() {
 			case msg, ok := <-subscription.Channel():
 				if !ok {
 					s.logger.Warn("subscription channel closed, attempting to re-subscribe...")
-					break subscriberLoop // This will lead to closing the current subscription and retrying.
+					break subscriberLoop
 				}
 				s.logger.Debugf("received invalidation notification, payload: %s", string(msg.Payload))
 				if err := s.reload(); err != nil {
