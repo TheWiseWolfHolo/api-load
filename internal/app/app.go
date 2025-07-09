@@ -77,12 +77,13 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
-	// 1. 启动 Leader Service 并等待选举结果
+
+	// 启动 Leader Service 并等待选举结果
 	if err := a.leaderService.Start(); err != nil {
 		return fmt.Errorf("leader service failed to start: %w", err)
 	}
 
-	// 2. Leader 节点执行初始化，Follower 节点等待
+	// Leader 节点执行初始化，Follower 节点等待
 	if a.leaderService.IsLeader() {
 		logrus.Info("Leader mode. Performing initial one-time tasks...")
 		acquired, err := a.leaderService.AcquireInitializingLock()
@@ -95,10 +96,9 @@ func (a *App) Start() error {
 				return fmt.Errorf("failed to wait for initialization as a fallback follower: %w", err)
 			}
 		} else {
-			// Release the lock when the initialization is done.
 			defer a.leaderService.ReleaseInitializingLock()
 
-			// 2.1. 数据库迁移
+			// 数据库迁移
 			if err := a.db.AutoMigrate(
 				&models.RequestLog{},
 				&models.APIKey{},
@@ -109,19 +109,15 @@ func (a *App) Start() error {
 			}
 			logrus.Info("Database auto-migration completed.")
 
-			// 2.2. 初始化系统设置
+			// 初始化系统设置
 			if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
 				return fmt.Errorf("failed to initialize system settings: %w", err)
 			}
 			logrus.Info("System settings initialized in DB.")
 
-			// 2.3. 加载配置到内存 (Leader 先行)
-			if err := a.settingsManager.LoadFromDatabase(); err != nil {
-				return fmt.Errorf("leader failed to load system settings from database: %w", err)
-			}
-			logrus.Info("System settings loaded into memory by leader.")
+			a.settingsManager.Initialize(a.storage)
 
-			// 2.4. 从数据库加载密钥到 Redis
+			// 从数据库加载密钥到 Redis
 			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
 				return fmt.Errorf("failed to load keys into key pool: %w", err)
 			}
@@ -132,15 +128,10 @@ func (a *App) Start() error {
 		if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
 			return fmt.Errorf("follower failed to start: %w", err)
 		}
+		a.settingsManager.Initialize(a.storage)
 	}
 
-	// 3. 所有节点加载或重新加载配置以确保一致性
-	if err := a.settingsManager.LoadFromDatabase(); err != nil {
-		return fmt.Errorf("failed to load system settings from database: %w", err)
-	}
-	logrus.Info("System settings loaded into memory.")
-
-	// 5. 显示配置并启动所有后台服务
+	// 显示配置并启动所有后台服务
 	a.settingsManager.DisplayCurrentSettings()
 	a.configManager.DisplayConfig()
 
@@ -189,6 +180,7 @@ func (a *App) Stop(ctx context.Context) {
 	a.keyValidationPool.Stop()
 	a.leaderService.Stop()
 	a.logCleanupService.Stop()
+	a.settingsManager.Stop()
 
 	// Close resources
 	a.proxyServer.Close()

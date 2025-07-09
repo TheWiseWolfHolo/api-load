@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -306,14 +307,22 @@ func getEnvOrDefault(key, defaultValue string) string {
 
 // GetInt is a helper function for SystemSettingsManager to get an integer value with a default.
 func (s *SystemSettingsManager) GetInt(key string, defaultValue int) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	settings := s.GetSettings()
+	v := reflect.ValueOf(settings)
+	t := v.Type()
 
-	if valStr, ok := s.settingsCache[key]; ok {
-		if valInt, err := strconv.Atoi(valStr); err == nil {
-			return valInt
+	for i := 0; i < t.NumField(); i++ {
+		structField := t.Field(i)
+		jsonTag := strings.Split(structField.Tag.Get("json"), ",")[0]
+		if jsonTag == key {
+			valueField := v.Field(i)
+			if valueField.Kind() == reflect.Int {
+				return int(valueField.Int())
+			}
+			break
 		}
 	}
+
 	return defaultValue
 }
 

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"gpt-load/internal/db"
 	"gpt-load/internal/models"
+	"gpt-load/internal/store"
+	"gpt-load/internal/syncer"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
@@ -109,35 +110,85 @@ func DefaultSystemSettings() SystemSettings {
 
 // SystemSettingsManager 管理系统配置
 type SystemSettingsManager struct {
-	settings      SystemSettings
-	settingsCache map[string]string // Cache for raw string values
-	mu            sync.RWMutex
+	syncer *syncer.CacheSyncer[SystemSettings]
 }
 
-var globalSystemSettings *SystemSettingsManager
-var once sync.Once
+const SettingsUpdateChannel = "system_settings:updated"
 
-// NewSystemSettingsManager 获取全局系统配置管理器单例
-func NewSystemSettingsManager() *SystemSettingsManager {
-	once.Do(func() {
-		globalSystemSettings = &SystemSettingsManager{}
-	})
-	return globalSystemSettings
+// NewSystemSettingsManager creates a new, uninitialized SystemSettingsManager.
+func NewSystemSettingsManager() (*SystemSettingsManager, error) {
+	return &SystemSettingsManager{}, nil
+}
+
+// Initialize initializes the SystemSettingsManager with database and store dependencies.
+func (sm *SystemSettingsManager) Initialize(store store.Store) error {
+	settingsLoader := func() (SystemSettings, error) {
+		var dbSettings []models.SystemSetting
+		if err := db.DB.Find(&dbSettings).Error; err != nil {
+			return SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
+		}
+
+		settingsMap := make(map[string]string)
+		for _, setting := range dbSettings {
+			settingsMap[setting.SettingKey] = setting.SettingValue
+		}
+
+		// Start with default settings, then override with values from the database.
+		settings := DefaultSystemSettings()
+		v := reflect.ValueOf(&settings).Elem()
+		t := v.Type()
+		jsonToField := make(map[string]string)
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+			if jsonTag != "" {
+				jsonToField[jsonTag] = field.Name
+			}
+		}
+
+		for key, valStr := range settingsMap {
+			if fieldName, ok := jsonToField[key]; ok {
+				fieldValue := v.FieldByName(fieldName)
+				if fieldValue.IsValid() && fieldValue.CanSet() {
+					if err := setFieldFromString(fieldValue, valStr); err != nil {
+						logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
+					}
+				}
+			}
+		}
+		return settings, nil
+	}
+
+	syncer, err := syncer.NewCacheSyncer(
+		settingsLoader,
+		store,
+		SettingsUpdateChannel,
+		logrus.WithField("syncer", "system_settings"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create system settings syncer: %w", err)
+	}
+
+	sm.syncer = syncer
+	return nil
+}
+
+// Stop gracefully stops the SystemSettingsManager's background syncer.
+func (sm *SystemSettingsManager) Stop() {
+	if sm.syncer != nil {
+		sm.syncer.Stop()
+	}
 }
 
 // EnsureSettingsInitialized 确保数据库中存在所有系统设置的记录。
 func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
-	if db.DB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
 	defaultSettings := DefaultSystemSettings()
 	metadata := GenerateSettingsMetadata(&defaultSettings)
 
 	for _, meta := range metadata {
 		var existing models.SystemSetting
 		err := db.DB.Where("setting_key = ?", meta.Key).First(&existing).Error
-		if err != nil { // Not found
+		if err != nil {
 			value := fmt.Sprintf("%v", meta.DefaultValue)
 			if meta.Key == "app_url" {
 				// Special handling for app_url initialization
@@ -171,51 +222,23 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 	return nil
 }
 
-// LoadFromDatabase 从数据库加载系统配置到内存
-func (sm *SystemSettingsManager) LoadFromDatabase() error {
-	if db.DB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	var settings []models.SystemSetting
-	if err := db.DB.Find(&settings).Error; err != nil {
-		return fmt.Errorf("failed to load system settings: %w", err)
-	}
-
-	settingsMap := make(map[string]string)
-	for _, setting := range settings {
-		settingsMap[setting.SettingKey] = setting.SettingValue
-	}
-
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	sm.settingsCache = settingsMap
-
-	// 使用默认值，然后用数据库中的值覆盖
-	sm.settings = DefaultSystemSettings()
-	sm.mapToStruct(settingsMap, &sm.settings)
-
-	logrus.Debug("System settings loaded from database")
-	return nil
-}
-
 // GetSettings 获取当前系统配置
+// If the syncer is not initialized, it returns default settings.
 func (sm *SystemSettingsManager) GetSettings() SystemSettings {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.settings
+	if sm.syncer == nil {
+		logrus.Warn("SystemSettingsManager is not initialized, returning default settings.")
+		return DefaultSystemSettings()
+	}
+	return sm.syncer.Get()
 }
 
 // GetAppUrl returns the effective App URL.
 // It prioritizes the value from system settings (database) over the APP_URL environment variable.
 func (sm *SystemSettingsManager) GetAppUrl() string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
 	// 1. 优先级: 数据库中的系统配置
-	if sm.settings.AppUrl != "" {
-		return sm.settings.AppUrl
+	settings := sm.GetSettings()
+	if settings.AppUrl != "" {
+		return settings.AppUrl
 	}
 
 	// 2. 回退: 环境变量
@@ -224,10 +247,6 @@ func (sm *SystemSettingsManager) GetAppUrl() string {
 
 // UpdateSettings 更新系统配置
 func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) error {
-	if db.DB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
 	// 验证配置项
 	if err := sm.ValidateSettings(settingsMap); err != nil {
 		return err
@@ -251,17 +270,14 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) erro
 		}
 	}
 
-	// 重新加载配置到内存
-	return sm.LoadFromDatabase()
+	// 触发所有实例重新加载
+	return sm.syncer.Invalidate()
 }
 
 // GetEffectiveConfig 获取有效配置 (系统配置 + 分组覆盖)
 func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMap) SystemSettings {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
 	// 从系统配置开始
-	effectiveConfig := sm.settings
+	effectiveConfig := sm.GetSettings()
 	v := reflect.ValueOf(&effectiveConfig).Elem()
 	t := v.Type()
 
@@ -360,49 +376,19 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) er
 
 // DisplayCurrentSettings 显示当前系统配置信息
 func (sm *SystemSettingsManager) DisplayCurrentSettings() {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
+	settings := sm.GetSettings()
 	logrus.Info("Current System Settings:")
-	logrus.Infof("   App URL: %s", sm.settings.AppUrl)
-	logrus.Infof("   Blacklist threshold: %d", sm.settings.BlacklistThreshold)
-	logrus.Infof("   Max retries: %d", sm.settings.MaxRetries)
+	logrus.Infof("   App URL: %s", settings.AppUrl)
+	logrus.Infof("   Blacklist threshold: %d", settings.BlacklistThreshold)
+	logrus.Infof("   Max retries: %d", settings.MaxRetries)
 	logrus.Infof("   Server timeouts: read=%ds, write=%ds, idle=%ds, shutdown=%ds",
-		sm.settings.ServerReadTimeout, sm.settings.ServerWriteTimeout,
-		sm.settings.ServerIdleTimeout, sm.settings.ServerGracefulShutdownTimeout)
+		settings.ServerReadTimeout, settings.ServerWriteTimeout,
+		settings.ServerIdleTimeout, settings.ServerGracefulShutdownTimeout)
 	logrus.Infof("   Request timeouts: request=%ds, response=%ds, idle_conn=%ds",
-		sm.settings.RequestTimeout, sm.settings.ResponseTimeout, sm.settings.IdleConnTimeout)
-	logrus.Infof("   Request log retention: %d days", sm.settings.RequestLogRetentionDays)
+		settings.RequestTimeout, settings.ResponseTimeout, settings.IdleConnTimeout)
+	logrus.Infof("   Request log retention: %d days", settings.RequestLogRetentionDays)
 	logrus.Infof("   Key validation: interval=%dmin, task_timeout=%dmin",
-		sm.settings.KeyValidationIntervalMinutes, sm.settings.KeyValidationTaskTimeoutMinutes)
-}
-
-// 辅助方法
-
-func (sm *SystemSettingsManager) mapToStruct(m map[string]string, s *SystemSettings) {
-	v := reflect.ValueOf(s).Elem()
-	t := v.Type()
-
-	// 创建一个从 json 标签到字段名的映射
-	jsonToField := make(map[string]string)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
-		if jsonTag != "" {
-			jsonToField[jsonTag] = field.Name
-		}
-	}
-
-	for key, valStr := range m {
-		if fieldName, ok := jsonToField[key]; ok {
-			fieldValue := v.FieldByName(fieldName)
-			if fieldValue.IsValid() && fieldValue.CanSet() {
-				if err := setFieldFromString(fieldValue, valStr); err != nil {
-					logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
-				}
-			}
-		}
-	}
+		settings.KeyValidationIntervalMinutes, settings.KeyValidationTaskTimeoutMinutes)
 }
 
 // setFieldFromString sets a struct field's value from a string, based on the field's kind.

@@ -59,24 +59,10 @@ func (s *Server) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	// 重载系统配置
-	if err := s.SettingsManager.LoadFromDatabase(); err != nil {
-		logrus.Errorf("Failed to reload system settings: %v", err)
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Failed to reload system settings after update"))
-		return
-	}
-
 	s.SettingsManager.DisplayCurrentSettings()
 
-	logrus.Info("Configuration reloaded successfully via API")
+	logrus.Info("Settings update request processed. Invalidation notification sent.")
 	response.Success(c, gin.H{
-		"message": "Configuration reloaded successfully",
-		"timestamp": gin.H{
-			"reloaded_at": "now",
-		},
-	})
-
-	response.Success(c, gin.H{
-		"message": "Settings updated successfully. Configuration reloaded.",
+		"message": "Settings updated successfully. Configuration will be reloaded in the background across all instances.",
 	})
 }
