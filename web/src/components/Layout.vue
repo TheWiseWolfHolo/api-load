@@ -79,6 +79,7 @@ import NavBar from "@/components/NavBar.vue";
   height: 35px;
   img {
     height: 100%;
+    width: 100%;
   }
 }
 
