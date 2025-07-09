@@ -13,14 +13,16 @@ import (
 type LogCleanupService struct {
 	db              *gorm.DB
 	settingsManager *config.SystemSettingsManager
+	leaderService   *LeaderService
 	stopCh          chan struct{}
 }
 
 // NewLogCleanupService 创建新的日志清理服务
-func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager) *LogCleanupService {
+func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager, leaderService *LeaderService) *LogCleanupService {
 	return &LogCleanupService{
 		db:              db,
 		settingsManager: settingsManager,
+		leaderService:   leaderService,
 		stopCh:          make(chan struct{}),
 	}
 }
@@ -58,6 +60,11 @@ func (s *LogCleanupService) run() {
 
 // cleanupExpiredLogs 清理过期的请求日志
 func (s *LogCleanupService) cleanupExpiredLogs() {
+	if !s.leaderService.IsLeader() {
+		logrus.Debug("Not the leader, skipping log cleanup.")
+		return
+	}
+
 	// 获取日志保留天数配置
 	settings := s.settingsManager.GetSettings()
 	retentionDays := settings.RequestLogRetentionDays

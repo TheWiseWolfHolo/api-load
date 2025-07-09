@@ -77,6 +77,5 @@ type LogConfig struct {
 
 // DatabaseConfig represents database configuration
 type DatabaseConfig struct {
-	DSN         string `json:"dsn"`
-	AutoMigrate bool   `json:"autoMigrate"`
+	DSN string `json:"dsn"`
 }

@@ -125,8 +125,8 @@ func NewSystemSettingsManager() *SystemSettingsManager {
 	return globalSystemSettings
 }
 
-// InitializeSystemSettings 初始化系统配置到数据库
-func (sm *SystemSettingsManager) InitializeSystemSettings() error {
+// EnsureSettingsInitialized 确保数据库中存在所有系统设置的记录。
+func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 	if db.DB == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -168,8 +168,7 @@ func (sm *SystemSettingsManager) InitializeSystemSettings() error {
 		}
 	}
 
-	// 加载配置到内存
-	return sm.LoadFromDatabase()
+	return nil
 }
 
 // LoadFromDatabase 从数据库加载系统配置到内存

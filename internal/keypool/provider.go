@@ -14,11 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	keypoolInitializedKey = "keypool:initialized"
-	keypoolLoadingKey     = "keypool:loading"
-)
-
 type KeyProvider struct {
 	db              *gorm.DB
 	store           store.Store
@@ -192,36 +187,14 @@ func (p *KeyProvider) handleFailure(keyID uint, keyHashKey, activeKeysListKey st
 
 // LoadKeysFromDB 从数据库加载所有分组和密钥，并填充到 Store 中。
 func (p *KeyProvider) LoadKeysFromDB() error {
-	// 1. 检查是否已初始化
-	initialized, err := p.store.Exists(keypoolInitializedKey)
-	if err != nil {
-		return fmt.Errorf("failed to check for keypool initialization flag: %w", err)
-	}
-	if initialized {
-		logrus.Info("Key pool already initialized, skipping database load.")
-		return nil
-	}
 
-	// 2. 设置加载锁，防止集群中多个节点同时加载
-	lockAcquired, err := p.store.SetNX(keypoolLoadingKey, []byte("1"), 10*time.Minute)
-	if err != nil {
-		return fmt.Errorf("failed to acquire loading lock: %w", err)
-	}
-	if !lockAcquired {
-		logrus.Info("Another instance is already loading the key pool. Skipping.")
-		return nil
-	}
-	defer p.store.Delete(keypoolLoadingKey)
-
-	logrus.Info("Acquired loading lock. Starting first-time initialization of key pool...")
-
-	// 3. 分批从数据库加载并使用 Pipeline 写入 Redis
+	// 1. 分批从数据库加载并使用 Pipeline 写入 Redis
 	allActiveKeyIDs := make(map[uint][]any)
 	batchSize := 1000
 	var batchKeys []*models.APIKey
 
-	err = p.db.Model(&models.APIKey{}).FindInBatches(&batchKeys, batchSize, func(tx *gorm.DB, batch int) error {
-		logrus.Infof("Processing batch %d with %d keys...", batch, len(batchKeys))
+	err := p.db.Model(&models.APIKey{}).FindInBatches(&batchKeys, batchSize, func(tx *gorm.DB, batch int) error {
+		logrus.Debugf("Processing batch %d with %d keys...", batch, len(batchKeys))
 
 		var pipeline store.Pipeliner
 		if redisStore, ok := p.store.(store.RedisPipeliner); ok {
@@ -257,22 +230,16 @@ func (p *KeyProvider) LoadKeysFromDB() error {
 		return fmt.Errorf("failed during batch processing of keys: %w", err)
 	}
 
-	// 4. 更新所有分组的 active_keys 列表
+	// 2. 更新所有分组的 active_keys 列表
 	logrus.Info("Updating active key lists for all groups...")
 	for groupID, activeIDs := range allActiveKeyIDs {
 		if len(activeIDs) > 0 {
 			activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
-			p.store.Delete(activeKeysListKey) // Clean slate
+			p.store.Delete(activeKeysListKey)
 			if err := p.store.LPush(activeKeysListKey, activeIDs...); err != nil {
 				logrus.WithFields(logrus.Fields{"groupID": groupID, "error": err}).Error("Failed to LPush active keys for group")
 			}
 		}
-	}
-
-	// 5. 设置最终的初始化成功标志
-	logrus.Info("Key pool loaded successfully. Setting initialization flag.")
-	if err := p.store.Set(keypoolInitializedKey, []byte("1"), 0); err != nil {
-		logrus.WithError(err).Error("Critical: Failed to set final initialization flag. Next startup might re-run initialization.")
 	}
 
 	return nil

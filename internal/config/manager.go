@@ -118,8 +118,7 @@ func (m *Manager) ReloadConfig() error {
 			EnableRequest: parseBoolean(os.Getenv("LOG_ENABLE_REQUEST"), true),
 		},
 		Database: types.DatabaseConfig{
-			DSN:         os.Getenv("DATABASE_DSN"),
-			AutoMigrate: parseBoolean(os.Getenv("DB_AUTO_MIGRATE"), true),
+			DSN: os.Getenv("DATABASE_DSN"),
 		},
 		RedisDSN: os.Getenv("REDIS_DSN"),
 	}
@@ -317,7 +316,6 @@ func (s *SystemSettingsManager) GetInt(key string, defaultValue int) int {
 	}
 	return defaultValue
 }
-
 
 // SetupLogger configures the logging system based on the provided configuration.
 func SetupLogger(configManager types.ConfigManager) {

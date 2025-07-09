@@ -77,27 +77,54 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
+	// 1. 启动 Leader Service 并等待选举结果
 	if err := a.leaderService.Start(); err != nil {
 		return fmt.Errorf("leader service failed to start: %w", err)
 	}
 
+	// 2. Leader 节点执行不依赖配置的“写”操作
 	if a.leaderService.IsLeader() {
-		if err := a.settingsManager.InitializeSystemSettings(); err != nil {
+		logrus.Info("Leader mode. Performing initial one-time tasks...")
+
+		// 2.1. 数据库迁移
+		if err := a.db.AutoMigrate(
+			&models.RequestLog{},
+			&models.APIKey{},
+			&models.SystemSetting{},
+			&models.Group{},
+		); err != nil {
+			return fmt.Errorf("database auto-migration failed: %w", err)
+		}
+		logrus.Info("Database auto-migration completed.")
+
+		// 2.2. 初始化系统设置
+		if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
 			return fmt.Errorf("failed to initialize system settings: %w", err)
 		}
-		logrus.Info("System settings initialized by leader.")
+		logrus.Info("System settings initialized in DB.")
 	} else {
-		logrus.Info("This node is not the leader. Skipping leader-only initialization tasks.")
+		logrus.Info("Follower Mode. Skipping initial one-time tasks.")
 	}
 
-	logrus.Debug("Loading API keys into the key pool...")
-	if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
-		return fmt.Errorf("failed to load keys into key pool: %w", err)
+	// 3. 所有节点从数据库加载配置到内存
+	if err := a.settingsManager.LoadFromDatabase(); err != nil {
+		return fmt.Errorf("failed to load system settings from database: %w", err)
 	}
+	logrus.Info("System settings loaded into memory.")
+
+	// 4. Leader 节点执行依赖配置的“写”操作
+	if a.leaderService.IsLeader() {
+		// 4.1. 从数据库加载密钥到 Redis
+		if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
+			return fmt.Errorf("failed to load keys into key pool: %w", err)
+		}
+		logrus.Info("API keys loaded into Redis cache by leader.")
+	}
+
+	// 5. 显示配置并启动所有后台服务
 	a.settingsManager.DisplayCurrentSettings()
 	a.configManager.DisplayConfig()
 
-	// Start background services
 	a.startRequestLogger()
 	a.logCleanupService.Start()
 	a.keyValidationPool.Start()
