@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"gpt-load/internal/syncer"
@@ -66,7 +65,7 @@ func (gm *GroupManager) GetGroupByName(name string) (*models.Group, error) {
 	groups := gm.syncer.Get()
 	group, ok := groups[name]
 	if !ok {
-		return nil, errors.ErrResourceNotFound
+		return nil, gorm.ErrRecordNotFound
 	}
 	return group, nil
 }
