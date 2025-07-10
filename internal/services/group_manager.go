@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"gpt-load/internal/config"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"gpt-load/internal/syncer"
@@ -14,16 +15,22 @@ const GroupUpdateChannel = "groups:updated"
 
 // GroupManager manages the caching of group data.
 type GroupManager struct {
-	syncer *syncer.CacheSyncer[map[string]*models.Group]
-	db     *gorm.DB
-	store  store.Store
+	syncer          *syncer.CacheSyncer[map[string]*models.Group]
+	db              *gorm.DB
+	store           store.Store
+	settingsManager *config.SystemSettingsManager
 }
 
 // NewGroupManager creates a new, uninitialized GroupManager.
-func NewGroupManager(db *gorm.DB, store store.Store) *GroupManager {
+func NewGroupManager(
+	db *gorm.DB,
+	store store.Store,
+	settingsManager *config.SystemSettingsManager,
+) *GroupManager {
 	return &GroupManager{
-		db:    db,
-		store: store,
+		db:              db,
+		store:           store,
+		settingsManager: settingsManager,
 	}
 }
 
@@ -38,7 +45,13 @@ func (gm *GroupManager) Initialize() error {
 		groupMap := make(map[string]*models.Group, len(groups))
 		for _, group := range groups {
 			g := *group
+			g.EffectiveConfig = gm.settingsManager.GetEffectiveConfig(g.Config)
 			groupMap[g.Name] = &g
+			logrus.WithFields(logrus.Fields{
+				"group_name":       g.Name,
+				"group_config":     g.Config,
+				"effective_config": g.EffectiveConfig,
+			}).Debug("Loaded group with effective config")
 		}
 		return groupMap, nil
 	}
@@ -48,6 +61,7 @@ func (gm *GroupManager) Initialize() error {
 		gm.store,
 		GroupUpdateChannel,
 		logrus.WithField("syncer", "groups"),
+		nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create group syncer: %w", err)

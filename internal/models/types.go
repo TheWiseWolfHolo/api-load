@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gpt-load/internal/types"
 	"time"
 
 	"gorm.io/datatypes"
@@ -38,21 +39,22 @@ type GroupConfig struct {
 
 // Group 对应 groups 表
 type Group struct {
-	ID              uint              `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name            string            `gorm:"type:varchar(255);not null;unique" json:"name"`
-	Endpoint        string            `gorm:"-" json:"endpoint"`
-	DisplayName     string            `gorm:"type:varchar(255)" json:"display_name"`
-	Description     string            `gorm:"type:varchar(512)" json:"description"`
-	Upstreams       datatypes.JSON    `gorm:"type:json;not null" json:"upstreams"`
-	ChannelType     string            `gorm:"type:varchar(50);not null" json:"channel_type"`
-	Sort            int               `gorm:"default:0" json:"sort"`
-	TestModel       string            `gorm:"type:varchar(255);not null" json:"test_model"`
-	ParamOverrides  datatypes.JSONMap `gorm:"type:json" json:"param_overrides"`
-	Config          datatypes.JSONMap `gorm:"type:json" json:"config"`
-	APIKeys         []APIKey          `gorm:"foreignKey:GroupID" json:"api_keys"`
-	LastValidatedAt *time.Time        `json:"last_validated_at"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
+	ID              uint                 `gorm:"primaryKey;autoIncrement" json:"id"`
+	EffectiveConfig types.SystemSettings `gorm:"-" json:"effective_config,omitempty"`
+	Name            string               `gorm:"type:varchar(255);not null;unique" json:"name"`
+	Endpoint        string               `gorm:"-" json:"endpoint"`
+	DisplayName     string               `gorm:"type:varchar(255)" json:"display_name"`
+	Description     string               `gorm:"type:varchar(512)" json:"description"`
+	Upstreams       datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
+	ChannelType     string               `gorm:"type:varchar(50);not null" json:"channel_type"`
+	Sort            int                  `gorm:"default:0" json:"sort"`
+	TestModel       string               `gorm:"type:varchar(255);not null" json:"test_model"`
+	ParamOverrides  datatypes.JSONMap    `gorm:"type:json" json:"param_overrides"`
+	Config          datatypes.JSONMap    `gorm:"type:json" json:"config"`
+	APIKeys         []APIKey             `gorm:"foreignKey:GroupID" json:"api_keys"`
+	LastValidatedAt *time.Time           `json:"last_validated_at"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
 }
 
 // APIKey 对应 api_keys 表

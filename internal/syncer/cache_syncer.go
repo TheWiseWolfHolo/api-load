@@ -23,6 +23,7 @@ type CacheSyncer[T any] struct {
 	logger      *logrus.Entry
 	stopChan    chan struct{}
 	wg          sync.WaitGroup
+	afterReload func(newValue T)
 }
 
 // NewCacheSyncer creates and initializes a new CacheSyncer.
@@ -31,6 +32,7 @@ func NewCacheSyncer[T any](
 	store store.Store,
 	channelName string,
 	logger *logrus.Entry,
+	afterReload func(newValue T),
 ) (*CacheSyncer[T], error) {
 	s := &CacheSyncer[T]{
 		loader:      loader,
@@ -38,6 +40,7 @@ func NewCacheSyncer[T any](
 		channelName: channelName,
 		logger:      logger,
 		stopChan:    make(chan struct{}),
+		afterReload: afterReload,
 	}
 
 	if err := s.reload(); err != nil {
@@ -85,6 +88,11 @@ func (s *CacheSyncer[T]) reload() error {
 	s.mu.Unlock()
 
 	s.logger.Info("cache reloaded successfully")
+	// After successfully reloading and updating the cache, trigger the hook.
+	if s.afterReload != nil {
+		s.logger.Debug("triggering afterReload hook")
+		s.afterReload(newData)
+	}
 	return nil
 }
 

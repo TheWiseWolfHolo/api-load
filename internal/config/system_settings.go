@@ -1,11 +1,13 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"gpt-load/internal/db"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"gpt-load/internal/syncer"
+	"gpt-load/internal/types"
 	"os"
 	"reflect"
 	"strconv"
@@ -16,38 +18,15 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// SystemSettings 定义所有系统配置项
-// 使用结构体标签作为唯一事实来源
-type SystemSettings struct {
-	// 基础参数
-	AppUrl                  string `json:"app_url" default:"" name:"项目地址" category:"基础参数" desc:"项目的基础 URL，用于拼接分组终端节点地址。系统配置优先于环境变量 APP_URL。"`
-	RequestLogRetentionDays int    `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
-
-	// 服务超时
-	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务超时" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
-	ServerWriteTimeout            int `json:"server_write_timeout" default:"1800" name:"写入超时" category:"服务超时" desc:"HTTP 服务器写入超时时间（秒）" validate:"min=1"`
-	ServerIdleTimeout             int `json:"server_idle_timeout" default:"120" name:"空闲超时" category:"服务超时" desc:"HTTP 服务器空闲超时时间（秒）" validate:"min=1"`
-	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" name:"优雅关闭超时" category:"服务超时" desc:"服务优雅关闭的等待超时时间（秒）" validate:"min=1"`
-
-	// 请求超时
-	RequestTimeout  int `json:"request_timeout" default:"30" name:"请求超时" category:"请求超时" desc:"请求处理的总体超时时间（秒）" validate:"min=1"`
-	ResponseTimeout int `json:"response_timeout" default:"30" name:"响应超时" category:"请求超时" desc:"TLS 握手和响应头的超时时间（秒）" validate:"min=1"`
-	IdleConnTimeout int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求超时" desc:"空闲连接的超时时间（秒）" validate:"min=1"`
-
-	// 密钥配置
-	MaxRetries                      int `json:"max_retries" default:"3" name:"最大重试次数" category:"密钥配置" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
-	BlacklistThreshold              int `json:"blacklist_threshold" default:"1" name:"黑名单阈值" category:"密钥配置" desc:"一个 Key 连续失败多少次后进入黑名单" validate:"min=0"`
-	KeyValidationIntervalMinutes    int `json:"key_validation_interval_minutes" default:"60" name:"定时验证周期" category:"密钥配置" desc:"后台定时验证密钥的默认周期（分钟）" validate:"min=5"`
-	KeyValidationTaskTimeoutMinutes int `json:"key_validation_task_timeout_minutes" default:"60" name:"手动验证超时" category:"密钥配置" desc:"手动触发的全量验证任务的超时时间（分钟）" validate:"min=10"`
-}
+const SettingsUpdateChannel = "system_settings:updated"
 
 // GenerateSettingsMetadata 使用反射从 SystemSettings 结构体动态生成元数据
-func GenerateSettingsMetadata(s *SystemSettings) []models.SystemSettingInfo {
+func GenerateSettingsMetadata(s *types.SystemSettings) []models.SystemSettingInfo {
 	var settingsInfo []models.SystemSettingInfo
 	v := reflect.ValueOf(s).Elem()
 	t := v.Type()
 
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
 
@@ -86,12 +65,12 @@ func GenerateSettingsMetadata(s *SystemSettings) []models.SystemSettingInfo {
 }
 
 // DefaultSystemSettings 返回默认的系统配置
-func DefaultSystemSettings() SystemSettings {
-	s := SystemSettings{}
+func DefaultSystemSettings() types.SystemSettings {
+	s := types.SystemSettings{}
 	v := reflect.ValueOf(&s).Elem()
 	t := v.Type()
 
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		defaultTag := field.Tag.Get("default")
 		if defaultTag == "" {
@@ -110,22 +89,24 @@ func DefaultSystemSettings() SystemSettings {
 
 // SystemSettingsManager 管理系统配置
 type SystemSettingsManager struct {
-	syncer *syncer.CacheSyncer[SystemSettings]
+	syncer *syncer.CacheSyncer[types.SystemSettings]
 }
 
-const SettingsUpdateChannel = "system_settings:updated"
-
 // NewSystemSettingsManager creates a new, uninitialized SystemSettingsManager.
-func NewSystemSettingsManager() (*SystemSettingsManager, error) {
-	return &SystemSettingsManager{}, nil
+func NewSystemSettingsManager() *SystemSettingsManager {
+	return &SystemSettingsManager{}
+}
+
+type gm interface {
+	Invalidate() error
 }
 
 // Initialize initializes the SystemSettingsManager with database and store dependencies.
-func (sm *SystemSettingsManager) Initialize(store store.Store) error {
-	settingsLoader := func() (SystemSettings, error) {
+func (sm *SystemSettingsManager) Initialize(store store.Store, gm gm) error {
+	settingsLoader := func() (types.SystemSettings, error) {
 		var dbSettings []models.SystemSetting
 		if err := db.DB.Find(&dbSettings).Error; err != nil {
-			return SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
+			return types.SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
 		}
 
 		settingsMap := make(map[string]string)
@@ -138,7 +119,7 @@ func (sm *SystemSettingsManager) Initialize(store store.Store) error {
 		v := reflect.ValueOf(&settings).Elem()
 		t := v.Type()
 		jsonToField := make(map[string]string)
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			field := t.Field(i)
 			jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
 			if jsonTag != "" {
@@ -162,11 +143,18 @@ func (sm *SystemSettingsManager) Initialize(store store.Store) error {
 		return settings, nil
 	}
 
+	afterLoader := func(newData types.SystemSettings) {
+		if err := gm.Invalidate(); err != nil {
+			logrus.Debugf("Failed to invalidate group manager cache after settings update: %v", err)
+		}
+	}
+
 	syncer, err := syncer.NewCacheSyncer(
 		settingsLoader,
 		store,
 		SettingsUpdateChannel,
 		logrus.WithField("syncer", "system_settings"),
+		afterLoader,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create system settings syncer: %w", err)
@@ -227,7 +215,7 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 
 // GetSettings 获取当前系统配置
 // If the syncer is not initialized, it returns default settings.
-func (sm *SystemSettingsManager) GetSettings() SystemSettings {
+func (sm *SystemSettingsManager) GetSettings() types.SystemSettings {
 	if sm.syncer == nil {
 		logrus.Warn("SystemSettingsManager is not initialized, returning default settings.")
 		return DefaultSystemSettings()
@@ -278,7 +266,7 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) erro
 }
 
 // GetEffectiveConfig 获取有效配置 (系统配置 + 分组覆盖)
-func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMap) SystemSettings {
+func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMap) types.SystemSettings {
 	// 从系统配置开始
 	effectiveConfig := sm.GetSettings()
 	v := reflect.ValueOf(&effectiveConfig).Elem()
@@ -286,7 +274,7 @@ func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMa
 
 	// 创建一个从 json 标签到字段名的映射
 	jsonToField := make(map[string]string)
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
 		if jsonTag != "" {
@@ -378,7 +366,7 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) er
 }
 
 // DisplayCurrentSettings 显示当前系统配置信息
-func (sm *SystemSettingsManager) DisplayCurrentSettings(settings SystemSettings) {
+func (sm *SystemSettingsManager) DisplayCurrentSettings(settings types.SystemSettings) {
 	logrus.Info("Current System Settings:")
 	logrus.Infof("   App URL: %s", settings.AppUrl)
 	logrus.Infof("   Blacklist threshold: %d", settings.BlacklistThreshold)
@@ -386,8 +374,10 @@ func (sm *SystemSettingsManager) DisplayCurrentSettings(settings SystemSettings)
 	logrus.Infof("   Server timeouts: read=%ds, write=%ds, idle=%ds, shutdown=%ds",
 		settings.ServerReadTimeout, settings.ServerWriteTimeout,
 		settings.ServerIdleTimeout, settings.ServerGracefulShutdownTimeout)
-	logrus.Infof("   Request timeouts: request=%ds, response=%ds, idle_conn=%ds",
-		settings.RequestTimeout, settings.ResponseTimeout, settings.IdleConnTimeout)
+	logrus.Infof("   Request timeouts: request=%ds, connect=%ds, idle_conn=%ds",
+		settings.RequestTimeout, settings.ConnectTimeout, settings.IdleConnTimeout)
+	logrus.Infof("   HTTP Client Pool: max_idle_conns=%d, max_idle_conns_per_host=%d",
+		settings.MaxIdleConns, settings.MaxIdleConnsPerHost)
 	logrus.Infof("   Request log retention: %d days", settings.RequestLogRetentionDays)
 	logrus.Infof("   Key validation: interval=%dmin, task_timeout=%dmin",
 		settings.KeyValidationIntervalMinutes, settings.KeyValidationTaskTimeoutMinutes)
@@ -424,10 +414,15 @@ func setFieldFromString(fieldValue reflect.Value, value string) error {
 
 func interfaceToInt(val any) (int, error) {
 	switch v := val.(type) {
+	case json.Number:
+		i64, err := v.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(i64), nil
 	case int:
 		return v, nil
 	case float64:
-		// JSON unmarshals numbers into float64
 		if v != float64(int(v)) {
 			return 0, fmt.Errorf("value is a float, not an integer: %v", v)
 		}
@@ -448,6 +443,12 @@ func interfaceToString(val any) (string, bool) {
 // interfaceToBool is kept for GetEffectiveConfig
 func interfaceToBool(val any) (bool, bool) {
 	switch v := val.(type) {
+	case json.Number:
+		if s := v.String(); s == "1" {
+			return true, true
+		} else if s == "0" {
+			return false, true
+		}
 	case bool:
 		return v, true
 	case string:

@@ -118,7 +118,7 @@ func (a *App) Start() error {
 			}
 			logrus.Info("System settings initialized in DB.")
 
-			a.settingsManager.Initialize(a.storage)
+			a.settingsManager.Initialize(a.storage, a.groupManager)
 
 			// 从数据库加载密钥到 Redis
 			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
@@ -131,7 +131,7 @@ func (a *App) Start() error {
 		if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
 			return fmt.Errorf("follower failed to start: %w", err)
 		}
-		a.settingsManager.Initialize(a.storage)
+		a.settingsManager.Initialize(a.storage, a.groupManager)
 	}
 
 	a.groupManager.Initialize()
