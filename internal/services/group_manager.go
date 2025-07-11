@@ -47,11 +47,6 @@ func (gm *GroupManager) Initialize() error {
 			g := *group
 			g.EffectiveConfig = gm.settingsManager.GetEffectiveConfig(g.Config)
 			groupMap[g.Name] = &g
-			logrus.WithFields(logrus.Fields{
-				"group_name":       g.Name,
-				"group_config":     g.Config,
-				"effective_config": g.EffectiveConfig,
-			}).Debug("Loaded group with effective config")
 		}
 		return groupMap, nil
 	}
