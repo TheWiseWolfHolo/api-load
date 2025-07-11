@@ -14,15 +14,6 @@ type ChannelProxy interface {
 	// BuildUpstreamURL constructs the target URL for the upstream service.
 	BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error)
 
-	// ModifyRequest allows the channel to add specific headers or modify the request
-	ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group)
-
-	// IsStreamRequest checks if the request is for a streaming response,
-	IsStreamRequest(c *gin.Context, bodyBytes []byte) bool
-
-	// ValidateKey checks if the given API key is valid.
-	ValidateKey(ctx context.Context, key string) (bool, error)
-
 	// IsConfigStale checks if the channel's configuration is stale compared to the provided group.
 	IsConfigStale(group *models.Group) bool
 
@@ -31,4 +22,16 @@ type ChannelProxy interface {
 
 	// GetStreamClient returns the client for streaming requests.
 	GetStreamClient() *http.Client
+
+	// ModifyRequest allows the channel to add specific headers or modify the request
+	ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group)
+
+	// IsStreamRequest checks if the request is for a streaming response,
+	IsStreamRequest(c *gin.Context, bodyBytes []byte) bool
+
+	// ExtractKey extracts the API key from the request.
+	ExtractKey(c *gin.Context) string
+
+	// ValidateKey checks if the given API key is valid.
+	ValidateKey(ctx context.Context, key string) (bool, error)
 }

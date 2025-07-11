@@ -33,10 +33,42 @@ func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	}, nil
 }
 
-
 // ModifyRequest sets the Authorization header for the OpenAI service.
 func (ch *OpenAIChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
 	req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+}
+
+// IsStreamRequest checks if the request is for a streaming response using the pre-read body.
+func (ch *OpenAIChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
+	if strings.Contains(c.GetHeader("Accept"), "text/event-stream") {
+		return true
+	}
+
+	if c.Query("stream") == "true" {
+		return true
+	}
+
+	type streamPayload struct {
+		Stream bool `json:"stream"`
+	}
+	var p streamPayload
+	if err := json.Unmarshal(bodyBytes, &p); err == nil {
+		return p.Stream
+	}
+
+	return false
+}
+
+// ExtractKey extracts the API key from the Authorization header.
+func (ch *OpenAIChannel) ExtractKey(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		const bearerPrefix = "Bearer "
+		if strings.HasPrefix(authHeader, bearerPrefix) {
+			return authHeader[len(bearerPrefix):]
+		}
+	}
+	return ""
 }
 
 // ValidateKey checks if the given API key is valid by making a chat completion request.
@@ -89,25 +121,4 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, key string) (bool, err
 	parsedError := app_errors.ParseUpstreamError(errorBody)
 
 	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
-}
-
-// IsStreamRequest checks if the request is for a streaming response using the pre-read body.
-func (ch *OpenAIChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
-	if strings.Contains(c.GetHeader("Accept"), "text/event-stream") {
-		return true
-	}
-
-	if c.Query("stream") == "true" {
-		return true
-	}
-
-	type streamPayload struct {
-		Stream bool `json:"stream"`
-	}
-	var p streamPayload
-	if err := json.Unmarshal(bodyBytes, &p); err == nil {
-		return p.Stream
-	}
-
-	return false
 }

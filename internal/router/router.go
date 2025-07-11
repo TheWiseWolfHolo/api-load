@@ -2,9 +2,11 @@ package router
 
 import (
 	"embed"
+	"gpt-load/internal/channel"
 	"gpt-load/internal/handler"
 	"gpt-load/internal/middleware"
 	"gpt-load/internal/proxy"
+	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 	"io/fs"
 	"net/http"
@@ -40,6 +42,8 @@ func NewRouter(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
 	configManager types.ConfigManager,
+	groupManager *services.GroupManager,
+	channelFactory *channel.Factory,
 	buildFS embed.FS,
 	indexPage []byte,
 ) *gin.Engine {
@@ -60,8 +64,8 @@ func NewRouter(
 
 	// 注册路由
 	registerSystemRoutes(router, serverHandler)
-	registerAPIRoutes(router, serverHandler, configManager)
-	registerProxyRoutes(router, proxyServer, configManager)
+	registerAPIRoutes(router, serverHandler, configManager, groupManager, channelFactory)
+	registerProxyRoutes(router, proxyServer, configManager, groupManager, channelFactory)
 	registerFrontendRoutes(router, buildFS, indexPage)
 
 	return router
@@ -74,7 +78,13 @@ func registerSystemRoutes(router *gin.Engine, serverHandler *handler.Server) {
 }
 
 // registerAPIRoutes 注册API路由
-func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, configManager types.ConfigManager) {
+func registerAPIRoutes(
+	router *gin.Engine,
+	serverHandler *handler.Server,
+	configManager types.ConfigManager,
+	groupManager *services.GroupManager,
+	channelFactory *channel.Factory,
+) {
 	api := router.Group("/api")
 	authConfig := configManager.GetAuthConfig()
 
@@ -83,7 +93,7 @@ func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, config
 
 	// 认证
 	protectedAPI := api.Group("")
-	protectedAPI.Use(middleware.Auth(authConfig))
+	protectedAPI.Use(middleware.Auth(authConfig, groupManager, channelFactory))
 	registerProtectedAPIRoutes(protectedAPI, serverHandler)
 }
 
@@ -140,11 +150,17 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 }
 
 // registerProxyRoutes 注册代理路由
-func registerProxyRoutes(router *gin.Engine, proxyServer *proxy.ProxyServer, configManager types.ConfigManager) {
+func registerProxyRoutes(
+	router *gin.Engine,
+	proxyServer *proxy.ProxyServer,
+	configManager types.ConfigManager,
+	groupManager *services.GroupManager,
+	channelFactory *channel.Factory,
+) {
 	proxyGroup := router.Group("/proxy")
 	authConfig := configManager.GetAuthConfig()
 
-	proxyGroup.Use(middleware.Auth(authConfig))
+	proxyGroup.Use(middleware.Auth(authConfig, groupManager, channelFactory))
 
 	proxyGroup.Any("/:group_name/*path", proxyServer.HandleProxy)
 }
