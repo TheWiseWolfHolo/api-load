@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"gpt-load/internal/app"
-	"gpt-load/internal/config"
 	"gpt-load/internal/container"
 	"gpt-load/internal/models"
 	"gpt-load/internal/types"
+	"gpt-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -47,7 +47,7 @@ func main() {
 
 	// Initialzie global logger
 	if err := container.Invoke(func(configManager types.ConfigManager) {
-		config.SetupLogger(configManager)
+		utils.SetupLogger(configManager)
 	}); err != nil {
 		logrus.Fatalf("Failed to setup logger: %v", err)
 	}
