@@ -121,7 +121,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 		}
 
 		if !isActive {
-			logrus.WithField("keyID", keyID).Info("Key has recovered and is being restored to active pool.")
+			logrus.WithField("keyID", keyID).Debug("Key has recovered and is being restored to active pool.")
 			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
 				return fmt.Errorf("failed to LRem key before LPush on recovery: %w", err)
 			}

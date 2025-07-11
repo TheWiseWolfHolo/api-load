@@ -102,13 +102,17 @@ func (s *KeyCronService) submitValidationJobs() {
 				continue
 			}
 
-			if len(keys) == 0 {
+			lenKey := len(keys)
+
+			if lenKey == 0 {
 				continue
 			}
 
-			total += len(keys)
+			total += lenKey
 
-			logrus.Infof("KeyCronService: Submitting %d keys for group %s for validation.", len(keys), group.Name)
+			if lenKey > 0 {
+				logrus.Infof("KeyCronService: Submitting %d keys for group %s for validation.", lenKey, group.Name)
+			}
 
 			for _, key := range keys {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -128,10 +132,6 @@ func (s *KeyCronService) submitValidationJobs() {
 	// Update timestamps for all groups that were due for validation
 	if len(groupsToUpdateTimestamp) > 0 {
 		s.updateGroupTimestamps(groupsToUpdateTimestamp, validationStartTime)
-	}
-
-	if total > 0 {
-		logrus.Infof("KeyCronService: Submitted %d keys for validation across %d groups.", total, len(groupsToUpdateTimestamp))
 	}
 }
 
