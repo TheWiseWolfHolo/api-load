@@ -39,7 +39,6 @@ func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
 func NewRouter(
 	serverHandler *handler.Server,
 	proxyServer *proxy.ProxyServer,
-	logCleanupHandler *handler.LogCleanupHandler,
 	configManager types.ConfigManager,
 	buildFS embed.FS,
 	indexPage []byte,
@@ -61,7 +60,7 @@ func NewRouter(
 
 	// 注册路由
 	registerSystemRoutes(router, serverHandler)
-	registerAPIRoutes(router, serverHandler, logCleanupHandler, configManager)
+	registerAPIRoutes(router, serverHandler, configManager)
 	registerProxyRoutes(router, proxyServer, configManager)
 	registerFrontendRoutes(router, buildFS, indexPage)
 
@@ -75,7 +74,7 @@ func registerSystemRoutes(router *gin.Engine, serverHandler *handler.Server) {
 }
 
 // registerAPIRoutes 注册API路由
-func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, logCleanupHandler *handler.LogCleanupHandler, configManager types.ConfigManager) {
+func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, configManager types.ConfigManager) {
 	api := router.Group("/api")
 	authConfig := configManager.GetAuthConfig()
 
@@ -85,7 +84,7 @@ func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, logCle
 	// 认证
 	protectedAPI := api.Group("")
 	protectedAPI.Use(middleware.Auth(authConfig))
-	registerProtectedAPIRoutes(protectedAPI, serverHandler, logCleanupHandler)
+	registerProtectedAPIRoutes(protectedAPI, serverHandler)
 }
 
 // registerPublicAPIRoutes 公开API路由
@@ -94,7 +93,7 @@ func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server
 }
 
 // registerProtectedAPIRoutes 认证API路由
-func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server, logCleanupHandler *handler.LogCleanupHandler) {
+func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
 	api.GET("/channel-types", serverHandler.CommonHandler.GetChannelTypes)
 
 	groups := api.Group("/groups")
@@ -130,11 +129,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	}
 
 	// 日志
-	logs := api.Group("/logs")
-	{
-		logs.GET("", handler.GetLogs)
-		logs.POST("/cleanup", logCleanupHandler.CleanupLogsNow)
-	}
+	api.GET("/logs", handler.GetLogs)
 
 	// 设置
 	settings := api.Group("/settings")

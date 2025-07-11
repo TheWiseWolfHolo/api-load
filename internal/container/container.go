@@ -77,9 +77,6 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(handler.NewServer); err != nil {
 		return nil, err
 	}
-	if err := container.Provide(handler.NewLogCleanupHandler); err != nil {
-		return nil, err
-	}
 	if err := container.Provide(handler.NewCommonHandler); err != nil {
 		return nil, err
 	}

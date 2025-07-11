@@ -13,19 +13,6 @@ import (
 )
 
 // GetLogs godoc
-// @Summary Get request logs
-// @Description Get request logs with pagination and filtering
-// @Tags Logs
-// @Accept  json
-// @Produce  json
-// @Param page query int false "Page number"
-// @Param size query int false "Page size"
-// @Param group_id query int false "Group ID"
-// @Param start_time query string false "Start time (RFC3339)"
-// @Param end_time query string false "End time (RFC3339)"
-// @Param status_code query int false "Status code"
-// @Success 200 {array} models.RequestLog
-// @Router /api/logs [get]
 func GetLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))

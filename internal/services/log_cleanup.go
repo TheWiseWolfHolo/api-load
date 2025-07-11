@@ -41,8 +41,7 @@ func (s *LogCleanupService) Stop() {
 
 // run 运行日志清理的主循环
 func (s *LogCleanupService) run() {
-	// 每天凌晨2点执行清理任务
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(2 * time.Hour)
 	defer ticker.Stop()
 
 	// 启动时先执行一次清理
@@ -93,10 +92,4 @@ func (s *LogCleanupService) cleanupExpiredLogs() {
 	} else {
 		logrus.Debug("No expired request logs found to cleanup")
 	}
-}
-
-// CleanupNow 立即执行一次日志清理
-func (s *LogCleanupService) CleanupNow() {
-	logrus.Info("Manual log cleanup triggered")
-	s.cleanupExpiredLogs()
 }
