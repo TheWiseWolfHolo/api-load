@@ -132,14 +132,8 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 	streamConfig.WriteBufferSize = 0
 	streamConfig.ReadBufferSize = 0
 	// Use a larger, independent connection pool for streaming clients to avoid exhaustion.
-	streamConfig.MaxIdleConns = group.EffectiveConfig.MaxIdleConns * 2
-	if streamConfig.MaxIdleConns < 200 {
-		streamConfig.MaxIdleConns = 200
-	}
-	streamConfig.MaxIdleConnsPerHost = group.EffectiveConfig.MaxIdleConnsPerHost * 2
-	if streamConfig.MaxIdleConnsPerHost < 40 {
-		streamConfig.MaxIdleConnsPerHost = 40
-	}
+	streamConfig.MaxIdleConns = max(group.EffectiveConfig.MaxIdleConns*2, 50)
+	streamConfig.MaxIdleConnsPerHost = max(group.EffectiveConfig.MaxIdleConnsPerHost*2, 20)
 
 	// Get both clients from the manager using their respective configurations.
 	httpClient := f.clientManager.GetClient(clientConfig)
