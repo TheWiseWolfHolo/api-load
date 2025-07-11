@@ -25,21 +25,15 @@ type SystemSetting struct {
 
 // GroupConfig 存储特定于分组的配置
 type GroupConfig struct {
-	BlacklistThreshold            *int `json:"blacklist_threshold,omitempty"`
-	MaxRetries                    *int `json:"max_retries,omitempty"`
-	ServerReadTimeout             *int `json:"server_read_timeout,omitempty"`
-	ServerWriteTimeout            *int `json:"server_write_timeout,omitempty"`
-	ServerIdleTimeout             *int `json:"server_idle_timeout,omitempty"`
-	ServerGracefulShutdownTimeout *int `json:"server_graceful_shutdown_timeout,omitempty"`
-	RequestTimeout                *int `json:"request_timeout,omitempty"`
-	ResponseTimeout               *int `json:"response_timeout,omitempty"`
-	IdleConnTimeout               *int `json:"idle_conn_timeout,omitempty"`
-	KeyValidationIntervalMinutes  *int `json:"key_validation_interval_minutes,omitempty"`
-	ConnectTimeout                *int `json:"connect_timeout,omitempty"`
-	MaxIdleConns                  *int `json:"max_idle_conns,omitempty"`
-	MaxIdleConnsPerHost           *int `json:"max_idle_conns_per_host,omitempty"`
-	ResponseHeaderTimeout         *int `json:"response_header_timeout,omitempty"`
-	DisableCompression            *bool `json:"disable_compression,omitempty"`
+	RequestTimeout               *int `json:"request_timeout,omitempty"`
+	IdleConnTimeout              *int `json:"idle_conn_timeout,omitempty"`
+	ConnectTimeout               *int `json:"connect_timeout,omitempty"`
+	MaxIdleConns                 *int `json:"max_idle_conns,omitempty"`
+	MaxIdleConnsPerHost          *int `json:"max_idle_conns_per_host,omitempty"`
+	ResponseHeaderTimeout        *int `json:"response_header_timeout,omitempty"`
+	MaxRetries                   *int `json:"max_retries,omitempty"`
+	BlacklistThreshold           *int `json:"blacklist_threshold,omitempty"`
+	KeyValidationIntervalMinutes *int `json:"key_validation_interval_minutes,omitempty"`
 }
 
 // Group 对应 groups 表

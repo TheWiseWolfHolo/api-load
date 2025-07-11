@@ -78,14 +78,6 @@ func (s *Server) Login(c *gin.Context) {
 
 	authConfig := s.config.GetAuthConfig()
 
-	if !authConfig.Enabled {
-		c.JSON(http.StatusOK, LoginResponse{
-			Success: true,
-			Message: "Authentication disabled",
-		})
-		return
-	}
-
 	if req.AuthKey == authConfig.Key {
 		c.JSON(http.StatusOK, LoginResponse{
 			Success: true,

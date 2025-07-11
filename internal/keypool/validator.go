@@ -58,7 +58,8 @@ func (s *KeyValidator) ValidateSingleKey(ctx context.Context, key *models.APIKey
 
 	isValid, validationErr := ch.ValidateKey(ctx, key.KeyValue)
 
-	s.keypoolProvider.UpdateStatus(key.ID, group.ID, isValid)
+	group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
+	s.keypoolProvider.UpdateStatus(key, group, isValid)
 
 	if !isValid {
 		logrus.WithFields(logrus.Fields{

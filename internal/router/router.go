@@ -83,13 +83,9 @@ func registerAPIRoutes(router *gin.Engine, serverHandler *handler.Server, logCle
 	registerPublicAPIRoutes(api, serverHandler)
 
 	// 认证
-	if authConfig.Enabled {
-		protectedAPI := api.Group("")
-		protectedAPI.Use(middleware.Auth(authConfig))
-		registerProtectedAPIRoutes(protectedAPI, serverHandler, logCleanupHandler)
-	} else {
-		registerProtectedAPIRoutes(api, serverHandler, logCleanupHandler)
-	}
+	protectedAPI := api.Group("")
+	protectedAPI.Use(middleware.Auth(authConfig))
+	registerProtectedAPIRoutes(protectedAPI, serverHandler, logCleanupHandler)
 }
 
 // registerPublicAPIRoutes 公开API路由
@@ -153,9 +149,7 @@ func registerProxyRoutes(router *gin.Engine, proxyServer *proxy.ProxyServer, con
 	proxyGroup := router.Group("/proxy")
 	authConfig := configManager.GetAuthConfig()
 
-	if authConfig.Enabled {
-		proxyGroup.Use(middleware.Auth(authConfig))
-	}
+	proxyGroup.Use(middleware.Auth(authConfig))
 
 	proxyGroup.Any("/:group_name/*path", proxyServer.HandleProxy)
 }

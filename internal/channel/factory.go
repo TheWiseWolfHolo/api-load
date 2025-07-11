@@ -117,7 +117,7 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		MaxIdleConns:          group.EffectiveConfig.MaxIdleConns,
 		MaxIdleConnsPerHost:   group.EffectiveConfig.MaxIdleConnsPerHost,
 		ResponseHeaderTimeout: time.Duration(group.EffectiveConfig.ResponseHeaderTimeout) * time.Second,
-		DisableCompression:    group.EffectiveConfig.DisableCompression,
+		DisableCompression:    false,
 		WriteBufferSize:       32 * 1024,
 		ReadBufferSize:        32 * 1024,
 		ForceAttemptHTTP2:     true,
@@ -146,11 +146,11 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 	streamClient := f.clientManager.GetClient(&streamConfig)
 
 	return &BaseChannel{
-		Name:           name,
-		Upstreams:      upstreamInfos,
-		HTTPClient:     httpClient,
-		StreamClient:   streamClient,
-		TestModel:      group.TestModel,
+		Name:            name,
+		Upstreams:       upstreamInfos,
+		HTTPClient:      httpClient,
+		StreamClient:    streamClient,
+		TestModel:       group.TestModel,
 		groupUpstreams:  group.Upstreams,
 		effectiveConfig: &group.EffectiveConfig,
 	}, nil

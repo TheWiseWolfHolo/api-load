@@ -3,15 +3,12 @@ package config
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
-	"reflect"
-	"strconv"
 	"strings"
 
 	"gpt-load/internal/errors"
 	"gpt-load/internal/types"
+	"gpt-load/internal/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -67,45 +64,38 @@ func NewManager(settingsManager *SystemSettingsManager) (types.ConfigManager, er
 
 // ReloadConfig reloads the configuration from environment variables
 func (m *Manager) ReloadConfig() error {
-	// Try to load .env file
 	if err := godotenv.Load(); err != nil {
 		logrus.Info("Info: Create .env file to support environment variable configuration")
 	}
 
-	// Get business logic defaults from the single source of truth
-	defaultSettings := DefaultSystemSettings()
-
 	config := &Config{
 		Server: types.ServerConfig{
-			Port: parseInteger(os.Getenv("PORT"), 3000),
-			Host: getEnvOrDefault("HOST", "0.0.0.0"),
-			ReadTimeout:             defaultSettings.ServerReadTimeout,
-			WriteTimeout:            defaultSettings.ServerWriteTimeout,
-			IdleTimeout:             defaultSettings.ServerIdleTimeout,
-			GracefulShutdownTimeout: defaultSettings.ServerGracefulShutdownTimeout,
+			Port:                    utils.ParseInteger(os.Getenv("PORT"), 3000),
+			Host:                    utils.GetEnvOrDefault("HOST", "0.0.0.0"),
+			ReadTimeout:             utils.ParseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 120),
+			WriteTimeout:            utils.ParseInteger(os.Getenv("SERVER_WRITE_TIMEOUT"), 1800),
+			IdleTimeout:             utils.ParseInteger(os.Getenv("SERVER_IDLE_TIMEOUT"), 120),
+			GracefulShutdownTimeout: utils.ParseInteger(os.Getenv("SERVER_GRACEFUL_SHUTDOWN_TIMEOUT"), 60),
 		},
 		Auth: types.AuthConfig{
-			Key:     os.Getenv("AUTH_KEY"),
-			Enabled: os.Getenv("AUTH_KEY") != "",
+			Key: os.Getenv("AUTH_KEY"),
 		},
 		CORS: types.CORSConfig{
-			Enabled:          parseBoolean(os.Getenv("ENABLE_CORS"), true),
-			AllowedOrigins:   parseArray(os.Getenv("ALLOWED_ORIGINS"), []string{"*"}),
-			AllowedMethods:   parseArray(os.Getenv("ALLOWED_METHODS"), []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-			AllowedHeaders:   parseArray(os.Getenv("ALLOWED_HEADERS"), []string{"*"}),
-			AllowCredentials: parseBoolean(os.Getenv("ALLOW_CREDENTIALS"), false),
+			Enabled:          utils.ParseBoolean(os.Getenv("ENABLE_CORS"), true),
+			AllowedOrigins:   utils.ParseArray(os.Getenv("ALLOWED_ORIGINS"), []string{"*"}),
+			AllowedMethods:   utils.ParseArray(os.Getenv("ALLOWED_METHODS"), []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+			AllowedHeaders:   utils.ParseArray(os.Getenv("ALLOWED_HEADERS"), []string{"*"}),
+			AllowCredentials: utils.ParseBoolean(os.Getenv("ALLOW_CREDENTIALS"), false),
 		},
 		Performance: types.PerformanceConfig{
-			MaxConcurrentRequests: parseInteger(os.Getenv("MAX_CONCURRENT_REQUESTS"), 100),
-			EnableGzip:            parseBoolean(os.Getenv("ENABLE_GZIP"), true),
-			KeyValidationPoolSize: parseInteger(os.Getenv("KEY_VALIDATION_POOL_SIZE"), 10),
+			MaxConcurrentRequests: utils.ParseInteger(os.Getenv("MAX_CONCURRENT_REQUESTS"), 100),
+			KeyValidationPoolSize: utils.ParseInteger(os.Getenv("KEY_VALIDATION_POOL_SIZE"), 10),
 		},
 		Log: types.LogConfig{
-			Level:         getEnvOrDefault("LOG_LEVEL", "info"),
-			Format:        getEnvOrDefault("LOG_FORMAT", "text"),
-			EnableFile:    parseBoolean(os.Getenv("LOG_ENABLE_FILE"), false),
-			FilePath:      getEnvOrDefault("LOG_FILE_PATH", "logs/app.log"),
-			EnableRequest: parseBoolean(os.Getenv("LOG_ENABLE_REQUEST"), true),
+			Level:      utils.GetEnvOrDefault("LOG_LEVEL", "info"),
+			Format:     utils.GetEnvOrDefault("LOG_FORMAT", "text"),
+			EnableFile: utils.ParseBoolean(os.Getenv("LOG_ENABLE_FILE"), false),
+			FilePath:   utils.GetEnvOrDefault("LOG_FILE_PATH", "logs/app.log"),
 		},
 		Database: types.DatabaseConfig{
 			DSN: os.Getenv("DATABASE_DSN"),
@@ -154,17 +144,7 @@ func (m *Manager) GetDatabaseConfig() types.DatabaseConfig {
 
 // GetEffectiveServerConfig returns server configuration merged with system settings
 func (m *Manager) GetEffectiveServerConfig() types.ServerConfig {
-	config := m.config.Server
-
-	// Merge with system settings from database
-	systemSettings := m.settingsManager.GetSettings()
-
-	config.ReadTimeout = systemSettings.ServerReadTimeout
-	config.WriteTimeout = systemSettings.ServerWriteTimeout
-	config.IdleTimeout = systemSettings.ServerIdleTimeout
-	config.GracefulShutdownTimeout = systemSettings.ServerGracefulShutdownTimeout
-
-	return config
+	return m.config.Server
 }
 
 // Validate validates the configuration
@@ -180,6 +160,11 @@ func (m *Manager) Validate() error {
 		validationErrors = append(validationErrors, "max concurrent requests cannot be less than 1")
 	}
 
+	// Validate auth key
+	if m.config.Auth.Key == "" {
+		validationErrors = append(validationErrors, "AUTH_KEY is required and cannot be empty")
+	}
+
 	if len(validationErrors) > 0 {
 		logrus.Error("Configuration validation failed:")
 		for _, err := range validationErrors {
@@ -191,160 +176,51 @@ func (m *Manager) Validate() error {
 	return nil
 }
 
-// DisplayConfig displays current configuration information
-func (m *Manager) DisplayConfig() {
+// DisplayServerConfig displays current server-related configuration information
+func (m *Manager) DisplayServerConfig() {
 	serverConfig := m.GetEffectiveServerConfig()
-	authConfig := m.GetAuthConfig()
 	corsConfig := m.GetCORSConfig()
 	perfConfig := m.GetPerformanceConfig()
 	logConfig := m.GetLogConfig()
+	dbConfig := m.GetDatabaseConfig()
 
-	logrus.Info("Current Server Configuration:")
-	logrus.Infof("   Server: %s:%d", serverConfig.Host, serverConfig.Port)
+	logrus.Info("--- Server Configuration ---")
+	logrus.Infof("  Listen Address: %s:%d", serverConfig.Host, serverConfig.Port)
+	logrus.Infof("  Graceful Shutdown Timeout: %d seconds", serverConfig.GracefulShutdownTimeout)
+	logrus.Infof("  Read Timeout: %d seconds", serverConfig.ReadTimeout)
+	logrus.Infof("  Write Timeout: %d seconds", serverConfig.WriteTimeout)
+	logrus.Infof("  Idle Timeout: %d seconds", serverConfig.IdleTimeout)
 
-	authStatus := "disabled"
-	if authConfig.Enabled {
-		authStatus = "enabled"
-	}
-	logrus.Infof("   Authentication: %s", authStatus)
+	logrus.Info("--- Performance ---")
+	logrus.Infof("  Max Concurrent Requests: %d", perfConfig.MaxConcurrentRequests)
+	logrus.Infof("  Key Validation Pool Size: %d", perfConfig.KeyValidationPoolSize)
 
+	logrus.Info("--- Security ---")
+	logrus.Infof("  Authentication: enabled (key loaded)")
 	corsStatus := "disabled"
 	if corsConfig.Enabled {
-		corsStatus = "enabled"
+		corsStatus = fmt.Sprintf("enabled (Origins: %s)", strings.Join(corsConfig.AllowedOrigins, ", "))
 	}
-	logrus.Infof("   CORS: %s", corsStatus)
-	logrus.Infof("   Max concurrent requests: %d", perfConfig.MaxConcurrentRequests)
-	logrus.Infof("   Concurrency pool size: %d", perfConfig.KeyValidationPoolSize)
+	logrus.Infof("  CORS: %s", corsStatus)
 
-	gzipStatus := "disabled"
-	if perfConfig.EnableGzip {
-		gzipStatus = "enabled"
-	}
-	logrus.Infof("   Gzip compression: %s", gzipStatus)
-
-	requestLogStatus := "enabled"
-	if !logConfig.EnableRequest {
-		requestLogStatus = "disabled"
-	}
-	logrus.Infof("   Request logging: %s", requestLogStatus)
-}
-
-// Helper functions
-
-// parseInteger parses integer environment variable
-func parseInteger(value string, defaultValue int) int {
-	if value == "" {
-		return defaultValue
-	}
-	if parsed, err := strconv.Atoi(value); err == nil {
-		return parsed
-	}
-	return defaultValue
-}
-
-// parseBoolean parses boolean environment variable
-func parseBoolean(value string, defaultValue bool) bool {
-	if value == "" {
-		return defaultValue
-	}
-
-	lowerValue := strings.ToLower(value)
-	switch lowerValue {
-	case "true", "1", "yes", "on":
-		return true
-	case "false", "0", "no", "off":
-		return false
-	default:
-		return defaultValue
-	}
-}
-
-// parseArray parses array environment variable (comma-separated)
-func parseArray(value string, defaultValue []string) []string {
-	if value == "" {
-		return defaultValue
-	}
-
-	parts := strings.Split(value, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-
-	if len(result) == 0 {
-		return defaultValue
-	}
-	return result
-}
-
-// getEnvOrDefault gets environment variable or default value
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// GetInt is a helper function for SystemSettingsManager to get an integer value with a default.
-func (s *SystemSettingsManager) GetInt(key string, defaultValue int) int {
-	settings := s.GetSettings()
-	v := reflect.ValueOf(settings)
-	t := v.Type()
-
-	for i := 0; i < t.NumField(); i++ {
-		structField := t.Field(i)
-		jsonTag := strings.Split(structField.Tag.Get("json"), ",")[0]
-		if jsonTag == key {
-			valueField := v.Field(i)
-			if valueField.Kind() == reflect.Int {
-				return int(valueField.Int())
-			}
-			break
-		}
-	}
-
-	return defaultValue
-}
-
-// SetupLogger configures the logging system based on the provided configuration.
-func SetupLogger(configManager types.ConfigManager) {
-	logConfig := configManager.GetLogConfig()
-
-	// Set log level
-	level, err := logrus.ParseLevel(logConfig.Level)
-	if err != nil {
-		logrus.Warn("Invalid log level, using info")
-		level = logrus.InfoLevel
-	}
-	logrus.SetLevel(level)
-
-	// Set log format
-	if logConfig.Format == "json" {
-		logrus.SetFormatter(&logrus.JSONFormatter{
-			TimestampFormat: "2006-01-02T15:04:05.000Z07:00", // ISO 8601 format
-		})
-	} else {
-		logrus.SetFormatter(&logrus.TextFormatter{
-			ForceColors:     true,
-			FullTimestamp:   true,
-			TimestampFormat: "2006-01-02 15:04:05",
-		})
-	}
-
-	// Setup file logging if enabled
+	logrus.Info("--- Logging ---")
+	logrus.Infof("  Log Level: %s", logConfig.Level)
+	logrus.Infof("  Log Format: %s", logConfig.Format)
+	logrus.Infof("  File Logging: %t", logConfig.EnableFile)
 	if logConfig.EnableFile {
-		logDir := filepath.Dir(logConfig.FilePath)
-		if err := os.MkdirAll(logDir, 0755); err != nil {
-			logrus.Warnf("Failed to create log directory: %v", err)
-		} else {
-			logFile, err := os.OpenFile(logConfig.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-			if err != nil {
-				logrus.Warnf("Failed to open log file: %v", err)
-			} else {
-				logrus.SetOutput(io.MultiWriter(os.Stdout, logFile))
-			}
-		}
+		logrus.Infof("  Log File Path: %s", logConfig.FilePath)
 	}
+
+	logrus.Info("--- Dependencies ---")
+	if dbConfig.DSN != "" {
+		logrus.Info("  Database: configured")
+	} else {
+		logrus.Info("  Database: not configured")
+	}
+	if m.config.RedisDSN != "" {
+		logrus.Info("  Redis: configured")
+	} else {
+		logrus.Info("  Redis: not configured")
+	}
+	logrus.Info("--------------------------")
 }

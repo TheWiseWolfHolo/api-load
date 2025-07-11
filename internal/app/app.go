@@ -135,7 +135,7 @@ func (a *App) Start() error {
 	}
 
 	// 显示配置并启动所有后台服务
-	a.configManager.DisplayConfig()
+	a.configManager.DisplayServerConfig()
 
 	a.groupManager.Initialize()
 

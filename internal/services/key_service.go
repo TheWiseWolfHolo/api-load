@@ -298,8 +298,6 @@ func (s *KeyService) TestMultipleKeys(ctx context.Context, group *models.Group, 
 		chunk := keysToTest[i:end]
 		results, err := s.KeyValidator.TestMultipleKeys(ctx, group, chunk)
 		if err != nil {
-			// If one chunk fails, we might want to stop or collect partial results.
-			// For now, let's stop and return the error.
 			return nil, err
 		}
 		allResults = append(allResults, results...)

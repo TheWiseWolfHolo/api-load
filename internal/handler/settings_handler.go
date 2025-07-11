@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"gpt-load/internal/config"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
+	"gpt-load/internal/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +14,7 @@ import (
 // It retrieves all system settings, groups them by category, and returns them.
 func (s *Server) GetSettings(c *gin.Context) {
 	currentSettings := s.SettingsManager.GetSettings()
-	settingsInfo := config.GenerateSettingsMetadata(&currentSettings)
+	settingsInfo := utils.GenerateSettingsMetadata(&currentSettings)
 
 	// Group settings by category while preserving order
 	categorized := make(map[string][]models.SystemSettingInfo)

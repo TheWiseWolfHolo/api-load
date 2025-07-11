@@ -166,7 +166,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			return
 		}
 
-		ps.keyProvider.UpdateStatus(apiKey.ID, group.ID, false)
+		ps.keyProvider.UpdateStatus(apiKey, group, false)
 
 		var statusCode int
 		var errorMessage string
@@ -201,7 +201,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		return
 	}
 
-	ps.keyProvider.UpdateStatus(apiKey.ID, group.ID, true)
+	ps.keyProvider.UpdateStatus(apiKey, group, true)
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
 
 	for key, values := range resp.Header {

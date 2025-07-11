@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/url"
 
-	"gpt-load/internal/config"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
+	"gpt-load/internal/utils"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -87,33 +87,18 @@ func isValidGroupName(name string) bool {
 	return match
 }
 
-// validateAndCleanConfig validates the group config against the GroupConfig struct.
-func validateAndCleanConfig(configMap map[string]any) (map[string]any, error) {
+// validateAndCleanConfig validates the group config against the GroupConfig struct and system-defined rules.
+func (s *Server) validateAndCleanConfig(configMap map[string]any) (map[string]any, error) {
 	if configMap == nil {
 		return nil, nil
 	}
 
-	configBytes, err := json.Marshal(configMap)
-	if err != nil {
-		return nil, err
-	}
-
-	var validatedConfig models.GroupConfig
-	if err := json.Unmarshal(configBytes, &validatedConfig); err != nil {
-		return nil, err
-	}
-
-	// Strict check for unknown fields
-	var cleanedMap map[string]any
-	if err := json.Unmarshal(configBytes, &cleanedMap); err != nil {
-		return nil, err
-	}
-
-	val := reflect.ValueOf(validatedConfig)
-	typ := val.Type()
+	// 1. Check for unknown fields by comparing against the GroupConfig struct definition.
+	var tempGroupConfig models.GroupConfig
+	groupConfigType := reflect.TypeOf(tempGroupConfig)
 	validFields := make(map[string]bool)
-	for i := 0; i < typ.NumField(); i++ {
-		jsonTag := typ.Field(i).Tag.Get("json")
+	for i := 0; i < groupConfigType.NumField(); i++ {
+		jsonTag := groupConfigType.Field(i).Tag.Get("json")
 		fieldName := strings.Split(jsonTag, ",")[0]
 		if fieldName != "" && fieldName != "-" {
 			validFields[fieldName] = true
@@ -126,28 +111,29 @@ func validateAndCleanConfig(configMap map[string]any) (map[string]any, error) {
 		}
 	}
 
-	// 验证配置项的合理范围
-	if validatedConfig.BlacklistThreshold != nil && *validatedConfig.BlacklistThreshold < 0 {
-		return nil, fmt.Errorf("blacklist_threshold must be >= 0")
-	}
-	if validatedConfig.MaxRetries != nil && (*validatedConfig.MaxRetries < 0 || *validatedConfig.MaxRetries > 10) {
-		return nil, fmt.Errorf("max_retries must be between 0 and 10")
-	}
-	if validatedConfig.RequestTimeout != nil && (*validatedConfig.RequestTimeout < 1 || *validatedConfig.RequestTimeout > 3600) {
-		return nil, fmt.Errorf("request_timeout must be between 1 and 3600 seconds")
-	}
-	if validatedConfig.KeyValidationIntervalMinutes != nil && (*validatedConfig.KeyValidationIntervalMinutes < 5 || *validatedConfig.KeyValidationIntervalMinutes > 1440) {
-		return nil, fmt.Errorf("key_validation_interval_minutes must be between 5 and 1440 minutes")
+	// 2. Validate the values of the provided fields using the central system settings validator.
+	if err := s.SettingsManager.ValidateGroupConfigOverrides(configMap); err != nil {
+		return nil, err
 	}
 
-	// Marshal back to a map to ensure consistency
+	// 3. Unmarshal and marshal back to clean the map and ensure correct types.
+	configBytes, err := json.Marshal(configMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config map: %w", err)
+	}
+
+	var validatedConfig models.GroupConfig
+	if err := json.Unmarshal(configBytes, &validatedConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal into validated config: %w", err)
+	}
+
 	validatedBytes, err := json.Marshal(validatedConfig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal validated config: %w", err)
 	}
 	var finalMap map[string]any
 	if err := json.Unmarshal(validatedBytes, &finalMap); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal into final map: %w", err)
 	}
 
 	return finalMap, nil
@@ -187,7 +173,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	cleanedConfig, err := validateAndCleanConfig(req.Config)
+	cleanedConfig, err := s.validateAndCleanConfig(req.Config)
 	if err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Invalid config format: %v", err)))
 		return
@@ -325,7 +311,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		group.ParamOverrides = req.ParamOverrides
 	}
 	if req.Config != nil {
-		cleanedConfig, err := validateAndCleanConfig(req.Config)
+		cleanedConfig, err := s.validateAndCleanConfig(req.Config)
 		if err != nil {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Invalid config format: %v", err)))
 			return
@@ -496,8 +482,8 @@ func (s *Server) GetGroupConfigOptions(c *gin.Context) {
 	var options []ConfigOption
 
 	// 1. Get all system setting definitions from the struct tags
-	defaultSettings := config.DefaultSystemSettings()
-	settingDefinitions := config.GenerateSettingsMetadata(&defaultSettings)
+	defaultSettings := utils.DefaultSystemSettings()
+	settingDefinitions := utils.GenerateSettingsMetadata(&defaultSettings)
 	defMap := make(map[string]models.SystemSettingInfo)
 	for _, def := range settingDefinitions {
 		defMap[def.Key] = def

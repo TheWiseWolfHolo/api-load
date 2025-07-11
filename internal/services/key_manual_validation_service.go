@@ -52,8 +52,7 @@ func (s *KeyManualValidationService) StartValidationTask(group *models.Group) (*
 		return nil, fmt.Errorf("no keys to validate in group %s", group.Name)
 	}
 
-	timeoutMinutes := s.SettingsManager.GetInt("key_validation_task_timeout_minutes", 60)
-	timeout := time.Duration(timeoutMinutes) * time.Minute
+	timeout := 30 * time.Minute
 
 	taskStatus, err := s.TaskService.StartTask(group.Name, len(keys), timeout)
 	if err != nil {

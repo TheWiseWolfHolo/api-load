@@ -8,6 +8,7 @@ import (
 	"gpt-load/internal/store"
 	"gpt-load/internal/syncer"
 	"gpt-load/internal/types"
+	"gpt-load/internal/utils"
 	"os"
 	"reflect"
 	"strconv"
@@ -20,73 +21,6 @@ import (
 
 const SettingsUpdateChannel = "system_settings:updated"
 
-// GenerateSettingsMetadata 使用反射从 SystemSettings 结构体动态生成元数据
-func GenerateSettingsMetadata(s *types.SystemSettings) []models.SystemSettingInfo {
-	var settingsInfo []models.SystemSettingInfo
-	v := reflect.ValueOf(s).Elem()
-	t := v.Type()
-
-	for i := range t.NumField() {
-		field := t.Field(i)
-		fieldValue := v.Field(i)
-
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
-			continue
-		}
-
-		nameTag := field.Tag.Get("name")
-		descTag := field.Tag.Get("desc")
-		defaultTag := field.Tag.Get("default")
-		validateTag := field.Tag.Get("validate")
-		categoryTag := field.Tag.Get("category")
-
-		var minValue *int
-		if strings.HasPrefix(validateTag, "min=") {
-			valStr := strings.TrimPrefix(validateTag, "min=")
-			if val, err := strconv.Atoi(valStr); err == nil {
-				minValue = &val
-			}
-		}
-
-		info := models.SystemSettingInfo{
-			Key:          jsonTag,
-			Name:         nameTag,
-			Value:        fieldValue.Interface(),
-			Type:         field.Type.String(),
-			DefaultValue: defaultTag,
-			Description:  descTag,
-			Category:     categoryTag,
-			MinValue:     minValue,
-		}
-		settingsInfo = append(settingsInfo, info)
-	}
-	return settingsInfo
-}
-
-// DefaultSystemSettings 返回默认的系统配置
-func DefaultSystemSettings() types.SystemSettings {
-	s := types.SystemSettings{}
-	v := reflect.ValueOf(&s).Elem()
-	t := v.Type()
-
-	for i := range t.NumField() {
-		field := t.Field(i)
-		defaultTag := field.Tag.Get("default")
-		if defaultTag == "" {
-			continue
-		}
-
-		fieldValue := v.Field(i)
-		if fieldValue.CanSet() {
-			if err := setFieldFromString(fieldValue, defaultTag); err != nil {
-				logrus.Warnf("Failed to set default value for field %s: %v", field.Name, err)
-			}
-		}
-	}
-	return s
-}
-
 // SystemSettingsManager 管理系统配置
 type SystemSettingsManager struct {
 	syncer *syncer.CacheSyncer[types.SystemSettings]
@@ -97,16 +31,16 @@ func NewSystemSettingsManager() *SystemSettingsManager {
 	return &SystemSettingsManager{}
 }
 
-type gm interface {
+type groupManager interface {
 	Invalidate() error
 }
 
-type leader interface {
+type leaderService interface {
 	IsLeader() bool
 }
 
 // Initialize initializes the SystemSettingsManager with database and store dependencies.
-func (sm *SystemSettingsManager) Initialize(store store.Store, gm gm, leader leader) error {
+func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, leader leaderService) error {
 	settingsLoader := func() (types.SystemSettings, error) {
 		var dbSettings []models.SystemSetting
 		if err := db.DB.Find(&dbSettings).Error; err != nil {
@@ -119,7 +53,7 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm gm, leader lea
 		}
 
 		// Start with default settings, then override with values from the database.
-		settings := DefaultSystemSettings()
+		settings := utils.DefaultSystemSettings()
 		v := reflect.ValueOf(&settings).Elem()
 		t := v.Type()
 		jsonToField := make(map[string]string)
@@ -135,14 +69,14 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm gm, leader lea
 			if fieldName, ok := jsonToField[key]; ok {
 				fieldValue := v.FieldByName(fieldName)
 				if fieldValue.IsValid() && fieldValue.CanSet() {
-					if err := setFieldFromString(fieldValue, valStr); err != nil {
+					if err := utils.SetFieldFromString(fieldValue, valStr); err != nil {
 						logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
 					}
 				}
 			}
 		}
 
-		sm.DisplayCurrentSettings(settings)
+		sm.DisplaySystemConfig(settings)
 
 		return settings, nil
 	}
@@ -180,8 +114,8 @@ func (sm *SystemSettingsManager) Stop() {
 
 // EnsureSettingsInitialized 确保数据库中存在所有系统设置的记录。
 func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
-	defaultSettings := DefaultSystemSettings()
-	metadata := GenerateSettingsMetadata(&defaultSettings)
+	defaultSettings := utils.DefaultSystemSettings()
+	metadata := utils.GenerateSettingsMetadata(&defaultSettings)
 
 	for _, meta := range metadata {
 		var existing models.SystemSetting
@@ -189,20 +123,15 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 		if err != nil {
 			value := fmt.Sprintf("%v", meta.DefaultValue)
 			if meta.Key == "app_url" {
-				// Special handling for app_url initialization
-				if appURL := os.Getenv("APP_URL"); appURL != "" {
-					value = appURL
-				} else {
-					host := os.Getenv("HOST")
-					if host == "" || host == "0.0.0.0" {
-						host = "localhost"
-					}
-					port := os.Getenv("PORT")
-					if port == "" {
-						port = "3000"
-					}
-					value = fmt.Sprintf("http://%s:%s", host, port)
+				host := os.Getenv("HOST")
+				if host == "" || host == "0.0.0.0" {
+					host = "localhost"
 				}
+				port := os.Getenv("PORT")
+				if port == "" {
+					port = "3000"
+				}
+				value = fmt.Sprintf("http://%s:%s", host, port)
 			}
 			setting := models.SystemSetting{
 				SettingKey:   meta.Key,
@@ -221,26 +150,30 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 }
 
 // GetSettings 获取当前系统配置
-// If the syncer is not initialized, it returns default settings.
 func (sm *SystemSettingsManager) GetSettings() types.SystemSettings {
 	if sm.syncer == nil {
 		logrus.Warn("SystemSettingsManager is not initialized, returning default settings.")
-		return DefaultSystemSettings()
+		return utils.DefaultSystemSettings()
 	}
 	return sm.syncer.Get()
 }
 
 // GetAppUrl returns the effective App URL.
-// It prioritizes the value from system settings (database) over the APP_URL environment variable.
 func (sm *SystemSettingsManager) GetAppUrl() string {
-	// 1. 优先级: 数据库中的系统配置
 	settings := sm.GetSettings()
 	if settings.AppUrl != "" {
 		return settings.AppUrl
 	}
 
-	// 2. 回退: 环境变量
-	return os.Getenv("APP_URL")
+	host := os.Getenv("HOST")
+	if host == "" || host == "0.0.0.0" {
+		host = "localhost"
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
 // UpdateSettings 更新系统配置
@@ -273,40 +206,35 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) erro
 }
 
 // GetEffectiveConfig 获取有效配置 (系统配置 + 分组覆盖)
-func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMap) types.SystemSettings {
-	// 从系统配置开始
+func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfigJSON datatypes.JSONMap) types.SystemSettings {
 	effectiveConfig := sm.GetSettings()
-	v := reflect.ValueOf(&effectiveConfig).Elem()
-	t := v.Type()
 
-	// 创建一个从 json 标签到字段名的映射
-	jsonToField := make(map[string]string)
-	for i := range t.NumField() {
-		field := t.Field(i)
-		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
-		if jsonTag != "" {
-			jsonToField[jsonTag] = field.Name
-		}
+	if groupConfigJSON == nil {
+		return effectiveConfig
 	}
 
-	// 应用分组配置覆盖
-	for key, val := range groupConfig {
-		if fieldName, ok := jsonToField[key]; ok {
-			fieldValue := v.FieldByName(fieldName)
-			if fieldValue.IsValid() && fieldValue.CanSet() {
-				switch fieldValue.Kind() {
-				case reflect.Int:
-					if intVal, err := interfaceToInt(val); err == nil {
-						fieldValue.SetInt(int64(intVal))
-					}
-				case reflect.String:
-					if strVal, ok := interfaceToString(val); ok {
-						fieldValue.SetString(strVal)
-					}
-				case reflect.Bool:
-					if boolVal, ok := interfaceToBool(val); ok {
-						fieldValue.SetBool(boolVal)
-					}
+	var groupConfig models.GroupConfig
+	groupConfigBytes, err := groupConfigJSON.MarshalJSON()
+	if err != nil {
+		logrus.Warnf("Failed to marshal group config JSON, using system settings only. Error: %v", err)
+		return effectiveConfig
+	}
+	if err := json.Unmarshal(groupConfigBytes, &groupConfig); err != nil {
+		logrus.Warnf("Failed to unmarshal group config, using system settings only. Error: %v", err)
+		return effectiveConfig
+	}
+
+	gcv := reflect.ValueOf(groupConfig)
+	ecv := reflect.ValueOf(&effectiveConfig).Elem()
+
+	for i := 0; i < gcv.NumField(); i++ {
+		groupField := gcv.Field(i)
+		if groupField.Kind() == reflect.Ptr && !groupField.IsNil() {
+			groupFieldValue := groupField.Elem()
+			effectiveField := ecv.FieldByName(gcv.Type().Field(i).Name)
+			if effectiveField.IsValid() && effectiveField.CanSet() {
+				if effectiveField.Type() == groupFieldValue.Type() {
+					effectiveField.Set(groupFieldValue)
 				}
 			}
 		}
@@ -317,11 +245,11 @@ func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfig datatypes.JSONMa
 
 // ValidateSettings 验证系统配置的有效性
 func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) error {
-	tempSettings := DefaultSystemSettings()
+	tempSettings := utils.DefaultSystemSettings()
 	v := reflect.ValueOf(&tempSettings).Elem()
 	t := v.Type()
 	jsonToField := make(map[string]reflect.StructField)
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		jsonTag := field.Tag.Get("json")
 		if jsonTag != "" {
@@ -339,7 +267,6 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) er
 
 		switch field.Type.Kind() {
 		case reflect.Int:
-			// JSON numbers are decoded as float64
 			floatVal, ok := value.(float64)
 			if !ok {
 				return fmt.Errorf("invalid type for %s: expected a number, got %T", key, value)
@@ -372,97 +299,70 @@ func (sm *SystemSettingsManager) ValidateSettings(settingsMap map[string]any) er
 	return nil
 }
 
-// DisplayCurrentSettings 显示当前系统配置信息
-func (sm *SystemSettingsManager) DisplayCurrentSettings(settings types.SystemSettings) {
-	logrus.Info("Current System Settings:")
-	logrus.Infof("   App URL: %s", settings.AppUrl)
-	logrus.Infof("   Blacklist threshold: %d", settings.BlacklistThreshold)
-	logrus.Infof("   Max retries: %d", settings.MaxRetries)
-	logrus.Infof("   Server timeouts: read=%ds, write=%ds, idle=%ds, shutdown=%ds",
-		settings.ServerReadTimeout, settings.ServerWriteTimeout,
-		settings.ServerIdleTimeout, settings.ServerGracefulShutdownTimeout)
-	logrus.Infof("   Request timeouts: request=%ds, connect=%ds, idle_conn=%ds",
-		settings.RequestTimeout, settings.ConnectTimeout, settings.IdleConnTimeout)
-	logrus.Infof("   HTTP Client Pool: max_idle_conns=%d, max_idle_conns_per_host=%d",
-		settings.MaxIdleConns, settings.MaxIdleConnsPerHost)
-	logrus.Infof("   Request log retention: %d days", settings.RequestLogRetentionDays)
-	logrus.Infof("   Key validation: interval=%dmin, task_timeout=%dmin",
-		settings.KeyValidationIntervalMinutes, settings.KeyValidationTaskTimeoutMinutes)
-}
-
-// setFieldFromString sets a struct field's value from a string, based on the field's kind.
-func setFieldFromString(fieldValue reflect.Value, value string) error {
-	if !fieldValue.CanSet() {
-		return fmt.Errorf("field cannot be set")
+// ValidateGroupConfigOverrides validates a map of group-level configuration overrides.
+func (sm *SystemSettingsManager) ValidateGroupConfigOverrides(configMap map[string]any) error {
+	tempSettings := types.SystemSettings{}
+	v := reflect.ValueOf(&tempSettings).Elem()
+	t := v.Type()
+	jsonToField := make(map[string]reflect.StructField)
+	for i := range t.NumField() {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+		if jsonTag != "" {
+			jsonToField[jsonTag] = field
+		}
 	}
 
-	switch fieldValue.Kind() {
-	case reflect.Int:
-		intVal, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid integer value '%s': %w", value, err)
+	for key, value := range configMap {
+		if value == nil {
+			continue
 		}
-		fieldValue.SetInt(int64(intVal))
-	case reflect.Bool:
-		boolVal, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("invalid boolean value '%s': %w", value, err)
+
+		field, ok := jsonToField[key]
+		if !ok {
+			return fmt.Errorf("invalid setting key: %s", key)
 		}
-		fieldValue.SetBool(boolVal)
-	case reflect.String:
-		fieldValue.SetString(value)
-	default:
-		return fmt.Errorf("unsupported field kind: %s", fieldValue.Kind())
+
+		validateTag := field.Tag.Get("validate")
+
+		floatVal, isFloat := value.(float64)
+		if !isFloat {
+			continue
+		}
+		intVal := int(floatVal)
+		if floatVal != float64(intVal) {
+			return fmt.Errorf("invalid value for %s: must be an integer", key)
+		}
+
+		if strings.HasPrefix(validateTag, "min=") {
+			minValStr := strings.TrimPrefix(validateTag, "min=")
+			minVal, _ := strconv.Atoi(minValStr)
+			if intVal < minVal {
+				return fmt.Errorf("value for %s (%d) is below minimum value (%d)", key, intVal, minVal)
+			}
+		}
 	}
+
 	return nil
 }
 
-// 工具函数
+// DisplaySystemConfig displays the current system settings.
+func (sm *SystemSettingsManager) DisplaySystemConfig(settings types.SystemSettings) {
+	logrus.Info("--- System Settings ---")
+	logrus.Infof("  App URL: %s", settings.AppUrl)
+	logrus.Infof("  Request Log Retention: %d days", settings.RequestLogRetentionDays)
 
-func interfaceToInt(val any) (int, error) {
-	switch v := val.(type) {
-	case json.Number:
-		i64, err := v.Int64()
-		if err != nil {
-			return 0, err
-		}
-		return int(i64), nil
-	case int:
-		return v, nil
-	case float64:
-		if v != float64(int(v)) {
-			return 0, fmt.Errorf("value is a float, not an integer: %v", v)
-		}
-		return int(v), nil
-	case string:
-		return strconv.Atoi(v)
-	default:
-		return 0, fmt.Errorf("cannot convert %T to int", v)
-	}
-}
+	logrus.Info("--- Request Behavior ---")
+	logrus.Infof("  Request Timeout: %d seconds", settings.RequestTimeout)
+	logrus.Infof("  Connect Timeout: %d seconds", settings.ConnectTimeout)
+	logrus.Infof("  Response Header Timeout: %d seconds", settings.ResponseHeaderTimeout)
+	logrus.Infof("  Idle Connection Timeout: %d seconds", settings.IdleConnTimeout)
+	logrus.Infof("  Max Idle Connections: %d", settings.MaxIdleConns)
+	logrus.Infof("  Max Idle Connections Per Host: %d", settings.MaxIdleConnsPerHost)
 
-// interfaceToString is kept for GetEffectiveConfig
-func interfaceToString(val any) (string, bool) {
-	s, ok := val.(string)
-	return s, ok
-}
-
-// interfaceToBool is kept for GetEffectiveConfig
-func interfaceToBool(val any) (bool, bool) {
-	switch v := val.(type) {
-	case json.Number:
-		if s := v.String(); s == "1" {
-			return true, true
-		} else if s == "0" {
-			return false, true
-		}
-	case bool:
-		return v, true
-	case string:
-		b, err := strconv.ParseBool(v)
-		if err == nil {
-			return b, true
-		}
-	}
-	return false, false
+	logrus.Info("--- Key & Group Behavior ---")
+	logrus.Infof("  Max Retries: %d", settings.MaxRetries)
+	logrus.Infof("  Blacklist Threshold: %d", settings.BlacklistThreshold)
+	logrus.Infof("  Key Validation Interval: %d minutes", settings.KeyValidationIntervalMinutes)
+	logrus.Info("-----------------------")
 }

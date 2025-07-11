@@ -71,18 +71,18 @@ func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 }
 
 // UpdateStatus 异步地提交一个 Key 状态更新任务。
-func (p *KeyProvider) UpdateStatus(keyID uint, groupID uint, isSuccess bool) {
+func (p *KeyProvider) UpdateStatus(apiKey *models.APIKey, group *models.Group, isSuccess bool) {
 	go func() {
-		keyHashKey := fmt.Sprintf("key:%d", keyID)
-		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
+		keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
+		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
 
 		if isSuccess {
-			if err := p.handleSuccess(keyID, keyHashKey, activeKeysListKey); err != nil {
-				logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to handle key success")
+			if err := p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey); err != nil {
+				logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key success")
 			}
 		} else {
-			if err := p.handleFailure(keyID, keyHashKey, activeKeysListKey); err != nil {
-				logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Error("Failed to handle key failure")
+			if err := p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey); err != nil {
+				logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key failure")
 			}
 		}
 	}()
@@ -134,7 +134,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 	})
 }
 
-func (p *KeyProvider) handleFailure(keyID uint, keyHashKey, activeKeysListKey string) error {
+func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, keyHashKey, activeKeysListKey string) error {
 	keyDetails, err := p.store.HGetAll(keyHashKey)
 	if err != nil {
 		return fmt.Errorf("failed to get key details from store: %w", err)
@@ -146,19 +146,19 @@ func (p *KeyProvider) handleFailure(keyID uint, keyHashKey, activeKeysListKey st
 		return nil
 	}
 
-	settings := p.settingsManager.GetSettings()
-	blacklistThreshold := settings.BlacklistThreshold
+	// 获取该分组的有效配置
+	blacklistThreshold := group.EffectiveConfig.BlacklistThreshold
 
 	return p.db.Transaction(func(tx *gorm.DB) error {
 		var key models.APIKey
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, keyID).Error; err != nil {
-			return fmt.Errorf("failed to lock key %d for update: %w", keyID, err)
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, apiKey.ID).Error; err != nil {
+			return fmt.Errorf("failed to lock key %d for update: %w", apiKey.ID, err)
 		}
 
 		newFailureCount := failureCount + 1
 
 		updates := map[string]any{"failure_count": newFailureCount}
-		shouldBlacklist := newFailureCount >= int64(blacklistThreshold)
+		shouldBlacklist := blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
 		if shouldBlacklist {
 			updates["status"] = models.KeyStatusInvalid
 		}
@@ -172,8 +172,8 @@ func (p *KeyProvider) handleFailure(keyID uint, keyHashKey, activeKeysListKey st
 		}
 
 		if shouldBlacklist {
-			logrus.WithFields(logrus.Fields{"keyID": keyID, "threshold": blacklistThreshold}).Warn("Key has reached blacklist threshold, disabling.")
-			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "threshold": blacklistThreshold}).Warn("Key has reached blacklist threshold, disabling.")
+			if err := p.store.LRem(activeKeysListKey, 0, apiKey.ID); err != nil {
 				return fmt.Errorf("failed to LRem key from active list: %w", err)
 			}
 			if err := p.store.HSet(keyHashKey, map[string]any{"status": models.KeyStatusInvalid}); err != nil {

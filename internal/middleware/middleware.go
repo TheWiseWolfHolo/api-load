@@ -18,16 +18,6 @@ import (
 // Logger creates a high-performance logging middleware
 func Logger(config types.LogConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check if request logging is enabled
-		if !config.EnableRequest {
-			// Don't log requests, only process them
-			c.Next()
-			// Only log errors
-			if c.Writer.Status() >= 400 {
-				logrus.Errorf("Error %d: %s %s", c.Writer.Status(), c.Request.Method, c.Request.URL.Path)
-			}
-			return
-		}
 
 		start := time.Now()
 		path := c.Request.URL.Path
@@ -127,10 +117,6 @@ func CORS(config types.CORSConfig) gin.HandlerFunc {
 // Auth creates an authentication middleware
 func Auth(config types.AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !config.Enabled {
-			c.Next()
-			return
-		}
 
 		// Skip authentication for management endpoints
 		path := c.Request.URL.Path

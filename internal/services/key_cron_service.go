@@ -66,7 +66,7 @@ func (s *KeyCronService) runLoop() {
 		select {
 		case <-ticker.C:
 			if s.LeaderService.IsLeader() {
-				logrus.Info("KeyCronService: Running as leader, submitting validation jobs.")
+				logrus.Debug("KeyCronService: Running as leader, submitting validation jobs.")
 				s.submitValidationJobs()
 			} else {
 				logrus.Debug("KeyCronService: Not the leader. Standing by.")
@@ -130,7 +130,9 @@ func (s *KeyCronService) submitValidationJobs() {
 		s.updateGroupTimestamps(groupsToUpdateTimestamp, validationStartTime)
 	}
 
-	logrus.Infof("KeyCronService: Submitted %d keys for validation across %d groups.", total, len(groupsToUpdateTimestamp))
+	if total > 0 {
+		logrus.Infof("KeyCronService: Submitted %d keys for validation across %d groups.", total, len(groupsToUpdateTimestamp))
+	}
 }
 
 func (s *KeyCronService) updateGroupTimestamps(groups map[uint]*models.Group, validationStartTime time.Time) {
