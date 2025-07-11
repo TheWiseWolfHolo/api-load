@@ -35,6 +35,11 @@ type GroupConfig struct {
 	ResponseTimeout               *int `json:"response_timeout,omitempty"`
 	IdleConnTimeout               *int `json:"idle_conn_timeout,omitempty"`
 	KeyValidationIntervalMinutes  *int `json:"key_validation_interval_minutes,omitempty"`
+	ConnectTimeout                *int `json:"connect_timeout,omitempty"`
+	MaxIdleConns                  *int `json:"max_idle_conns,omitempty"`
+	MaxIdleConnsPerHost           *int `json:"max_idle_conns_per_host,omitempty"`
+	ResponseHeaderTimeout         *int `json:"response_header_timeout,omitempty"`
+	DisableCompression            *bool `json:"disable_compression,omitempty"`
 }
 
 // Group 对应 groups 表

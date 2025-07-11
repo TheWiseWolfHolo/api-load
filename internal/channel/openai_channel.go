@@ -9,9 +9,10 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 )
 
 func init() {
@@ -33,11 +34,38 @@ func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	}, nil
 }
 
-func (ch *OpenAIChannel) Handle(c *gin.Context, apiKey *models.APIKey, group *models.Group) error {
-	modifier := func(req *http.Request, key *models.APIKey) {
-		req.Header.Set("Authorization", "Bearer "+key.KeyValue)
+// BuildUpstreamURL constructs the target URL for the OpenAI service.
+func (ch *OpenAIChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error) {
+	// Use the weighted round-robin selection from the base channel.
+	// This method already handles parsing the group's Upstreams JSON.
+	base := ch.getUpstreamURL()
+	if base == nil {
+		// If no upstreams are configured in the group, fallback to a default.
+		// This can be considered an error or a feature depending on requirements.
+		// For now, we'll use the official OpenAI URL as a last resort.
+		base, _ = url.Parse("https://api.openai.com")
 	}
-	return ch.ProcessRequest(c, apiKey, modifier, ch)
+
+	// It's crucial to create a copy to avoid modifying the cached URL object in BaseChannel.
+	finalURL := *base
+	// The originalURL.Path contains the full path, e.g., "/proxy/openai/v1/chat/completions".
+	// We need to strip the proxy prefix to get the correct upstream path.
+	proxyPrefix := "/proxy/" + group.Name
+	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
+		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
+	} else {
+		// Fallback for safety, though this case should ideally not be hit.
+		finalURL.Path = originalURL.Path
+	}
+
+	finalURL.RawQuery = originalURL.RawQuery
+
+	return finalURL.String(), nil
+}
+
+// ModifyRequest sets the Authorization header for the OpenAI service.
+func (ch *OpenAIChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
+	req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
 }
 
 // ValidateKey checks if the given API key is valid by making a chat completion request.
@@ -92,16 +120,23 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, key string) (bool, err
 	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
 }
 
-// IsStreamingRequest checks if the request is for a streaming response.
-func (ch *OpenAIChannel) IsStreamingRequest(c *gin.Context) bool {
-	// For OpenAI, streaming is indicated by a "stream": true field in the JSON body.
-	// We use ShouldBindBodyWith to check the body without consuming it, so it can be read again by the proxy.
+// IsStreamRequest checks if the request is for a streaming response using the pre-read body.
+func (ch *OpenAIChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
+	if strings.Contains(c.GetHeader("Accept"), "text/event-stream") {
+		return true
+	}
+
+	if c.Query("stream") == "true" {
+		return true
+	}
+
 	type streamPayload struct {
 		Stream bool `json:"stream"`
 	}
 	var p streamPayload
-	if err := c.ShouldBindBodyWith(&p, binding.JSON); err == nil {
+	if err := json.Unmarshal(bodyBytes, &p); err == nil {
 		return p.Stream
 	}
+
 	return false
 }

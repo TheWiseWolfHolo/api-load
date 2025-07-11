@@ -9,6 +9,7 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -33,13 +34,36 @@ func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	}, nil
 }
 
-func (ch *GeminiChannel) Handle(c *gin.Context, apiKey *models.APIKey, group *models.Group) error {
-	modifier := func(req *http.Request, key *models.APIKey) {
-		q := req.URL.Query()
-		q.Set("key", key.KeyValue)
-		req.URL.RawQuery = q.Encode()
+// BuildUpstreamURL constructs the target URL for the Gemini service.
+func (ch *GeminiChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error) {
+	base := ch.getUpstreamURL()
+	if base == nil {
+		// Fallback to default Gemini URL
+		base, _ = url.Parse("https://generativelanguage.googleapis.com")
 	}
-	return ch.ProcessRequest(c, apiKey, modifier, ch)
+
+	finalURL := *base
+	// The originalURL.Path contains the full path, e.g., "/proxy/gemini/v1beta/models/gemini-pro:generateContent".
+	// We need to strip the proxy prefix to get the correct upstream path.
+	proxyPrefix := "/proxy/" + group.Name
+	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
+		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
+	} else {
+		// Fallback for safety.
+		finalURL.Path = originalURL.Path
+	}
+
+	// The API key will be added to RawQuery in ModifyRequest.
+	finalURL.RawQuery = originalURL.RawQuery
+
+	return finalURL.String(), nil
+}
+
+// ModifyRequest adds the API key as a query parameter for Gemini requests.
+func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
+	q := req.URL.Query()
+	q.Set("key", apiKey.KeyValue)
+	req.URL.RawQuery = q.Encode()
 }
 
 // ValidateKey checks if the given API key is valid by making a generateContent request.
@@ -95,12 +119,21 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, err
 	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
 }
 
-// IsStreamingRequest checks if the request is for a streaming response.
-func (ch *GeminiChannel) IsStreamingRequest(c *gin.Context) bool {
-	// For Gemini, streaming is indicated by the path containing streaming keywords
+// IsStreamRequest checks if the request is for a streaming response.
+// For Gemini, this is primarily determined by the URL path.
+func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
 	path := c.Request.URL.Path
-	return strings.Contains(path, ":streamGenerateContent") ||
-		strings.Contains(path, "streamGenerateContent") ||
-		strings.Contains(path, ":stream") ||
-		strings.Contains(path, "/stream")
+	if strings.HasSuffix(path, ":streamGenerateContent") {
+		return true
+	}
+
+	// Also check for standard streaming indicators as a fallback.
+	if strings.Contains(c.GetHeader("Accept"), "text/event-stream") {
+		return true
+	}
+	if c.Query("stream") == "true" {
+		return true
+	}
+
+	return false
 }

@@ -34,6 +34,8 @@ var (
 	ErrTaskInProgress      = &APIError{HTTPStatus: http.StatusConflict, Code: "TASK_IN_PROGRESS", Message: "A task is already in progress"}
 	ErrBadGateway          = &APIError{HTTPStatus: http.StatusBadGateway, Code: "BAD_GATEWAY", Message: "Upstream service error"}
 	ErrNoActiveKeys        = &APIError{HTTPStatus: http.StatusServiceUnavailable, Code: "NO_ACTIVE_KEYS", Message: "No active API keys available for this group"}
+	ErrMaxRetriesExceeded = &APIError{HTTPStatus: http.StatusBadGateway, Code: "MAX_RETRIES_EXCEEDED", Message: "Request failed after maximum retries"}
+	ErrNoKeysAvailable    = &APIError{HTTPStatus: http.StatusServiceUnavailable, Code: "NO_KEYS_AVAILABLE", Message: "No API keys available to process the request"}
 )
 
 // NewAPIError creates a new APIError with a custom message.
@@ -42,6 +44,15 @@ func NewAPIError(base *APIError, message string) *APIError {
 		HTTPStatus: base.HTTPStatus,
 		Code:       base.Code,
 		Message:    message,
+	}
+}
+
+// NewAPIErrorWithUpstream creates a new APIError specifically for wrapping raw upstream errors.
+func NewAPIErrorWithUpstream(statusCode int, code string, upstreamMessage string) *APIError {
+	return &APIError{
+		HTTPStatus: statusCode,
+		Code:       code,
+		Message:    upstreamMessage,
 	}
 }
 

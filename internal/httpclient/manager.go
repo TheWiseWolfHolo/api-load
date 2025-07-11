@@ -1,0 +1,105 @@
+package httpclient
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+)
+
+// Config defines the parameters for creating an HTTP client.
+// This struct is used to generate a unique fingerprint for client reuse.
+type Config struct {
+	ConnectTimeout        time.Duration
+	RequestTimeout        time.Duration
+	IdleConnTimeout       time.Duration
+	MaxIdleConns          int
+	MaxIdleConnsPerHost   int
+	ResponseHeaderTimeout time.Duration
+	DisableCompression    bool
+	WriteBufferSize       int
+	ReadBufferSize        int
+}
+
+// HTTPClientManager manages the lifecycle of HTTP clients.
+// It creates and caches clients based on their configuration fingerprint,
+// ensuring that clients with the same configuration are reused.
+type HTTPClientManager struct {
+	clients map[string]*http.Client
+	lock    sync.RWMutex
+}
+
+// NewHTTPClientManager creates a new client manager.
+func NewHTTPClientManager() *HTTPClientManager {
+	return &HTTPClientManager{
+		clients: make(map[string]*http.Client),
+	}
+}
+
+// GetClient returns an HTTP client that matches the given configuration.
+// If a matching client already exists in the cache, it is returned.
+// Otherwise, a new client is created, cached, and returned.
+func (m *HTTPClientManager) GetClient(config *Config) *http.Client {
+	fingerprint := config.getFingerprint()
+
+	// Fast path with read lock
+	m.lock.RLock()
+	client, exists := m.clients[fingerprint]
+	m.lock.RUnlock()
+	if exists {
+		return client
+	}
+
+	// Slow path with write lock
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	// Double-check in case another goroutine created the client while we were waiting for the lock.
+	if client, exists = m.clients[fingerprint]; exists {
+		return client
+	}
+
+	// Create a new transport and client with the specified configuration.
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   config.ConnectTimeout,
+			KeepAlive: 30 * time.Second, // KeepAlive is a good default
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          config.MaxIdleConns,
+		MaxIdleConnsPerHost:   config.MaxIdleConnsPerHost,
+		IdleConnTimeout:       config.IdleConnTimeout,
+		TLSHandshakeTimeout:   10 * time.Second, // A reasonable default
+		ExpectContinueTimeout: 1 * time.Second,  // A reasonable default
+		ResponseHeaderTimeout: config.ResponseHeaderTimeout,
+		DisableCompression:    config.DisableCompression,
+		WriteBufferSize:       config.WriteBufferSize,
+		ReadBufferSize:        config.ReadBufferSize,
+	}
+
+	newClient := &http.Client{
+		Transport: transport,
+		Timeout:   config.RequestTimeout,
+	}
+
+	m.clients[fingerprint] = newClient
+	return newClient
+}
+
+// getFingerprint generates a unique string representation of the client configuration.
+func (c *Config) getFingerprint() string {
+	return fmt.Sprintf(
+		"ct:%.0fs|rt:%.0fs|it:%.0fs|mic:%d|mich:%d|rht:%.0fs|dc:%t|wbs:%d|rbs:%d",
+		c.ConnectTimeout.Seconds(),
+		c.RequestTimeout.Seconds(),
+		c.IdleConnTimeout.Seconds(),
+		c.MaxIdleConns,
+		c.MaxIdleConnsPerHost,
+		c.ResponseHeaderTimeout.Seconds(),
+		c.DisableCompression,
+		c.WriteBufferSize,
+		c.ReadBufferSize,
+	)
+}

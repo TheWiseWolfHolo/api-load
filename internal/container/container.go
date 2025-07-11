@@ -7,6 +7,7 @@ import (
 	"gpt-load/internal/config"
 	"gpt-load/internal/db"
 	"gpt-load/internal/handler"
+	"gpt-load/internal/httpclient"
 	"gpt-load/internal/keypool"
 	"gpt-load/internal/proxy"
 	"gpt-load/internal/router"
@@ -34,6 +35,9 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(store.NewStore); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(httpclient.NewHTTPClientManager); err != nil {
 		return nil, err
 	}
 	if err := container.Provide(channel.NewFactory); err != nil {

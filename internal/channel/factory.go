@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"gpt-load/internal/config"
+	"gpt-load/internal/httpclient"
 	"gpt-load/internal/models"
-	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -42,14 +42,16 @@ func GetChannels() []string {
 // Factory is responsible for creating channel proxies.
 type Factory struct {
 	settingsManager *config.SystemSettingsManager
+	clientManager   *httpclient.HTTPClientManager
 	channelCache    map[uint]ChannelProxy
 	cacheLock       sync.Mutex
 }
 
 // NewFactory creates a new channel factory.
-func NewFactory(settingsManager *config.SystemSettingsManager) *Factory {
+func NewFactory(settingsManager *config.SystemSettingsManager, clientManager *httpclient.HTTPClientManager) *Factory {
 	return &Factory{
 		settingsManager: settingsManager,
+		clientManager:   clientManager,
 		channelCache:    make(map[uint]ChannelProxy),
 	}
 }
@@ -109,21 +111,39 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		upstreamInfos = append(upstreamInfos, UpstreamInfo{URL: u, Weight: weight})
 	}
 
-	// Get effective settings by merging system and group configs
-	effectiveSettings := f.settingsManager.GetEffectiveConfig(group.Config)
-
-	// Configure the HTTP client with the effective timeouts
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			IdleConnTimeout: time.Duration(effectiveSettings.IdleConnTimeout) * time.Second,
-		},
-		Timeout: time.Duration(effectiveSettings.RequestTimeout) * time.Second,
+	// Base configuration for regular requests, derived from the group's effective settings.
+	clientConfig := &httpclient.Config{
+		ConnectTimeout:        time.Duration(group.EffectiveConfig.ConnectTimeout) * time.Second,
+		RequestTimeout:        time.Duration(group.EffectiveConfig.RequestTimeout) * time.Second,
+		IdleConnTimeout:       time.Duration(group.EffectiveConfig.IdleConnTimeout) * time.Second,
+		MaxIdleConns:          group.EffectiveConfig.MaxIdleConns,
+		MaxIdleConnsPerHost:   group.EffectiveConfig.MaxIdleConnsPerHost,
+		ResponseHeaderTimeout: time.Duration(group.EffectiveConfig.ResponseHeaderTimeout) * time.Second,
+		DisableCompression:    group.EffectiveConfig.DisableCompression,
+		WriteBufferSize:       32 * 1024, // Use a reasonable default buffer size for regular requests
+		ReadBufferSize:        32 * 1024,
 	}
+
+	// Create a dedicated configuration for streaming requests.
+	// This configuration is optimized for low-latency, long-running connections.
+	streamConfig := *clientConfig
+	streamConfig.RequestTimeout = 0      // No overall timeout for the entire request.
+	streamConfig.DisableCompression = true // Always disable compression for streaming to reduce latency.
+	streamConfig.WriteBufferSize = 0     // Disable buffering for real-time data transfer.
+	streamConfig.ReadBufferSize = 0
+	// For stream-specific connection pool, we can use a simple heuristic like doubling the regular one.
+	streamConfig.MaxIdleConns = group.EffectiveConfig.MaxIdleConns * 2
+	streamConfig.MaxIdleConnsPerHost = group.EffectiveConfig.MaxIdleConnsPerHost * 2
+
+	// Get both clients from the manager using their respective configurations.
+	httpClient := f.clientManager.GetClient(clientConfig)
+	streamClient := f.clientManager.GetClient(&streamConfig)
 
 	return &BaseChannel{
 		Name:           name,
 		Upstreams:      upstreamInfos,
 		HTTPClient:     httpClient,
+		StreamClient:   streamClient,
 		TestModel:      group.TestModel,
 		groupUpstreams: group.Upstreams,
 		groupConfig:    group.Config,
