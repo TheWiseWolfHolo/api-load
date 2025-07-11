@@ -2,13 +2,15 @@ package channel
 
 import (
 	"bytes"
-	"encoding/json"
+	"fmt"
 	"gpt-load/internal/models"
+	"gpt-load/internal/types"
 	"net/http"
 	"net/url"
+	"reflect"
+	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 )
 
@@ -28,7 +30,7 @@ type BaseChannel struct {
 	TestModel       string
 	upstreamLock    sync.Mutex
 	groupUpstreams  datatypes.JSON
-	groupConfig     datatypes.JSONMap
+	effectiveConfig *types.SystemSettings
 }
 
 // getUpstreamURL selects an upstream URL using a smooth weighted round-robin algorithm.
@@ -64,28 +66,33 @@ func (b *BaseChannel) getUpstreamURL() *url.URL {
 	return best.URL
 }
 
+// BuildUpstreamURL constructs the target URL for the upstream service.
+func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error) {
+	base := b.getUpstreamURL()
+	if base == nil {
+		return "", fmt.Errorf("no upstream URL configured for channel %s", b.Name)
+	}
+
+	finalURL := *base
+	proxyPrefix := "/proxy/" + group.Name
+	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
+		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
+	} else {
+		finalURL.Path = originalURL.Path
+	}
+
+	finalURL.RawQuery = originalURL.RawQuery
+
+	return finalURL.String(), nil
+}
+
 // IsConfigStale checks if the channel's configuration is stale compared to the provided group.
 func (b *BaseChannel) IsConfigStale(group *models.Group) bool {
-	// It's important to compare the raw JSON here to detect any changes.
 	if !bytes.Equal(b.groupUpstreams, group.Upstreams) {
 		return true
 	}
 
-	// For JSONMap, we need to marshal it to compare.
-	currentConfigBytes, err := json.Marshal(b.groupConfig)
-	if err != nil {
-		// Log the error and assume it's stale to be safe
-		logrus.Errorf("failed to marshal current group config: %v", err)
-		return true
-	}
-	newConfigBytes, err := json.Marshal(group.Config)
-	if err != nil {
-		// Log the error and assume it's stale
-		logrus.Errorf("failed to marshal new group config: %v", err)
-		return true
-	}
-
-	if !bytes.Equal(currentConfigBytes, newConfigBytes) {
+	if !reflect.DeepEqual(b.effectiveConfig, &group.EffectiveConfig) {
 		return true
 	}
 

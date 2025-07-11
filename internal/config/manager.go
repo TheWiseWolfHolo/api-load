@@ -79,8 +79,6 @@ func (m *Manager) ReloadConfig() error {
 		Server: types.ServerConfig{
 			Port: parseInteger(os.Getenv("PORT"), 3000),
 			Host: getEnvOrDefault("HOST", "0.0.0.0"),
-			// Server timeout configs now come from system settings, not environment
-			// Using defaults from SystemSettings struct as the initial value
 			ReadTimeout:             defaultSettings.ServerReadTimeout,
 			WriteTimeout:            defaultSettings.ServerWriteTimeout,
 			IdleTimeout:             defaultSettings.ServerIdleTimeout,

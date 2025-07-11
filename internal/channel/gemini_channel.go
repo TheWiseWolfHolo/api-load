@@ -9,7 +9,6 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -34,31 +33,6 @@ func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	}, nil
 }
 
-// BuildUpstreamURL constructs the target URL for the Gemini service.
-func (ch *GeminiChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error) {
-	base := ch.getUpstreamURL()
-	if base == nil {
-		// Fallback to default Gemini URL
-		base, _ = url.Parse("https://generativelanguage.googleapis.com")
-	}
-
-	finalURL := *base
-	// The originalURL.Path contains the full path, e.g., "/proxy/gemini/v1beta/models/gemini-pro:generateContent".
-	// We need to strip the proxy prefix to get the correct upstream path.
-	proxyPrefix := "/proxy/" + group.Name
-	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
-		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
-	} else {
-		// Fallback for safety.
-		finalURL.Path = originalURL.Path
-	}
-
-	// The API key will be added to RawQuery in ModifyRequest.
-	finalURL.RawQuery = originalURL.RawQuery
-
-	return finalURL.String(), nil
-}
-
 // ModifyRequest adds the API key as a query parameter for Gemini requests.
 func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
 	q := req.URL.Query()
@@ -73,11 +47,8 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, err
 		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
-	// Use the test model specified in the group settings.
-	// The path format for Gemini is /v1beta/models/{model}:generateContent
 	reqURL := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s", upstreamURL.String(), ch.TestModel, key)
 
-	// Use a minimal, low-cost payload for validation
 	payload := gin.H{
 		"contents": []gin.H{
 			{"parts": []gin.H{

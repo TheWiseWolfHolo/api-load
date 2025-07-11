@@ -20,6 +20,9 @@ type Config struct {
 	DisableCompression    bool
 	WriteBufferSize       int
 	ReadBufferSize        int
+	ForceAttemptHTTP2     bool
+	TLSHandshakeTimeout   time.Duration
+	ExpectContinueTimeout time.Duration
 }
 
 // HTTPClientManager manages the lifecycle of HTTP clients.
@@ -65,14 +68,14 @@ func (m *HTTPClientManager) GetClient(config *Config) *http.Client {
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   config.ConnectTimeout,
-			KeepAlive: 30 * time.Second, // KeepAlive is a good default
+			KeepAlive: 30 * time.Second,
 		}).DialContext,
-		ForceAttemptHTTP2:     true,
+		ForceAttemptHTTP2:     config.ForceAttemptHTTP2,
 		MaxIdleConns:          config.MaxIdleConns,
 		MaxIdleConnsPerHost:   config.MaxIdleConnsPerHost,
 		IdleConnTimeout:       config.IdleConnTimeout,
-		TLSHandshakeTimeout:   10 * time.Second, // A reasonable default
-		ExpectContinueTimeout: 1 * time.Second,  // A reasonable default
+		TLSHandshakeTimeout:   config.TLSHandshakeTimeout,
+		ExpectContinueTimeout: config.ExpectContinueTimeout,
 		ResponseHeaderTimeout: config.ResponseHeaderTimeout,
 		DisableCompression:    config.DisableCompression,
 		WriteBufferSize:       config.WriteBufferSize,
@@ -91,7 +94,7 @@ func (m *HTTPClientManager) GetClient(config *Config) *http.Client {
 // getFingerprint generates a unique string representation of the client configuration.
 func (c *Config) getFingerprint() string {
 	return fmt.Sprintf(
-		"ct:%.0fs|rt:%.0fs|it:%.0fs|mic:%d|mich:%d|rht:%.0fs|dc:%t|wbs:%d|rbs:%d",
+		"ct:%.0fs|rt:%.0fs|it:%.0fs|mic:%d|mich:%d|rht:%.0fs|dc:%t|wbs:%d|rbs:%d|fh2:%t|tlst:%.0fs|ect:%.0fs",
 		c.ConnectTimeout.Seconds(),
 		c.RequestTimeout.Seconds(),
 		c.IdleConnTimeout.Seconds(),
@@ -101,5 +104,8 @@ func (c *Config) getFingerprint() string {
 		c.DisableCompression,
 		c.WriteBufferSize,
 		c.ReadBufferSize,
+		c.ForceAttemptHTTP2,
+		c.TLSHandshakeTimeout.Seconds(),
+		c.ExpectContinueTimeout.Seconds(),
 	)
 }

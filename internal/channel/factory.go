@@ -22,7 +22,6 @@ var (
 )
 
 // Register adds a new channel constructor to the registry.
-// This function is intended to be called from the init() function of each channel implementation.
 func Register(channelType string, constructor channelConstructor) {
 	if _, exists := channelRegistry[channelType]; exists {
 		panic(fmt.Sprintf("channel type '%s' is already registered", channelType))
@@ -57,7 +56,6 @@ func NewFactory(settingsManager *config.SystemSettingsManager, clientManager *ht
 }
 
 // GetChannel returns a channel proxy based on the group's channel type.
-// It uses a cache to ensure that only one instance of a channel is created for each group.
 func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 	f.cacheLock.Lock()
 	defer f.cacheLock.Unlock()
@@ -120,20 +118,28 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		MaxIdleConnsPerHost:   group.EffectiveConfig.MaxIdleConnsPerHost,
 		ResponseHeaderTimeout: time.Duration(group.EffectiveConfig.ResponseHeaderTimeout) * time.Second,
 		DisableCompression:    group.EffectiveConfig.DisableCompression,
-		WriteBufferSize:       32 * 1024, // Use a reasonable default buffer size for regular requests
+		WriteBufferSize:       32 * 1024,
 		ReadBufferSize:        32 * 1024,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	// Create a dedicated configuration for streaming requests.
-	// This configuration is optimized for low-latency, long-running connections.
 	streamConfig := *clientConfig
-	streamConfig.RequestTimeout = 0      // No overall timeout for the entire request.
-	streamConfig.DisableCompression = true // Always disable compression for streaming to reduce latency.
-	streamConfig.WriteBufferSize = 0     // Disable buffering for real-time data transfer.
+	streamConfig.RequestTimeout = 0
+	streamConfig.DisableCompression = true
+	streamConfig.WriteBufferSize = 0
 	streamConfig.ReadBufferSize = 0
-	// For stream-specific connection pool, we can use a simple heuristic like doubling the regular one.
+	// Use a larger, independent connection pool for streaming clients to avoid exhaustion.
 	streamConfig.MaxIdleConns = group.EffectiveConfig.MaxIdleConns * 2
+	if streamConfig.MaxIdleConns < 200 {
+		streamConfig.MaxIdleConns = 200
+	}
 	streamConfig.MaxIdleConnsPerHost = group.EffectiveConfig.MaxIdleConnsPerHost * 2
+	if streamConfig.MaxIdleConnsPerHost < 40 {
+		streamConfig.MaxIdleConnsPerHost = 40
+	}
 
 	// Get both clients from the manager using their respective configurations.
 	httpClient := f.clientManager.GetClient(clientConfig)
@@ -145,7 +151,7 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		HTTPClient:     httpClient,
 		StreamClient:   streamClient,
 		TestModel:      group.TestModel,
-		groupUpstreams: group.Upstreams,
-		groupConfig:    group.Config,
+		groupUpstreams:  group.Upstreams,
+		effectiveConfig: &group.EffectiveConfig,
 	}, nil
 }

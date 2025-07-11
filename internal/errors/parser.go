@@ -33,8 +33,6 @@ type rootMessageErrorResponse struct {
 }
 
 // ParseUpstreamError attempts to parse a structured error message from an upstream response body
-// using a chain of responsibility pattern. It tries various common formats and gracefully
-// degrades to a raw string if all parsing attempts fail.
 func ParseUpstreamError(body []byte) string {
 	// 1. Attempt to parse the standard OpenAI/Gemini format.
 	var stdErr standardErrorResponse

@@ -9,7 +9,6 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -34,34 +33,6 @@ func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 	}, nil
 }
 
-// BuildUpstreamURL constructs the target URL for the OpenAI service.
-func (ch *OpenAIChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group) (string, error) {
-	// Use the weighted round-robin selection from the base channel.
-	// This method already handles parsing the group's Upstreams JSON.
-	base := ch.getUpstreamURL()
-	if base == nil {
-		// If no upstreams are configured in the group, fallback to a default.
-		// This can be considered an error or a feature depending on requirements.
-		// For now, we'll use the official OpenAI URL as a last resort.
-		base, _ = url.Parse("https://api.openai.com")
-	}
-
-	// It's crucial to create a copy to avoid modifying the cached URL object in BaseChannel.
-	finalURL := *base
-	// The originalURL.Path contains the full path, e.g., "/proxy/openai/v1/chat/completions".
-	// We need to strip the proxy prefix to get the correct upstream path.
-	proxyPrefix := "/proxy/" + group.Name
-	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
-		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
-	} else {
-		// Fallback for safety, though this case should ideally not be hit.
-		finalURL.Path = originalURL.Path
-	}
-
-	finalURL.RawQuery = originalURL.RawQuery
-
-	return finalURL.String(), nil
-}
 
 // ModifyRequest sets the Authorization header for the OpenAI service.
 func (ch *OpenAIChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {

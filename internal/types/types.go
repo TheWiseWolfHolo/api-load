@@ -17,8 +17,8 @@ type ConfigManager interface {
 // SystemSettings 定义所有系统配置项
 type SystemSettings struct {
 	// 基础参数
-	AppUrl                  string `json:"app_url" default:"" name:"项目地址" category:"基础参数" desc:"项目的基础 URL，用于拼接分组终端节点地址。系统配置优先于环境变量 APP_URL。"`
-	RequestLogRetentionDays int    `json:"request_log_retention_days" default:"30" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
+	AppUrl                  string `json:"app_url" default:"http://localhost:3000" name:"项目地址" category:"基础参数" desc:"项目的基础 URL，用于拼接分组终端节点地址。系统配置优先于环境变量 APP_URL。"`
+	RequestLogRetentionDays int    `json:"request_log_retention_days" default:"7" name:"日志保留天数" category:"基础参数" desc:"请求日志在数据库中的保留天数" validate:"min=1"`
 
 	// 服务超时
 	ServerReadTimeout             int `json:"server_read_timeout" default:"120" name:"读取超时" category:"服务超时" desc:"HTTP 服务器读取超时时间（秒）" validate:"min=1"`
@@ -27,13 +27,13 @@ type SystemSettings struct {
 	ServerGracefulShutdownTimeout int `json:"server_graceful_shutdown_timeout" default:"60" name:"优雅关闭超时" category:"服务超时" desc:"服务优雅关闭的等待超时时间（秒）" validate:"min=1"`
 
 	// 请求超时
-	RequestTimeout      int `json:"request_timeout" default:"600" name:"请求超时" category:"请求超时" desc:"转发请求的完整生命周期超时（秒），包括连接、重试等。" validate:"min=1"`
-	ConnectTimeout      int `json:"connect_timeout" default:"5" name:"连接超时" category:"请求超时" desc:"与上游服务建立新连接的超时时间（秒）。" validate:"min=1"`
-	IdleConnTimeout     int `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求超时" desc:"HTTP 客户端中空闲连接的超时时间（秒）。" validate:"min=1"`
-	MaxIdleConns        int `json:"max_idle_conns" default:"100" name:"最大空闲连接数" category:"请求超时" desc:"HTTP 客户端连接池中允许的最大空闲连接总数。" validate:"min=1"`
-	MaxIdleConnsPerHost int `json:"max_idle_conns_per_host" default:"10" name:"每主机最大空闲连接数" category:"请求超时" desc:"HTTP 客户端连接池对每个上游主机允许的最大空闲连接数。" validate:"min=1"`
-	ResponseHeaderTimeout int `json:"response_header_timeout" default:"120" name:"响应头超时" category:"请求超时" desc:"等待上游服务响应头的最长时间（秒），用于流式请求。" validate:"min=1"`
-	DisableCompression bool `json:"disable_compression" default:"false" name:"禁用压缩" category:"请求超时" desc:"是否禁用对上游请求的传输压缩（Gzip）。对于流式请求建议开启以降低延迟。"`
+	RequestTimeout        int  `json:"request_timeout" default:"600" name:"请求超时" category:"请求超时" desc:"转发请求的完整生命周期超时（秒），包括连接、重试等。" validate:"min=1"`
+	ConnectTimeout        int  `json:"connect_timeout" default:"5" name:"连接超时" category:"请求超时" desc:"与上游服务建立新连接的超时时间（秒）。" validate:"min=1"`
+	IdleConnTimeout       int  `json:"idle_conn_timeout" default:"120" name:"空闲连接超时" category:"请求超时" desc:"HTTP 客户端中空闲连接的超时时间（秒）。" validate:"min=1"`
+	MaxIdleConns          int  `json:"max_idle_conns" default:"100" name:"最大空闲连接数" category:"请求超时" desc:"HTTP 客户端连接池中允许的最大空闲连接总数。" validate:"min=1"`
+	MaxIdleConnsPerHost   int  `json:"max_idle_conns_per_host" default:"10" name:"每主机最大空闲连接数" category:"请求超时" desc:"HTTP 客户端连接池对每个上游主机允许的最大空闲连接数。" validate:"min=1"`
+	ResponseHeaderTimeout int  `json:"response_header_timeout" default:"120" name:"响应头超时" category:"请求超时" desc:"等待上游服务响应头的最长时间（秒），用于流式请求。" validate:"min=1"`
+	DisableCompression    bool `json:"disable_compression" default:"false" name:"禁用压缩" category:"请求超时" desc:"是否禁用对上游请求的传输压缩（Gzip）。对于流式请求建议开启以降低延迟。"`
 
 	// 密钥配置
 	MaxRetries                      int `json:"max_retries" default:"3" name:"最大重试次数" category:"密钥配置" desc:"单个请求使用不同 Key 的最大重试次数" validate:"min=0"`
@@ -86,4 +86,11 @@ type LogConfig struct {
 // DatabaseConfig represents database configuration
 type DatabaseConfig struct {
 	DSN string `json:"dsn"`
+}
+
+type RetryError struct {
+	StatusCode   int    `json:"status_code"`
+	ErrorMessage string `json:"error_message"`
+	KeyID        string `json:"key_id"`
+	Attempt      int    `json:"attempt"`
 }

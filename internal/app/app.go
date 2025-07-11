@@ -184,8 +184,6 @@ func (a *App) Stop(ctx context.Context) {
 	a.logCleanupService.Stop()
 	a.groupManager.Stop()
 	a.settingsManager.Stop()
-
-	// Close resources
 	a.storage.Close()
 
 	// Wait for the logger to finish writing all logs
