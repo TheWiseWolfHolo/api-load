@@ -30,7 +30,7 @@ func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsMan
 // Start 启动日志清理服务
 func (s *LogCleanupService) Start() {
 	go s.run()
-	logrus.Info("Log cleanup service started")
+	logrus.Debug("Log cleanup service started")
 }
 
 // Stop 停止日志清理服务

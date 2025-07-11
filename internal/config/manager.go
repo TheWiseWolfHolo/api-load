@@ -46,7 +46,6 @@ type Manager struct {
 // Config represents the application configuration
 type Config struct {
 	Server      types.ServerConfig      `json:"server"`
-	OpenAI      types.OpenAIConfig      `json:"openai"`
 	Auth        types.AuthConfig        `json:"auth"`
 	CORS        types.CORSConfig        `json:"cors"`
 	Performance types.PerformanceConfig `json:"performance"`
@@ -87,14 +86,6 @@ func (m *Manager) ReloadConfig() error {
 			IdleTimeout:             defaultSettings.ServerIdleTimeout,
 			GracefulShutdownTimeout: defaultSettings.ServerGracefulShutdownTimeout,
 		},
-		OpenAI: types.OpenAIConfig{
-			// BaseURLs will be configured per group
-			BaseURLs: []string{},
-			// Timeout configs now come from system settings
-			RequestTimeout:  defaultSettings.RequestTimeout,
-			ResponseTimeout: defaultSettings.ResponseTimeout,
-			IdleConnTimeout: defaultSettings.IdleConnTimeout,
-		},
 		Auth: types.AuthConfig{
 			Key:     os.Getenv("AUTH_KEY"),
 			Enabled: os.Getenv("AUTH_KEY") != "",
@@ -130,14 +121,7 @@ func (m *Manager) ReloadConfig() error {
 		return err
 	}
 
-	logrus.Info("Environment configuration reloaded successfully")
-
 	return nil
-}
-
-// GetConfig returns the raw config struct
-func (m *Manager) GetConfig() *Config {
-	return m.config
 }
 
 // GetAuthConfig returns authentication configuration
@@ -217,7 +201,7 @@ func (m *Manager) DisplayConfig() {
 	perfConfig := m.GetPerformanceConfig()
 	logConfig := m.GetLogConfig()
 
-	logrus.Info("Current Configuration:")
+	logrus.Info("Current Server Configuration:")
 	logrus.Infof("   Server: %s:%d", serverConfig.Host, serverConfig.Port)
 
 	authStatus := "disabled"

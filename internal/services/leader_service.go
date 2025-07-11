@@ -170,7 +170,7 @@ func (s *LeaderService) maintainLeadershipLoop() {
 	ticker := time.NewTicker(leaderRenewalInterval)
 	defer ticker.Stop()
 
-	logrus.Info("Leadership maintenance loop started.")
+	logrus.Debug("Leadership maintenance loop started.")
 	for {
 		select {
 		case <-ticker.C:
@@ -200,7 +200,7 @@ func (s *LeaderService) tryToBeLeader() error {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	if acquired {
-		logrus.WithField("nodeID", s.nodeID).Info("Successfully acquired leadership.")
+		logrus.WithField("nodeID", s.nodeID).Debug("Successfully acquired leadership.")
 		s.isLeader.Store(true)
 	}
 	return nil

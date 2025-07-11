@@ -51,6 +51,5 @@ func NewDB(configManager types.ConfigManager) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	fmt.Println("Database connection initialized.")
 	return DB, nil
 }

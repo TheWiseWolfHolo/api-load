@@ -124,7 +124,7 @@ func (a *App) Start() error {
 			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
 				return fmt.Errorf("failed to load keys into key pool: %w", err)
 			}
-			logrus.Info("API keys loaded into Redis cache by leader.")
+			logrus.Debug("API keys loaded into Redis cache by leader.")
 		}
 	} else {
 		logrus.Info("Follower Mode. Waiting for leader to complete initialization.")
@@ -134,10 +134,10 @@ func (a *App) Start() error {
 		a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderService)
 	}
 
-	a.groupManager.Initialize()
-
 	// 显示配置并启动所有后台服务
 	a.configManager.DisplayConfig()
+
+	a.groupManager.Initialize()
 
 	a.startRequestLogger()
 	a.logCleanupService.Start()
@@ -159,8 +159,6 @@ func (a *App) Start() error {
 	go func() {
 		logrus.Info("GPT-Load proxy server started successfully")
 		logrus.Infof("Server address: http://%s:%d", serverConfig.Host, serverConfig.Port)
-		logrus.Infof("Statistics: http://%s:%d/stats", serverConfig.Host, serverConfig.Port)
-		logrus.Infof("Health check: http://%s:%d/health", serverConfig.Host, serverConfig.Port)
 		logrus.Info("")
 		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logrus.Fatalf("Server startup failed: %v", err)
@@ -184,10 +182,10 @@ func (a *App) Stop(ctx context.Context) {
 	a.keyValidationPool.Stop()
 	a.leaderService.Stop()
 	a.logCleanupService.Stop()
+	a.groupManager.Stop()
 	a.settingsManager.Stop()
 
 	// Close resources
-	a.proxyServer.Close()
 	a.storage.Close()
 
 	// Wait for the logger to finish writing all logs

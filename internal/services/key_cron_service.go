@@ -39,7 +39,7 @@ func NewKeyCronService(
 
 // Start begins the cron job execution.
 func (s *KeyCronService) Start() {
-	logrus.Info("Starting KeyCronService...")
+	logrus.Debug("Starting KeyCronService...")
 	s.wg.Add(1)
 	go s.runLoop()
 }

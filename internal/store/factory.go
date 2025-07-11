@@ -23,7 +23,7 @@ func NewStore(cfg types.ConfigManager) (Store, error) {
 			return nil, fmt.Errorf("failed to connect to redis: %w", err)
 		}
 
-		logrus.Info("Successfully connected to Redis.")
+		logrus.Debug("Successfully connected to Redis.")
 		return NewRedisStore(client), nil
 	}
 
