@@ -61,9 +61,9 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <n-space vertical size="large">
+  <n-space vertical>
     <n-form ref="formRef" :model="form" label-placement="top">
-      <n-space vertical size="large">
+      <n-space vertical>
         <n-card
           size="small"
           v-for="category in settingList"
@@ -103,12 +103,14 @@ async function handleSubmit() {
                   placeholder="请输入数值"
                   clearable
                   style="width: 100%"
+                  size="small"
                 />
                 <n-input
                   v-else
                   v-model:value="form[item.key] as string"
                   placeholder="请输入内容"
                   clearable
+                  size="small"
                 />
               </n-form-item>
             </n-grid-item>

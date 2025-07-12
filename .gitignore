@@ -40,8 +40,6 @@ config/secrets/
 
 # Logs
 *.log
-logs/
-log/
 
 # Runtime data
 pids

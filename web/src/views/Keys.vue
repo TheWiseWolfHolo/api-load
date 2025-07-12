@@ -96,7 +96,7 @@ function handleGroupDelete(deletedGroup: Group) {
 <style scoped>
 .keys-container {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
 }
 

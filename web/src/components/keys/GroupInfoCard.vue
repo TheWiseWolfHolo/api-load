@@ -177,6 +177,7 @@ function resetPage() {
         </div>
       </template>
 
+      <n-divider style="margin: 0; margin-bottom: 12px" />
       <!-- 统计摘要区 -->
       <div class="stats-summary">
         <n-spin :show="loading" size="small">
@@ -274,6 +275,7 @@ function resetPage() {
           </n-grid>
         </n-spin>
       </div>
+      <n-divider style="margin: 0" />
 
       <!-- 详细信息区（可折叠） -->
       <div class="details-section">
