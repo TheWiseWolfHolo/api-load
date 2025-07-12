@@ -37,3 +37,15 @@ export function formatDisplayName(name: string): string {
 export function getGroupDisplayName(group: Group): string {
   return group.display_name || formatDisplayName(group.name);
 }
+
+/**
+ * Masks a long key string for display.
+ * @param key The key string.
+ * @returns The masked key.
+ */
+export function maskKey(key: string): string {
+  if (!key || key.length <= 8) {
+    return key || "";
+  }
+  return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
-import { getGroupDisplayName } from "@/utils/display";
+import { getGroupDisplayName, maskKey } from "@/utils/display";
 import {
   AddCircleOutline,
   AlertCircleOutline,
@@ -140,13 +140,6 @@ async function loadKeys() {
   } finally {
     loading.value = false;
   }
-}
-
-function maskKey(key: string): string {
-  if (key.length <= 8) {
-    return key;
-  }
-  return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
 }
 
 function copyKey(key: KeyRow) {

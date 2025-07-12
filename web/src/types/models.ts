@@ -1,3 +1,10 @@
+// 通用 API 响应结构
+export interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
 // 密钥状态
 export type KeyStatus = "active" | "invalid" | undefined;
 
@@ -69,32 +76,47 @@ export interface TaskInfo {
   };
 }
 
+// Based on backend response
 export interface RequestLog {
   id: string;
   timestamp: string;
   group_id: number;
   key_id: number;
+  is_success: boolean;
   source_ip: string;
   status_code: number;
   request_path: string;
-  request_body_snippet: string;
+  duration_ms: number;
+  error_message: string;
+  user_agent: string;
+  retries: number;
+  group_name?: string;
+  key_value?: string;
+}
+
+export interface Pagination {
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
 }
 
 export interface LogsResponse {
-  total: number;
-  page: number;
-  size: number;
-  data: RequestLog[];
+  items: RequestLog[];
+  pagination: Pagination;
 }
 
 export interface LogFilter {
-  page: number;
-  size: number;
-  group_id?: number;
-  start_time?: string;
-  end_time?: string;
-  status_code?: number;
+  page?: number;
+  page_size?: number;
+  group_name?: string;
+  key_value?: string;
+  is_success?: boolean | null;
+  status_code?: number | null;
   source_ip?: string;
+  error_contains?: string;
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 export interface DashboardStats {
