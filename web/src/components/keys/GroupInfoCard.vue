@@ -118,6 +118,9 @@ function formatNumber(num: number): string {
 }
 
 function formatPercentage(num: number): string {
+  if (num <= 0) {
+    return "0";
+  }
   return `${(num * 100).toFixed(1)}%`;
 }
 
@@ -205,7 +208,7 @@ function resetPage() {
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
-                    <n-gradient-text type="success" size="20">
+                    <n-gradient-text type="info" size="20">
                       {{ formatNumber(stats?.hourly_stats?.failed_requests ?? 0) }}
                     </n-gradient-text>
                   </template>
@@ -228,7 +231,7 @@ function resetPage() {
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
-                    <n-gradient-text type="success" size="20">
+                    <n-gradient-text type="info" size="20">
                       {{ formatNumber(stats?.daily_stats?.failed_requests ?? 0) }}
                     </n-gradient-text>
                   </template>
@@ -251,7 +254,7 @@ function resetPage() {
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
-                    <n-gradient-text type="success" size="20">
+                    <n-gradient-text type="info" size="20">
                       {{ formatNumber(stats?.weekly_stats?.failed_requests ?? 0) }}
                     </n-gradient-text>
                   </template>
