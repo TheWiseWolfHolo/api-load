@@ -276,6 +276,8 @@ func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, sea
 		query = query.Where("key_value LIKE ?", "%"+searchKeyword+"%")
 	}
 
+	query = query.Order("last_used_at desc, updated_at desc")
+
 	return query
 }
 
