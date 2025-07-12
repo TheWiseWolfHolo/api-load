@@ -79,8 +79,9 @@ type DatabaseConfig struct {
 }
 
 type RetryError struct {
-	StatusCode   int    `json:"status_code"`
-	ErrorMessage string `json:"error_message"`
-	KeyID        string `json:"key_id"`
-	Attempt      int    `json:"attempt"`
+	StatusCode         int    `json:"status_code"`
+	ErrorMessage       string `json:"error_message"`
+	ParsedErrorMessage string `json:"-"`
+	KeyID              string `json:"key_id"`
+	Attempt            int    `json:"attempt"`
 }

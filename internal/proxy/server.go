@@ -109,10 +109,14 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			} else {
 				response.Error(c, app_errors.NewAPIErrorWithUpstream(lastError.StatusCode, "UPSTREAM_ERROR", lastError.ErrorMessage))
 			}
-			logrus.Debugf("Max retries exceeded for group %s after %d attempts. Parsed Error: %s", group.Name, retryCount, lastError.ErrorMessage)
+			logMessage := lastError.ParsedErrorMessage
+			if logMessage == "" {
+				logMessage = lastError.ErrorMessage
+			}
+			logrus.Debugf("Max retries exceeded for group %s after %d attempts. Parsed Error: %s", group.Name, retryCount, logMessage)
 
 			keyID, _ := strconv.ParseUint(lastError.KeyID, 10, 64)
-			ps.logRequest(c, group, uint(keyID), startTime, lastError.StatusCode, retryCount, errors.New(lastError.ErrorMessage))
+			ps.logRequest(c, group, uint(keyID), startTime, lastError.StatusCode, retryCount, errors.New(logMessage))
 		} else {
 			response.Error(c, app_errors.ErrMaxRetriesExceeded)
 			logrus.Debugf("Max retries exceeded for group %s after %d attempts.", group.Name, retryCount)
@@ -203,10 +207,11 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		}
 
 		newRetryErrors := append(retryErrors, types.RetryError{
-			StatusCode:   statusCode,
-			ErrorMessage: errorMessage,
-			KeyID:        fmt.Sprintf("%d", apiKey.ID),
-			Attempt:      retryCount + 1,
+			StatusCode:         statusCode,
+			ErrorMessage:       errorMessage,
+			ParsedErrorMessage: parsedError,
+			KeyID:              fmt.Sprintf("%d", apiKey.ID),
+			Attempt:            retryCount + 1,
 		})
 		ps.executeRequestWithRetry(c, channelHandler, group, bodyBytes, isStream, startTime, retryCount+1, newRetryErrors)
 		return
