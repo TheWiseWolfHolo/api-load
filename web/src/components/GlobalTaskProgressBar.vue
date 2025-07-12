@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { TaskInfo } from "@/types/models";
+import { appState } from "@/utils/app-state";
 import { NButton, NCard, NProgress, NText, useMessage } from "naive-ui";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const taskInfo = ref<TaskInfo>({ is_running: false });
 const visible = ref(false);
@@ -13,6 +14,13 @@ const message = useMessage();
 onMounted(() => {
   startPolling();
 });
+
+watch(
+  () => appState.taskPollingTrigger,
+  () => {
+    startPolling();
+  }
+);
 
 onBeforeUnmount(() => {
   stopPolling();

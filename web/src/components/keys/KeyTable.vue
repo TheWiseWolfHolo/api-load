@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
+import { appState } from "@/utils/app-state";
 import { getGroupDisplayName, maskKey } from "@/utils/display";
 import {
   AddCircleOutline,
@@ -57,9 +58,9 @@ const statusOptions = [
 
 // 更多操作下拉菜单选项
 const moreOptions = [
-  { label: "导出所有密钥", key: "copyAll" },
-  { label: "导出有效密钥", key: "copyValid" },
-  { label: "导出无效密钥", key: "copyInvalid" },
+  // { label: "导出所有密钥", key: "copyAll" },
+  // { label: "导出有效密钥", key: "copyValid" },
+  // { label: "导出无效密钥", key: "copyInvalid" },
   { type: "divider" },
   { label: "恢复所有无效密钥", key: "restoreAll" },
   { label: "清空所有无效密钥", key: "clearInvalid", props: { style: { color: "#d03050" } } },
@@ -349,6 +350,7 @@ async function validateAllKeys() {
   try {
     await keysApi.validateGroupKeys(props.selectedGroup.id);
     localStorage.removeItem("last_closed_task");
+    appState.taskPollingTrigger++;
   } catch (_error) {
     console.error("测试失败");
   } finally {
