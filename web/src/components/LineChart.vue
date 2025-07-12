@@ -100,38 +100,67 @@ const getYPosition = (value: number) => {
   return padding.top + (1 - ratio) * plotHeight;
 };
 
-// 生成线条路径
+// 生成线条路径（处理零值点）
 const generateLinePath = (data: number[]) => {
   if (!data.length) {
     return "";
   }
 
-  const points = data.map((value, index) => {
+  const points: string[] = [];
+  let hasValidPath = false;
+
+  data.forEach((value, index) => {
     const x = getXPosition(index);
     const y = getYPosition(value);
-    return `${x},${y}`;
+
+    if (value > 0) {
+      if (!hasValidPath) {
+        points.push(`M ${x},${y}`);
+        hasValidPath = true;
+      } else {
+        points.push(`L ${x},${y}`);
+      }
+    } else if (hasValidPath && index < data.length - 1) {
+      // 如果当前是零值但前面有有效路径，检查后面是否还有非零值
+      const nextNonZeroIndex = data.findIndex((v, i) => i > index && v > 0);
+      if (nextNonZeroIndex !== -1) {
+        // 如果后面还有非零值，结束当前路径
+        hasValidPath = false;
+      }
+    }
   });
 
-  return `M ${points.join(" L ")}`;
+  return points.join(" ");
 };
 
-// 生成填充区域路径
+// 生成填充区域路径（只为有数据的区域填充）
 const generateAreaPath = (data: number[]) => {
   if (!data.length) {
     return "";
   }
 
-  const points = data.map((value, index) => {
-    const x = getXPosition(index);
-    const y = getYPosition(value);
-    return `${x},${y}`;
+  const validPoints: Array<{ x: number; y: number; index: number }> = [];
+
+  data.forEach((value, index) => {
+    if (value > 0) {
+      const x = getXPosition(index);
+      const y = getYPosition(value);
+      validPoints.push({ x, y, index });
+    }
   });
 
-  const baseY = getYPosition(dataRange.value.min);
-  const firstX = getXPosition(0);
-  const lastX = getXPosition(data.length - 1);
+  if (validPoints.length === 0) {
+    return "";
+  }
 
-  return `M ${firstX},${baseY} L ${points.join(" L ")} L ${lastX},${baseY} Z`;
+  const baseY = getYPosition(dataRange.value.min);
+  const pathPoints = validPoints.map(p => `${p.x},${p.y}`);
+
+  // 从底部开始，绘制到各个点，然后回到底部
+  const firstPoint = validPoints[0];
+  const lastPoint = validPoints[validPoints.length - 1];
+
+  return `M ${firstPoint.x},${baseY} L ${pathPoints.join(" L ")} L ${lastPoint.x},${baseY} Z`;
 };
 
 // 数字格式化
@@ -425,29 +454,42 @@ onMounted(() => {
             <path
               :d="generateLinePath(dataset.data)"
               :stroke="dataset.color"
-              stroke-width="3"
+              stroke-width="2"
               fill="none"
               class="line-path"
               :style="{
                 strokeDasharray: animatedStroke,
                 strokeDashoffset: animatedOffset,
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.1))',
               }"
             />
 
             <!-- 数据点 -->
             <g v-for="(value, pointIndex) in dataset.data" :key="pointIndex">
               <circle
+                v-if="value > 0"
                 :cx="getXPosition(pointIndex)"
                 :cy="getYPosition(value)"
-                r="4"
+                r="3"
                 :fill="dataset.color"
                 :stroke="dataset.color"
-                stroke-width="2"
+                stroke-width="1"
                 class="data-point"
                 :class="{
                   'point-hover': hoveredPoint?.pointIndex === pointIndex,
                 }"
+              />
+              <!-- 零值点用灰色小点表示 -->
+              <circle
+                v-else
+                :cx="getXPosition(pointIndex)"
+                :cy="getYPosition(value)"
+                r="1.5"
+                fill="#d1d5db"
+                stroke="#d1d5db"
+                stroke-width="1"
+                class="data-point-zero"
+                opacity="0.6"
               />
             </g>
           </g>
@@ -624,8 +666,17 @@ onMounted(() => {
 
 .data-point:hover,
 .point-hover {
-  r: 6;
-  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
+  r: 5;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.3));
+}
+
+.data-point-zero {
+  cursor: default;
+  transition: opacity 0.2s ease;
+}
+
+.data-point-zero:hover {
+  opacity: 0.8;
 }
 
 .chart-tooltip {
