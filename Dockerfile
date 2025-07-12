@@ -1,4 +1,4 @@
-FROM node:20-alpine AS frontend-builder
+FROM node:20-alpine AS builder
 
 WORKDIR /build
 COPY ./web .
@@ -6,25 +6,29 @@ RUN npm install
 RUN npm run build
 
 
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:alpine AS builder2
+
+ENV GO111MODULE=on \
+    CGO_ENABLED=0 \
+    GOOS=linux
 
 WORKDIR /build
-RUN apk add --no-cache git build-base
-COPY go.mod go.sum ./
+
+ADD go.mod go.sum ./
 RUN go mod download
+
 COPY . .
-COPY --from=frontend-builder /build/dist ./web/dist
-
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s" \
-    -o gpt-load
+COPY --from=builder /build/dist ./web/dist
+RUN go build -ldflags "-s -w " -o gpt-load
 
 
-FROM alpine:latest
+FROM alpine
 
 WORKDIR /app
-RUN apk --no-cache add ca-certificates tzdata
-COPY --from=backend-builder /build/gpt-load .
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata \
+    && update-ca-certificates
 
+COPY --from=builder2 /build/gpt-load .
 EXPOSE 3000
 ENTRYPOINT ["/app/gpt-load"]
