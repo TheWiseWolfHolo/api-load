@@ -1,52 +1,59 @@
 <script setup lang="ts">
-import { NCard, NGrid, NGridItem, NSpace, NTag } from "naive-ui";
+import { getDashboardStats } from "@/api/dashboard";
+import type { DashboardStatsResponse } from "@/types/models";
+import { NCard, NGrid, NGridItem, NSpace, NTag, NTooltip } from "naive-ui";
 import { onMounted, ref } from "vue";
 
-// 模拟数据
-const stats = ref([
-  {
-    title: "总请求数",
-    value: "125,842",
-    icon: "📈",
-    color: "var(--primary-gradient)",
-    trend: "+12.5%",
-    trendUp: true,
-  },
-  {
-    title: "活跃连接",
-    value: "1,234",
-    icon: "🔗",
-    color: "var(--success-gradient)",
-    trend: "+5.2%",
-    trendUp: true,
-  },
-  {
-    title: "响应时间",
-    value: "245ms",
-    icon: "⚡",
-    color: "var(--warning-gradient)",
-    trend: "-8.1%",
-    trendUp: false,
-  },
-  {
-    title: "错误率",
-    value: "0.12%",
-    icon: "🛡️",
-    color: "var(--secondary-gradient)",
-    trend: "-2.3%",
-    trendUp: false,
-  },
-]);
-
+// 统计数据
+const stats = ref<DashboardStatsResponse | null>(null);
+const loading = ref(true);
 const animatedValues = ref<Record<string, number>>({});
 
-onMounted(() => {
-  // 动画效果
-  stats.value.forEach((stat, index) => {
+// 格式化数值显示
+const formatValue = (value: number, type: "count" | "rate" = "count"): string => {
+  if (type === "rate") {
+    return `${value.toFixed(2)}%`;
+  }
+  if (value >= 10000) {
+    return `${(value / 10000).toFixed(1)}w`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return value.toString();
+};
+
+// 格式化趋势显示
+const formatTrend = (trend: number): string => {
+  const sign = trend >= 0 ? "+" : "";
+  return `${sign}${trend.toFixed(1)}%`;
+};
+
+// 获取统计数据
+const fetchStats = async () => {
+  try {
+    loading.value = true;
+    const response = await getDashboardStats();
+    stats.value = response.data;
+
+    // 添加动画效果
     setTimeout(() => {
-      animatedValues.value[stat.title] = 1;
-    }, index * 150);
-  });
+      animatedValues.value = {
+        key_count: 1,
+        group_count: 1,
+        request_count: 1,
+        error_rate: 1,
+      };
+    }, 150);
+  } catch (error) {
+    console.error("获取统计数据失败:", error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchStats();
 });
 </script>
 
@@ -54,32 +61,124 @@ onMounted(() => {
   <div class="stats-container">
     <n-space vertical size="medium">
       <n-grid :cols="4" :x-gap="20" :y-gap="20" responsive="screen">
-        <n-grid-item v-for="(stat, index) in stats" :key="stat.title" span="1">
-          <n-card
-            :bordered="false"
-            class="stat-card"
-            :style="{ animationDelay: `${index * 0.05}s` }"
-          >
+        <!-- 秘钥数量 -->
+        <n-grid-item span="1">
+          <n-card :bordered="false" class="stat-card" style="animation-delay: 0s">
             <div class="stat-header">
-              <div class="stat-icon" :style="{ background: stat.color }">
-                {{ stat.icon }}
-              </div>
-              <n-tag :type="stat.trendUp ? 'success' : 'error'" size="small" class="stat-trend">
-                {{ stat.trend }}
-              </n-tag>
+              <div class="stat-icon key-icon">🔑</div>
+              <n-tooltip v-if="stats?.key_count.sub_value" trigger="hover">
+                <template #trigger>
+                  <n-tag type="error" size="small" class="stat-trend">
+                    {{ stats.key_count.sub_value }}
+                  </n-tag>
+                </template>
+                {{ stats.key_count.sub_value_tip }}
+              </n-tooltip>
             </div>
 
             <div class="stat-content">
-              <div class="stat-value">{{ stat.value }}</div>
-              <div class="stat-title">{{ stat.title }}</div>
+              <div class="stat-value">
+                {{ stats ? formatValue(stats.key_count.value) : "--" }}
+              </div>
+              <div class="stat-title">秘钥数量</div>
             </div>
 
             <div class="stat-bar">
               <div
-                class="stat-bar-fill"
+                class="stat-bar-fill key-bar"
                 :style="{
-                  background: stat.color,
-                  width: `${animatedValues[stat.title] * 100}%`,
+                  width: `${animatedValues.key_count * 100}%`,
+                }"
+              />
+            </div>
+          </n-card>
+        </n-grid-item>
+
+        <!-- 分组数量 -->
+        <n-grid-item span="1">
+          <n-card :bordered="false" class="stat-card" style="animation-delay: 0.05s">
+            <div class="stat-header">
+              <div class="stat-icon group-icon">📁</div>
+            </div>
+
+            <div class="stat-content">
+              <div class="stat-value">
+                {{ stats ? formatValue(stats.group_count.value) : "--" }}
+              </div>
+              <div class="stat-title">分组数量</div>
+            </div>
+
+            <div class="stat-bar">
+              <div
+                class="stat-bar-fill group-bar"
+                :style="{
+                  width: `${animatedValues.group_count * 100}%`,
+                }"
+              />
+            </div>
+          </n-card>
+        </n-grid-item>
+
+        <!-- 24小时请求 -->
+        <n-grid-item span="1">
+          <n-card :bordered="false" class="stat-card" style="animation-delay: 0.1s">
+            <div class="stat-header">
+              <div class="stat-icon request-icon">📈</div>
+              <n-tag
+                v-if="stats?.request_count && stats.request_count.trend !== undefined"
+                :type="stats?.request_count.trend_is_growth ? 'success' : 'error'"
+                size="small"
+                class="stat-trend"
+              >
+                {{ stats ? formatTrend(stats.request_count.trend) : "--" }}
+              </n-tag>
+            </div>
+
+            <div class="stat-content">
+              <div class="stat-value">
+                {{ stats ? formatValue(stats.request_count.value) : "--" }}
+              </div>
+              <div class="stat-title">24小时请求</div>
+            </div>
+
+            <div class="stat-bar">
+              <div
+                class="stat-bar-fill request-bar"
+                :style="{
+                  width: `${animatedValues.request_count * 100}%`,
+                }"
+              />
+            </div>
+          </n-card>
+        </n-grid-item>
+
+        <!-- 24小时错误率 -->
+        <n-grid-item span="1">
+          <n-card :bordered="false" class="stat-card" style="animation-delay: 0.15s">
+            <div class="stat-header">
+              <div class="stat-icon error-icon">🛡️</div>
+              <n-tag
+                v-if="stats?.error_rate.trend !== 0"
+                :type="stats?.error_rate.trend_is_growth ? 'success' : 'error'"
+                size="small"
+                class="stat-trend"
+              >
+                {{ stats ? formatTrend(stats.error_rate.trend) : "--" }}
+              </n-tag>
+            </div>
+
+            <div class="stat-content">
+              <div class="stat-value">
+                {{ stats ? formatValue(stats.error_rate.value, "rate") : "--" }}
+              </div>
+              <div class="stat-title">24小时错误率</div>
+            </div>
+
+            <div class="stat-bar">
+              <div
+                class="stat-bar-fill error-bar"
+                :style="{
+                  width: `${animatedValues.error_rate * 100}%`,
                 }"
               />
             </div>
@@ -130,6 +229,22 @@ onMounted(() => {
   box-shadow: var(--shadow-md);
 }
 
+.key-icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.group-icon {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.request-icon {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.error-icon {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
 .stat-trend {
   font-weight: 600;
 }
@@ -175,6 +290,22 @@ onMounted(() => {
   border-radius: 2px;
   transition: width 1s ease-out;
   transition-delay: 0.2s;
+}
+
+.key-bar {
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.group-bar {
+  background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+}
+
+.request-bar {
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.error-bar {
+  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
 }
 
 @keyframes slideInUp {

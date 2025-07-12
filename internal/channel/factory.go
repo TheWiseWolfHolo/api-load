@@ -66,7 +66,7 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 		}
 	}
 
-	logrus.Infof("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
+	logrus.Debugf("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
 
 	constructor, ok := channelRegistry[group.ChannelType]
 	if !ok {

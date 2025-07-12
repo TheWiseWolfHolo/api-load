@@ -711,3 +711,21 @@ func (s *Server) GetGroupStats(c *gin.Context) {
 
 	response.Success(c, resp)
 }
+
+
+// List godoc
+// @Summary List all groups for selection
+// @Description Get a list of all groups with their ID and display name
+// @Tags Groups
+// @Accept  json
+// @Produce  json
+// @Success 200 {object} response.Response{data=[]models.Group}
+// @Router /groups/list [get]
+func (s *Server) List(c *gin.Context) {
+	var groups []models.Group
+	if err := s.DB.Select("id, display_name").Find(&groups).Error; err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, "无法获取分组列表"))
+		return
+	}
+	response.Success(c, groups)
+}

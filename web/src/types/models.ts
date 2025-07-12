@@ -143,3 +143,33 @@ export interface GroupRequestStat {
   display_name: string;
   request_count: number;
 }
+
+// 仪表盘统计卡片数据
+export interface StatCard {
+  value: number;
+  sub_value?: number;
+  sub_value_tip?: string;
+  trend: number;
+  trend_is_growth: boolean;
+}
+
+// 仪表盘基础统计响应
+export interface DashboardStatsResponse {
+  key_count: StatCard;
+  group_count: StatCard;
+  request_count: StatCard;
+  error_rate: StatCard;
+}
+
+// 图表数据集
+export interface ChartDataset {
+  label: string;
+  data: number[];
+  color: string;
+}
+
+// 图表数据
+export interface ChartData {
+  labels: string[];
+  datasets: ChartDataset[];
+}

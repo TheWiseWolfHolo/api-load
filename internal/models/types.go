@@ -85,18 +85,34 @@ type RequestLog struct {
 	Retries      int       `gorm:"not null" json:"retries"`
 }
 
-// GroupRequestStat 用于表示每个分组的请求统计
-type GroupRequestStat struct {
-	DisplayName  string `json:"display_name"`
-	RequestCount int64  `json:"request_count"`
+// StatCard 用于仪表盘的单个统计卡片数据
+type StatCard struct {
+	Value         float64 `json:"value"`
+	SubValue      int64   `json:"sub_value,omitempty"`
+	SubValueTip   string  `json:"sub_value_tip,omitempty"`
+	Trend         float64 `json:"trend"`
+	TrendIsGrowth bool    `json:"trend_is_growth"`
 }
 
-// DashboardStats 用于仪表盘的统计数据
-type DashboardStats struct {
-	TotalRequests   int64              `json:"total_requests"`
-	SuccessRequests int64              `json:"success_requests"`
-	SuccessRate     float64            `json:"success_rate"`
-	GroupStats      []GroupRequestStat `json:"group_stats"`
+// DashboardStatsResponse 用于仪表盘基础统计的API响应
+type DashboardStatsResponse struct {
+	KeyCount      StatCard `json:"key_count"`
+	GroupCount    StatCard `json:"group_count"`
+	RequestCount  StatCard `json:"request_count"`
+	ErrorRate     StatCard `json:"error_rate"`
+}
+
+// ChartDataset 用于图表的数据集
+type ChartDataset struct {
+	Label string  `json:"label"`
+	Data  []int64 `json:"data"`
+	Color string  `json:"color"`
+}
+
+// ChartData 用于图表的API响应
+type ChartData struct {
+	Labels   []string       `json:"labels"`
+	Datasets []ChartDataset `json:"datasets"`
 }
 
 // GroupHourlyStat 对应 group_hourly_stats 表，用于存储每个分组每小时的请求统计

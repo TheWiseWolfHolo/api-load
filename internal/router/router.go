@@ -110,6 +110,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	{
 		groups.POST("", serverHandler.CreateGroup)
 		groups.GET("", serverHandler.ListGroups)
+		groups.GET("/list", serverHandler.List)
 		groups.GET("/config-options", serverHandler.GetGroupConfigOptions)
 		groups.PUT("/:id", serverHandler.UpdateGroup)
 		groups.DELETE("/:id", serverHandler.DeleteGroup)
@@ -136,6 +137,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	dashboard := api.Group("/dashboard")
 	{
 		dashboard.GET("/stats", serverHandler.Stats)
+		dashboard.GET("/chart", serverHandler.Chart)
 	}
 
 	// 日志
