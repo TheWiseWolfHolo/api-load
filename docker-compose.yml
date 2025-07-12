@@ -1,70 +1,54 @@
-version: '3.8'
-
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: gpt-load-app
+  gpt-load:
+    image: ghcr.io/tbphp/gpt-load:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: gpt-load
     ports:
-      - "8080:8080"
+      - "3000:3000"
     env_file:
       - .env
-    environment:
-      # Override or set environment variables here
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - GIN_MODE=release
-    restart: unless-stopped
+    restart: always
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
       redis:
-        condition: service_started
-    networks:
-      - gpt-load-net
-
-  db:
-    image: mysql:8.0
-    container_name: gpt-load-db
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-    volumes:
-      - db-data:/var/lib/mysql
-    ports:
-      - "3306:3306"
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER}", "-p${DB_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mysql:
+    image: mysql:8.2
+    container_name: gpt-load-mysql
+    restart: always
+    # ports:
+    #   - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: gpt_load
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
       retries: 5
-    networks:
-      - gpt-load-net
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     container_name: gpt-load-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+    restart: always
+    # ports:
+    #   - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    networks:
-      - gpt-load-net
+      retries: 3
 
 volumes:
-  db-data:
-
-networks:
-  gpt-load-net:
-    driver: bridge
+  mysql_data:
