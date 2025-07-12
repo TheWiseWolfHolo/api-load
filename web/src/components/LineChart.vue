@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { getDashboardChart, getGroupList } from "@/api/dashboard";
-import type { ChartData, ChartDataset } from "@/types/models";
+import type { ChartData } from "@/types/models";
+import { getGroupDisplayName } from "@/utils/display";
 import { NSelect, NSpin } from "naive-ui";
 import { computed, onMounted, ref, watch } from "vue";
 
@@ -17,16 +18,18 @@ const hoveredPoint = ref<{
 } | null>(null);
 const tooltipData = ref<{
   time: string;
-  label: string;
-  value: number;
-  color: string;
+  datasets: Array<{
+    label: string;
+    value: number;
+    color: string;
+  }>;
 } | null>(null);
 const tooltipPosition = ref({ x: 0, y: 0 });
 const chartSvg = ref<SVGElement>();
 
 // 图表尺寸和边距
 const chartWidth = 800;
-const chartHeight = 400;
+const chartHeight = 260;
 const padding = { top: 40, right: 40, bottom: 60, left: 80 };
 
 // 格式化分组选项
@@ -46,8 +49,13 @@ const dataRange = computed(() => {
   const max = Math.max(...allValues, 0);
   const min = Math.min(...allValues, 0);
 
+  // 如果所有数据都是0，设置一个合理的范围
+  if (max === 0 && min === 0) {
+    return { min: 0, max: 10 };
+  }
+
   // 添加一些padding让图表更好看
-  const paddingValue = (max - min) * 0.1;
+  const paddingValue = Math.max((max - min) * 0.1, 1);
   return {
     min: Math.max(0, min - paddingValue),
     max: max + paddingValue,
@@ -174,67 +182,68 @@ const handleMouseMove = (event: MouseEvent) => {
   }
 
   const rect = chartSvg.value.getBoundingClientRect();
-  const mouseX = event.clientX - rect.left;
-  const mouseY = event.clientY - rect.top;
+  // 考虑SVG的viewBox缩放
+  const scaleX = 800 / rect.width;
+  const scaleY = 260 / rect.height;
 
-  // 找到最近的数据点
-  let closestDistance = Infinity;
-  let closestDatasetIndex = -1;
-  let closestPointIndex = -1;
+  const mouseX = (event.clientX - rect.left) * scaleX;
+  const mouseY = (event.clientY - rect.top) * scaleY;
 
-  chartData.value.datasets.forEach((dataset, datasetIndex) => {
-    dataset.data.forEach((value, pointIndex) => {
-      const x = getXPosition(pointIndex);
-      const y = getYPosition(value);
-      const distance = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+  // 首先找到最接近的X轴位置（时间点）
+  let closestXDistance = Infinity;
+  let closestTimeIndex = -1;
 
-      if (distance < 30 && distance < closestDistance) {
-        closestDistance = distance;
-        closestDatasetIndex = datasetIndex;
-        closestPointIndex = pointIndex;
-      }
-    });
+  chartData.value.labels.forEach((_, pointIndex) => {
+    const x = getXPosition(pointIndex);
+    const xDistance = Math.abs(mouseX - x);
+
+    if (xDistance < closestXDistance) {
+      closestXDistance = xDistance;
+      closestTimeIndex = pointIndex;
+    }
   });
 
-  if (closestDatasetIndex >= 0 && closestPointIndex >= 0) {
+  // 如果鼠标距离最近的时间点太远，不显示提示
+  if (closestXDistance > 50) {
+    hoveredPoint.value = null;
+    tooltipData.value = null;
+    return;
+  }
+
+  // 收集该时间点所有数据集的数据
+  const datasetsAtTime = chartData.value.datasets.map(dataset => ({
+    label: dataset.label,
+    value: dataset.data[closestTimeIndex],
+    color: dataset.color,
+  }));
+
+  if (closestTimeIndex >= 0) {
     hoveredPoint.value = {
-      datasetIndex: closestDatasetIndex,
-      pointIndex: closestPointIndex,
+      datasetIndex: 0, // 不再需要特定的数据集索引
+      pointIndex: closestTimeIndex,
       x: mouseX,
       y: mouseY,
+    };
+
+    // 显示 tooltip
+    const x = getXPosition(closestTimeIndex);
+    const avgY =
+      datasetsAtTime.reduce((sum, item) => sum + getYPosition(item.value), 0) /
+      datasetsAtTime.length;
+
+    tooltipPosition.value = {
+      x,
+      y: avgY - 20, // 在平均高度上方显示
+    };
+
+    tooltipData.value = {
+      time: chartData.value.labels[closestTimeIndex],
+      datasets: datasetsAtTime,
     };
   } else {
     hoveredPoint.value = null;
     tooltipData.value = null;
   }
-};
-
-const showTooltip = (
-  event: MouseEvent,
-  dataset: ChartDataset,
-  pointIndex: number,
-  value: number
-) => {
-  if (!chartData.value) {
-    return;
-  }
-
-  const rect = (event.target as SVGElement).getBoundingClientRect();
-  const containerRect = chartSvg.value?.getBoundingClientRect();
-
-  if (containerRect) {
-    tooltipPosition.value = {
-      x: rect.left - containerRect.left + rect.width / 2,
-      y: rect.top - containerRect.top - 10,
-    };
-  }
-
-  tooltipData.value = {
-    time: chartData.value.labels[pointIndex],
-    label: dataset.label,
-    value,
-    color: dataset.color,
-  };
 };
 
 const hideTooltip = () => {
@@ -249,7 +258,7 @@ const fetchGroups = async () => {
     groupOptions.value = [
       { label: "全部分组", value: null },
       ...response.data.map(group => ({
-        label: group.display_name || group.name,
+        label: getGroupDisplayName(group),
         value: group.id || 0,
       })),
     ];
@@ -290,13 +299,16 @@ onMounted(() => {
 <template>
   <div class="chart-container">
     <div class="chart-header">
-      <h3 class="chart-title">24小时请求趋势</h3>
+      <div class="chart-title-section">
+        <h3 class="chart-title">24小时请求趋势</h3>
+        <p class="chart-subtitle">实时监控系统请求状态</p>
+      </div>
       <n-select
         v-model:value="selectedGroup"
         :options="groupOptions as any"
-        placeholder="选择分组"
+        placeholder="全部分组"
         size="small"
-        style="width: 120px"
+        style="width: 150px"
         clearable
         @update:value="fetchChartData"
       />
@@ -305,7 +317,7 @@ onMounted(() => {
     <div v-if="chartData" class="chart-content">
       <div class="chart-legend">
         <div v-for="dataset in chartData.datasets" :key="dataset.label" class="legend-item">
-          <div class="legend-color" :style="{ backgroundColor: dataset.color }" />
+          <div class="legend-indicator" :style="{ backgroundColor: dataset.color }" />
           <span class="legend-label">{{ dataset.label }}</span>
         </div>
       </div>
@@ -313,8 +325,7 @@ onMounted(() => {
       <div class="chart-wrapper">
         <svg
           ref="chartSvg"
-          :width="chartWidth"
-          :height="chartHeight"
+          viewBox="0 0 800 260"
           class="chart-svg"
           @mousemove="handleMouseMove"
           @mouseleave="hideTooltip"
@@ -435,11 +446,8 @@ onMounted(() => {
                 stroke-width="2"
                 class="data-point"
                 :class="{
-                  'point-hover':
-                    hoveredPoint?.datasetIndex === datasetIndex &&
-                    hoveredPoint?.pointIndex === pointIndex,
+                  'point-hover': hoveredPoint?.pointIndex === pointIndex,
                 }"
-                @mouseenter="showTooltip($event, dataset, pointIndex, value)"
               />
             </g>
           </g>
@@ -468,9 +476,9 @@ onMounted(() => {
           }"
         >
           <div class="tooltip-time">{{ tooltipData.time }}</div>
-          <div class="tooltip-value">
-            <span class="tooltip-color" :style="{ backgroundColor: tooltipData.color }" />
-            {{ tooltipData.label }}: {{ formatNumber(tooltipData.value) }}
+          <div v-for="dataset in tooltipData.datasets" :key="dataset.label" class="tooltip-value">
+            <span class="tooltip-color" :style="{ backgroundColor: dataset.color }" />
+            {{ dataset.label }}: {{ formatNumber(dataset.value) }}
           </div>
         </div>
       </div>
@@ -497,12 +505,17 @@ onMounted(() => {
 .chart-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
+  gap: 16px;
+}
+
+.chart-title-section {
+  flex: 1;
 }
 
 .chart-title {
-  margin: 0;
+  margin: 0 0 4px 0;
   font-size: 24px;
   font-weight: 600;
   background: linear-gradient(45deg, #fff, #f0f0f0);
@@ -511,37 +524,70 @@ onMounted(() => {
   background-clip: text;
 }
 
+.chart-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+}
+
 .chart-content {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
-  padding: 20px;
+  padding: 12px;
   color: #333;
 }
 
 .chart-legend {
   display: flex;
   justify-content: center;
-  gap: 24px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  transition: all 0.2s ease;
 }
 
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+.legend-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.legend-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.legend-indicator::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
 }
 
 .legend-label {
-  font-size: 14px;
-  color: #666;
+  font-size: 13px;
+  color: #334155;
 }
 
 .chart-wrapper {
@@ -584,27 +630,42 @@ onMounted(() => {
 
 .chart-tooltip {
   position: absolute;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
   color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
   pointer-events: none;
   transform: translateX(-50%) translateY(-100%);
   z-index: 1000;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 140px;
+  max-width: 220px;
 }
 
 .tooltip-time {
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-align: center;
+  color: #e2e8f0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 6px;
 }
 
 .tooltip-value {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.tooltip-value:last-child {
+  margin-bottom: 0;
 }
 
 .tooltip-color {
@@ -618,7 +679,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 300px;
+  height: 260px;
   color: white;
 }
 

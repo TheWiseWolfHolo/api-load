@@ -1,21 +1,15 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-// Stats godoc
-// @Summary Get dashboard statistics
-// @Description Get statistics for the dashboard cards
-// @Tags Dashboard
-// @Accept  json
-// @Produce  json
-// @Success 200 {object} response.Response{data=models.DashboardStatsResponse}
-// @Router /dashboard/stats [get]
+// Stats Get dashboard statistics
 func (s *Server) Stats(c *gin.Context) {
 	var activeKeys, invalidKeys, groupCount int64
 	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusActive).Count(&activeKeys)
@@ -37,11 +31,24 @@ func (s *Server) Stats(c *gin.Context) {
 		return
 	}
 
+	// 计算请求量趋势
 	reqTrend := 0.0
+	reqTrendIsGrowth := true
 	if previousPeriod.TotalRequests > 0 {
+		// 有前期数据，计算百分比变化
 		reqTrend = (float64(currentPeriod.TotalRequests-previousPeriod.TotalRequests) / float64(previousPeriod.TotalRequests)) * 100
+		reqTrendIsGrowth = reqTrend >= 0
+	} else if currentPeriod.TotalRequests > 0 {
+		// 前期无数据，当前有数据，视为100%增长
+		reqTrend = 100.0
+		reqTrendIsGrowth = true
+	} else {
+		// 前期和当前都无数据
+		reqTrend = 0.0
+		reqTrendIsGrowth = true
 	}
 
+	// 计算当前和前期错误率
 	currentErrorRate := 0.0
 	if currentPeriod.TotalRequests > 0 {
 		currentErrorRate = (float64(currentPeriod.TotalFailures) / float64(currentPeriod.TotalRequests)) * 100
@@ -52,7 +59,25 @@ func (s *Server) Stats(c *gin.Context) {
 		previousErrorRate = (float64(previousPeriod.TotalFailures) / float64(previousPeriod.TotalRequests)) * 100
 	}
 
-	errorRateTrend := currentErrorRate - previousErrorRate
+	// 计算错误率趋势
+	errorRateTrend := 0.0
+	errorRateTrendIsGrowth := false
+	if previousPeriod.TotalRequests > 0 {
+		// 有前期数据，计算百分点差异
+		errorRateTrend = currentErrorRate - previousErrorRate
+		errorRateTrendIsGrowth = errorRateTrend < 0 // 错误率下降是好事
+	} else if currentPeriod.TotalRequests > 0 {
+		// 前期无数据，当前有数据
+		errorRateTrend = currentErrorRate // 显示当前错误率
+		errorRateTrendIsGrowth = false    // 有错误是坏事（如果错误率>0）
+		if currentErrorRate == 0 {
+			errorRateTrendIsGrowth = true // 如果当前无错误，标记为正面
+		}
+	} else {
+		// 都无数据
+		errorRateTrend = 0.0
+		errorRateTrendIsGrowth = true
+	}
 
 	stats := models.DashboardStatsResponse{
 		KeyCount: models.StatCard{
@@ -66,28 +91,19 @@ func (s *Server) Stats(c *gin.Context) {
 		RequestCount: models.StatCard{
 			Value:         float64(currentPeriod.TotalRequests),
 			Trend:         reqTrend,
-			TrendIsGrowth: reqTrend >= 0,
+			TrendIsGrowth: reqTrendIsGrowth,
 		},
 		ErrorRate: models.StatCard{
 			Value:         currentErrorRate,
 			Trend:         errorRateTrend,
-			TrendIsGrowth: errorRateTrend < 0, // 错误率下降是好事
+			TrendIsGrowth: errorRateTrendIsGrowth,
 		},
 	}
 
 	response.Success(c, stats)
 }
 
-
-// Chart godoc
-// @Summary Get dashboard chart data
-// @Description Get chart data for the last 24 hours
-// @Tags Dashboard
-// @Accept  json
-// @Produce  json
-// @Param groupId query int false "Group ID"
-// @Success 200 {object} response.Response{data=models.ChartData}
-// @Router /dashboard/chart [get]
+// Chart Get dashboard chart data
 func (s *Server) Chart(c *gin.Context) {
 	groupID := c.Query("groupId")
 
@@ -95,7 +111,7 @@ func (s *Server) Chart(c *gin.Context) {
 	twentyFourHoursAgo := now.Add(-24 * time.Hour)
 
 	var hourlyStats []models.GroupHourlyStat
-	query := s.DB.Where("time >= ?", twentyFourHoursAgo)
+	query := s.DB.Where("time >= ? AND time < ?", twentyFourHoursAgo, now)
 	if groupID != "" {
 		query = query.Where("group_id = ?", groupID)
 	}
@@ -148,7 +164,6 @@ func (s *Server) Chart(c *gin.Context) {
 
 	response.Success(c, chartData)
 }
-
 
 type hourlyStatResult struct {
 	TotalRequests int64
