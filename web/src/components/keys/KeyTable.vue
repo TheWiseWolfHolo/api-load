@@ -44,7 +44,7 @@ const loading = ref(false);
 const searchText = ref("");
 const statusFilter = ref<"all" | "active" | "invalid">("all");
 const currentPage = ref(1);
-const pageSize = ref(15);
+const pageSize = ref(12);
 const total = ref(0);
 const totalPages = ref(0);
 const dialog = useDialog();
@@ -565,8 +565,8 @@ function resetPage() {
         <n-select
           v-model:value="pageSize"
           :options="[
-            { label: '15条/页', value: 15 },
-            { label: '30条/页', value: 30 },
+            { label: '12条/页', value: 12 },
+            { label: '24条/页', value: 24 },
             { label: '60条/页', value: 60 },
             { label: '120条/页', value: 120 },
           ]"

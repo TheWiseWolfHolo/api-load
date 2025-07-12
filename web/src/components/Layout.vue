@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppFooter from "@/components/AppFooter.vue";
 import GlobalTaskProgressBar from "@/components/GlobalTaskProgressBar.vue";
 import Logout from "@/components/Logout.vue";
 import NavBar from "@/components/NavBar.vue";
@@ -32,6 +33,7 @@ import NavBar from "@/components/NavBar.vue";
         </router-view>
       </div>
     </n-layout-content>
+    <app-footer />
   </n-layout>
 
   <!-- 全局任务进度条 -->
@@ -41,6 +43,9 @@ import NavBar from "@/components/NavBar.vue";
 <style scoped>
 .main-layout {
   background: transparent;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .layout-header {
@@ -104,9 +109,16 @@ import NavBar from "@/components/NavBar.vue";
   background: transparent;
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .content-wrapper {
   padding: 24px 12px;
+  min-height: calc(100vh - 111px);
+}
+
+.layout-footer {
+  background: transparent;
+  padding: 0;
 }
 </style>

@@ -103,7 +103,7 @@ function handleGroupDelete(deletedGroup: Group) {
 .sidebar {
   width: 240px;
   flex-shrink: 0;
-  height: calc(100vh - 106px);
+  height: calc(100vh - 159px);
 }
 
 .main-content {

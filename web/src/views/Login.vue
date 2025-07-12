@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppFooter from "@/components/AppFooter.vue";
 import { useAuthService } from "@/services/auth";
 import { LockClosedSharp } from "@vicons/ionicons5";
 import { NButton, NCard, NInput, NSpace, useMessage } from "naive-ui";
@@ -77,22 +78,20 @@ const handleLogin = async () => {
           </n-button>
         </n-space>
       </n-card>
-
-      <div class="login-footer">
-        <p class="footer-text">© 2024 GPT Load. All rights reserved.</p>
-      </div>
     </div>
   </div>
+  <app-footer />
 </template>
 
 <style scoped>
 .login-container {
-  height: 100vh;
+  min-height: calc(100vh - 52px);
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   overflow: hidden;
+  padding: 24px;
 }
 
 .login-background {
@@ -205,17 +204,6 @@ const handleLogin = async () => {
   background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
   transform: translateY(-1px);
   box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-}
-
-.login-footer {
-  text-align: center;
-  margin-top: 32px;
-}
-
-.footer-text {
-  font-size: 0.875rem;
-  color: #94a3b8;
-  margin: 0;
 }
 
 :deep(.n-input) {
