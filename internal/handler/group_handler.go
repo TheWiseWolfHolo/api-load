@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sync"
 
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
@@ -531,4 +532,182 @@ func (s *Server) GetGroupConfigOptions(c *gin.Context) {
 	}
 
 	response.Success(c, options)
+}
+
+// KeyStats defines the statistics for API keys in a group.
+type KeyStats struct {
+	TotalKeys   int64 `json:"total_keys"`
+	ActiveKeys  int64 `json:"active_keys"`
+	InvalidKeys int64 `json:"invalid_keys"`
+}
+
+// RequestStats defines the statistics for requests over a period.
+type RequestStats struct {
+	TotalRequests  int64   `json:"total_requests"`
+	FailedRequests int64   `json:"failed_requests"`
+	FailureRate    float64 `json:"failure_rate"`
+}
+
+// GroupStatsResponse defines the complete statistics for a group.
+type GroupStatsResponse struct {
+	KeyStats    KeyStats     `json:"key_stats"`
+	HourlyStats RequestStats `json:"hourly_stats"` // 1 hour
+	DailyStats  RequestStats `json:"daily_stats"`  // 24 hours
+	WeeklyStats RequestStats `json:"weekly_stats"` // 7 days
+}
+
+// calculateRequestStats is a helper to compute request statistics.
+func calculateRequestStats(total, failed int64) RequestStats {
+	stats := RequestStats{
+		TotalRequests:  total,
+		FailedRequests: failed,
+	}
+	if total > 0 {
+		stats.FailureRate, _ = strconv.ParseFloat(fmt.Sprintf("%.4f", float64(failed)/float64(total)), 64)
+	}
+	return stats
+}
+
+// GetGroupStats handles retrieving detailed statistics for a specific group.
+func (s *Server) GetGroupStats(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "Invalid group ID format"))
+		return
+	}
+	groupID := uint(id)
+
+	// 1. 验证分组是否存在
+	var group models.Group
+	if err := s.DB.First(&group, groupID).Error; err != nil {
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+
+	var resp GroupStatsResponse
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var errors []error
+
+	// 并发执行所有统计查询
+
+	// 2. Key 统计
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var totalKeys, activeKeys int64
+
+		if err := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Count(&totalKeys).Error; err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get total keys: %w", err))
+			mu.Unlock()
+			return
+		}
+		if err := s.DB.Model(&models.APIKey{}).Where("group_id = ? AND status = ?", groupID, models.KeyStatusActive).Count(&activeKeys).Error; err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get active keys: %w", err))
+			mu.Unlock()
+			return
+		}
+
+		mu.Lock()
+		resp.KeyStats = KeyStats{
+			TotalKeys:   totalKeys,
+			ActiveKeys:  activeKeys,
+			InvalidKeys: totalKeys - activeKeys,
+		}
+		mu.Unlock()
+	}()
+
+	// 3. 1小时请求统计 (查询 request_logs 表)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var total, failed int64
+		now := time.Now()
+		oneHourAgo := now.Add(-1 * time.Hour)
+
+		if err := s.DB.Model(&models.RequestLog{}).Where("group_id = ? AND timestamp BETWEEN ? AND ?", groupID, oneHourAgo, now).Count(&total).Error; err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get hourly total requests: %w", err))
+			mu.Unlock()
+			return
+		}
+		if err := s.DB.Model(&models.RequestLog{}).Where("group_id = ? AND timestamp BETWEEN ? AND ? AND is_success = ?", groupID, oneHourAgo, now, false).Count(&failed).Error; err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get hourly failed requests: %w", err))
+			mu.Unlock()
+			return
+		}
+
+		mu.Lock()
+		resp.HourlyStats = calculateRequestStats(total, failed)
+		mu.Unlock()
+	}()
+
+	// 4. 24小时和7天统计 (查询 group_hourly_stats 表)
+	// 辅助函数，用于从 group_hourly_stats 查询
+	queryHourlyStats := func(duration time.Duration) (RequestStats, error) {
+		var result struct {
+			SuccessCount int64
+			FailureCount int64
+		}
+		now := time.Now()
+		// 结束时间为当前小时的整点，查询时不包含该小时
+		// 开始时间为结束时间减去统计周期
+		endTime := now.Truncate(time.Hour)
+		startTime := endTime.Add(-duration)
+
+		err := s.DB.Model(&models.GroupHourlyStat{}).
+			Select("SUM(success_count) as success_count, SUM(failure_count) as failure_count").
+			Where("group_id = ? AND time >= ? AND time < ?", groupID, startTime, endTime).
+			Scan(&result).Error
+		if err != nil {
+			return RequestStats{}, err
+		}
+		return calculateRequestStats(result.SuccessCount+result.FailureCount, result.FailureCount), nil
+	}
+
+	// 24小时统计
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stats, err := queryHourlyStats(24 * time.Hour)
+		if err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get daily stats: %w", err))
+			mu.Unlock()
+			return
+		}
+		mu.Lock()
+		resp.DailyStats = stats
+		mu.Unlock()
+	}()
+
+	// 7天统计
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stats, err := queryHourlyStats(7 * 24 * time.Hour)
+		if err != nil {
+			mu.Lock()
+			errors = append(errors, fmt.Errorf("failed to get weekly stats: %w", err))
+			mu.Unlock()
+			return
+		}
+		mu.Lock()
+		resp.WeeklyStats = stats
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if len(errors) > 0 {
+		// 只记录第一个错误，但表明可能存在多个错误
+		logrus.WithContext(c.Request.Context()).WithError(errors[0]).Error("Errors occurred while fetching group stats")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, "Failed to retrieve some statistics"))
+		return
+	}
+
+	response.Success(c, resp)
 }
