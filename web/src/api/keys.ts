@@ -2,7 +2,7 @@ import type {
   APIKey,
   Group,
   GroupConfigOption,
-  GroupStats,
+  GroupStatsResponse,
   KeyStatus,
   TaskInfo,
 } from "@/types/models";
@@ -33,16 +33,9 @@ export const keysApi = {
   },
 
   // 获取分组统计信息
-  async getGroupStats(): Promise<GroupStats> {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    return {
-      total_keys: 0,
-      active_keys: 0,
-      requests_1h: 0,
-      requests_24h: 0,
-      requests_7d: 0,
-      failure_rate_24h: 0,
-    } as GroupStats;
+  async getGroupStats(groupId: number): Promise<GroupStatsResponse> {
+    const res = await http.get(`/groups/${groupId}/stats`);
+    return res.data;
   },
 
   // 获取分组可配置参数

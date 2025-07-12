@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
-import type { Group, GroupStats } from "@/types/models";
+import type { Group, GroupStatsResponse } from "@/types/models";
 import { getGroupDisplayName } from "@/utils/display";
 import { Pencil, Trash } from "@vicons/ionicons5";
 import {
@@ -32,7 +32,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<Emits>();
 
-const stats = ref<GroupStats | null>(null);
+const stats = ref<GroupStatsResponse | null>(null);
 const loading = ref(false);
 const dialog = useDialog();
 const showEditModal = ref(false);
@@ -60,7 +60,7 @@ async function loadStats() {
   try {
     loading.value = true;
     if (props.group?.id) {
-      stats.value = await keysApi.getGroupStats();
+      stats.value = await keysApi.getGroupStats(props.group.id);
     }
   } finally {
     loading.value = false;
@@ -118,7 +118,7 @@ function formatNumber(num: number): string {
 }
 
 function formatPercentage(num: number): string {
-  return `${num.toFixed(1)}%`;
+  return `${(num * 100).toFixed(1)}%`;
 }
 
 function copyUrl(url: string) {
@@ -177,38 +177,96 @@ function resetPage() {
       <!-- 统计摘要区 -->
       <div class="stats-summary">
         <n-spin :show="loading" size="small">
-          <n-grid :cols="5" :x-gap="12" :y-gap="12" responsive="screen">
+          <n-grid :cols="4" :x-gap="12" :y-gap="12" responsive="screen">
             <n-grid-item span="1">
-              <n-card
-                :title="`${stats?.active_keys || 0} / ${stats?.total_keys || 0}`"
-                size="large"
+              <n-statistic :label="`密钥数量：${stats?.key_stats?.total_keys ?? 0}`">
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="success" size="20">
+                      {{ stats?.key_stats?.active_keys ?? 0 }}
+                    </n-gradient-text>
+                  </template>
+                  有效密钥数
+                </n-tooltip>
+                <n-divider vertical />
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="error" size="20">
+                      {{ stats?.key_stats?.invalid_keys ?? 0 }}
+                    </n-gradient-text>
+                  </template>
+                  无效密钥数
+                </n-tooltip>
+              </n-statistic>
+            </n-grid-item>
+            <n-grid-item span="1">
+              <n-statistic
+                :label="`近1小时：${formatNumber(stats?.hourly_stats?.total_requests ?? 0)}`"
               >
-                <template #header-extra><span class="status-title">密钥数量</span></template>
-              </n-card>
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="success" size="20">
+                      {{ formatNumber(stats?.hourly_stats?.failed_requests ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近1小时失败请求
+                </n-tooltip>
+                <n-divider vertical />
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="error" size="20">
+                      {{ formatPercentage(stats?.hourly_stats?.failure_rate ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近1小时失败率
+                </n-tooltip>
+              </n-statistic>
             </n-grid-item>
             <n-grid-item span="1">
-              <n-card
-                class="status-card-failure"
-                :title="formatPercentage(stats?.failure_rate_24h || 0)"
-                size="large"
+              <n-statistic
+                :label="`近24小时：${formatNumber(stats?.daily_stats?.total_requests ?? 0)}`"
               >
-                <template #header-extra><span class="status-title">失败率</span></template>
-              </n-card>
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="success" size="20">
+                      {{ formatNumber(stats?.daily_stats?.failed_requests ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近24小时失败请求
+                </n-tooltip>
+                <n-divider vertical />
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="error" size="20">
+                      {{ formatPercentage(stats?.daily_stats?.failure_rate ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近24小时失败率
+                </n-tooltip>
+              </n-statistic>
             </n-grid-item>
             <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_1h || 0)" size="large">
-                <template #header-extra><span class="status-title">近1小时</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_24h || 0)" size="large">
-                <template #header-extra><span class="status-title">近24小时</span></template>
-              </n-card>
-            </n-grid-item>
-            <n-grid-item span="1">
-              <n-card :title="formatNumber(stats?.requests_7d || 0)" size="large">
-                <template #header-extra><span class="status-title">近7天</span></template>
-              </n-card>
+              <n-statistic
+                :label="`近7天：${formatNumber(stats?.weekly_stats?.total_requests ?? 0)}`"
+              >
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="success" size="20">
+                      {{ formatNumber(stats?.weekly_stats?.failed_requests ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近7天失败请求
+                </n-tooltip>
+                <n-divider vertical />
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-gradient-text type="error" size="20">
+                      {{ formatPercentage(stats?.weekly_stats?.failure_rate ?? 0) }}
+                    </n-gradient-text>
+                  </template>
+                  近7天失败率
+                </n-tooltip>
+              </n-statistic>
             </n-grid-item>
           </n-grid>
         </n-spin>

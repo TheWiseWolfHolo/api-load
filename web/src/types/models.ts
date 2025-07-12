@@ -53,13 +53,26 @@ export interface GroupConfigOption {
   default_value: number;
 }
 
-export interface GroupStats {
+// GroupStatsResponse defines the complete statistics for a group.
+export interface GroupStatsResponse {
+  key_stats: KeyStats;
+  hourly_stats: RequestStats;
+  daily_stats: RequestStats;
+  weekly_stats: RequestStats;
+}
+
+// KeyStats defines the statistics for API keys in a group.
+export interface KeyStats {
   total_keys: number;
   active_keys: number;
-  requests_1h: number;
-  requests_24h: number;
-  requests_7d: number;
-  failure_rate_24h: number;
+  invalid_keys: number;
+}
+
+// RequestStats defines the statistics for requests over a period.
+export interface RequestStats {
+  total_requests: number;
+  failed_requests: number;
+  failure_rate: number;
 }
 
 export interface TaskInfo {
