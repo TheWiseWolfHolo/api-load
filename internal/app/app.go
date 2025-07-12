@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"gpt-load/internal/config"
@@ -38,7 +37,6 @@ type App struct {
 	storage           store.Store
 	db                *gorm.DB
 	httpServer        *http.Server
-	wg                sync.WaitGroup
 }
 
 // AppParams defines the dependencies for the App.
