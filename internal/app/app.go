@@ -14,6 +14,7 @@ import (
 	"gpt-load/internal/services"
 	"gpt-load/internal/store"
 	"gpt-load/internal/types"
+	"gpt-load/internal/version"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -156,7 +157,7 @@ func (a *App) Start() error {
 
 	// Start HTTP server in a new goroutine
 	go func() {
-		logrus.Info("GPT-Load proxy server started successfully")
+		logrus.Infof("GPT-Load proxy server started successfully on Version: %s", version.Version)
 		logrus.Infof("Server address: http://%s:%d", serverConfig.Host, serverConfig.Port)
 		logrus.Info("")
 		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
