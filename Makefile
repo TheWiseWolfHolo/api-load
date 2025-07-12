@@ -43,8 +43,7 @@ build-all: clean ## 为所有支持的平台构建二进制文件
 .PHONY: run
 run: ## 构建前端并运行服务器
 	@echo "--- Building frontend... ---"
-	@rm -rf web/dist
-	cd web && pnpm install && pnpm run build
+	cd web && npm install && npm run build
 	@echo "--- Preparing backend... ---"
 	@echo "--- Starting backend... ---"
 	go run $(MAIN_PATH)/main.go
