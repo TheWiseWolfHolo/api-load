@@ -41,7 +41,7 @@ export interface Group {
   config: Record<string, unknown>;
   api_keys?: APIKey[];
   endpoint?: string;
-  param_overrides: any;
+  param_overrides: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
 }

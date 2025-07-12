@@ -22,6 +22,7 @@ import {
   NSpace,
   NSpin,
   useDialog,
+  type MessageReactive,
 } from "naive-ui";
 import { ref, watch } from "vue";
 import KeyCreateDialog from "./KeyCreateDialog.vue";
@@ -66,7 +67,7 @@ const moreOptions = [
   { label: "验证所有密钥", key: "validateAll" },
 ];
 
-let testingMsg: any = null;
+let testingMsg: MessageReactive | null = null;
 const isDeling = ref(false);
 const isRestoring = ref(false);
 
@@ -246,19 +247,29 @@ async function deleteKey(key: KeyRow) {
 }
 
 function formatRelativeTime(date: string) {
+  if (!date) {
+    return "从未";
+  }
   const now = new Date();
   const target = new Date(date);
-  const diff = now.getTime() - target.getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
+  const diffSeconds = Math.floor((now.getTime() - target.getTime()) / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
 
-  if (days > 0) {
-    return `${days}天前`;
-  } else if (hours > 0) {
-    return `${hours}小时前`;
-  } else {
-    return "刚刚";
+  if (diffDays > 0) {
+    return `${diffDays}天前`;
   }
+  if (diffHours > 0) {
+    return `${diffHours}小时前`;
+  }
+  if (diffMinutes > 0) {
+    return `${diffMinutes}分钟前`;
+  }
+  if (diffSeconds > 0) {
+    return `${diffSeconds}秒前`;
+  }
+  return "刚刚";
 }
 
 function getStatusClass(status: KeyStatus): string {

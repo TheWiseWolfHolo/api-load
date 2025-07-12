@@ -45,8 +45,22 @@ const message = useMessage();
 const loading = ref(false);
 const formRef = ref();
 
+// 表单数据接口
+interface GroupFormData {
+  name: string;
+  display_name: string;
+  description: string;
+  upstreams: UpstreamInfo[];
+  channel_type: "openai" | "gemini";
+  sort: number;
+  test_model: string;
+  param_overrides: string;
+  config: Record<string, number>;
+  configItems: ConfigItem[];
+}
+
 // 表单数据
-const formData = reactive<any>({
+const formData = reactive<GroupFormData>({
   name: "",
   display_name: "",
   description: "",
@@ -241,7 +255,7 @@ async function handleSubmit() {
 
     // 将configItems转换为config对象
     const config: Record<string, number> = {};
-    formData.configItems.forEach((item: any) => {
+    formData.configItems.forEach((item: ConfigItem) => {
       if (item.key && item.key.trim()) {
         config[item.key] = item.value;
       }
@@ -256,7 +270,7 @@ async function handleSubmit() {
       channel_type: formData.channel_type,
       sort: formData.sort,
       test_model: formData.test_model,
-      param_overrides: formData.param_overrides ? paramOverrides : null,
+      param_overrides: formData.param_overrides ? paramOverrides : undefined,
       config,
     };
 
@@ -431,7 +445,7 @@ async function handleSubmit() {
                             value: opt.key,
                             disabled:
                               formData.configItems
-                                .map((item: any) => item.key)
+                                .map((item: ConfigItem) => item.key)
                                 ?.includes(opt.key) && opt.key !== configItem.key,
                           }))
                         "
