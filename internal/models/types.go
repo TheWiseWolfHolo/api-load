@@ -98,3 +98,14 @@ type DashboardStats struct {
 	SuccessRate     float64            `json:"success_rate"`
 	GroupStats      []GroupRequestStat `json:"group_stats"`
 }
+
+// GroupHourlyStat 对应 group_hourly_stats 表，用于存储每个分组每小时的请求统计
+type GroupHourlyStat struct {
+	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Time         time.Time `gorm:"type:datetime;not null;uniqueIndex:idx_group_time" json:"time"` // 整点时间
+	GroupID      uint      `gorm:"not null;uniqueIndex:idx_group_time" json:"group_id"`
+	SuccessCount int64     `gorm:"not null;default:0" json:"success_count"`
+	FailureCount int64     `gorm:"not null;default:0" json:"failure_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}

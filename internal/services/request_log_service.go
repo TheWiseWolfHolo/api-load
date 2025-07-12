@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -222,6 +223,50 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 				return fmt.Errorf("failed to batch update api_key stats: %w", err)
 			}
 		}
+
+		// 更新统计表
+		hourlyStats := make(map[struct {
+			Time    time.Time
+			GroupID uint
+		}]struct{ Success, Failure int64 })
+		for _, log := range logs {
+			hourlyTime := log.Timestamp.Truncate(time.Hour)
+			key := struct {
+				Time    time.Time
+				GroupID uint
+			}{Time: hourlyTime, GroupID: log.GroupID}
+
+			counts := hourlyStats[key]
+			if log.IsSuccess {
+				counts.Success++
+			} else {
+				counts.Failure++
+			}
+			hourlyStats[key] = counts
+		}
+
+		if len(hourlyStats) > 0 {
+			for key, counts := range hourlyStats {
+				err := tx.Clauses(clause.OnConflict{
+					Columns: []clause.Column{{Name: "time"}, {Name: "group_id"}},
+					DoUpdates: clause.Assignments(map[string]interface{}{
+						"success_count": gorm.Expr("success_count + ?", counts.Success),
+						"failure_count": gorm.Expr("failure_count + ?", counts.Failure),
+						"updated_at":    time.Now(),
+					}),
+				}).Create(&models.GroupHourlyStat{
+					Time:         key.Time,
+					GroupID:      key.GroupID,
+					SuccessCount: counts.Success,
+					FailureCount: counts.Failure,
+				}).Error
+
+				if err != nil {
+					return fmt.Errorf("failed to upsert group hourly stat: %w", err)
+				}
+			}
+		}
+
 		return nil
 	})
 }

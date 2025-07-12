@@ -104,6 +104,7 @@ func (a *App) Start() error {
 			// 数据库迁移
 			if err := a.db.AutoMigrate(
 				&models.RequestLog{},
+				&models.GroupHourlyStat{},
 				&models.APIKey{},
 				&models.SystemSetting{},
 				&models.Group{},
