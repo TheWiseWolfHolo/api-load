@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gpt-load/internal/channel"
@@ -26,10 +28,11 @@ import (
 
 // ProxyServer represents the proxy server
 type ProxyServer struct {
-	keyProvider     *keypool.KeyProvider
-	groupManager    *services.GroupManager
-	settingsManager *config.SystemSettingsManager
-	channelFactory  *channel.Factory
+	keyProvider       *keypool.KeyProvider
+	groupManager      *services.GroupManager
+	settingsManager   *config.SystemSettingsManager
+	channelFactory    *channel.Factory
+	requestLogService *services.RequestLogService
 }
 
 // NewProxyServer creates a new proxy server
@@ -38,12 +41,14 @@ func NewProxyServer(
 	groupManager *services.GroupManager,
 	settingsManager *config.SystemSettingsManager,
 	channelFactory *channel.Factory,
+	requestLogService *services.RequestLogService,
 ) (*ProxyServer, error) {
 	return &ProxyServer{
-		keyProvider:     keyProvider,
-		groupManager:    groupManager,
-		settingsManager: settingsManager,
-		channelFactory:  channelFactory,
+		keyProvider:       keyProvider,
+		groupManager:      groupManager,
+		settingsManager:   settingsManager,
+		channelFactory:    channelFactory,
+		requestLogService: requestLogService,
 	}, nil
 }
 
@@ -105,9 +110,13 @@ func (ps *ProxyServer) executeRequestWithRetry(
 				response.Error(c, app_errors.NewAPIErrorWithUpstream(lastError.StatusCode, "UPSTREAM_ERROR", lastError.ErrorMessage))
 			}
 			logrus.Debugf("Max retries exceeded for group %s after %d attempts. Parsed Error: %s", group.Name, retryCount, lastError.ErrorMessage)
+
+			keyID, _ := strconv.ParseUint(lastError.KeyID, 10, 64)
+			ps.logRequest(c, group, uint(keyID), startTime, lastError.StatusCode, retryCount, errors.New(lastError.ErrorMessage))
 		} else {
 			response.Error(c, app_errors.ErrMaxRetriesExceeded)
 			logrus.Debugf("Max retries exceeded for group %s after %d attempts.", group.Name, retryCount)
+			ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, app_errors.ErrMaxRetriesExceeded)
 		}
 		return
 	}
@@ -116,6 +125,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
+		ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, err)
 		return
 	}
 
@@ -163,6 +173,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil || (resp != nil && resp.StatusCode >= 400) {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
+			ps.logRequest(c, group, apiKey.ID, startTime, 499, retryCount+1, err)
 			return
 		}
 
@@ -203,6 +214,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 
 	ps.keyProvider.UpdateStatus(apiKey, group, true)
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
+	ps.logRequest(c, group, apiKey.ID, startTime, resp.StatusCode, retryCount+1, nil)
 
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -215,5 +227,42 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		ps.handleStreamingResponse(c, resp)
 	} else {
 		ps.handleNormalResponse(c, resp)
+	}
+}
+
+// logRequest is a helper function to create and record a request log.
+func (ps *ProxyServer) logRequest(
+	c *gin.Context,
+	group *models.Group,
+	keyID uint,
+	startTime time.Time,
+	statusCode int,
+	retries int,
+	finalError error,
+) {
+	if ps.requestLogService == nil {
+		return
+	}
+
+	duration := time.Since(startTime).Milliseconds()
+
+	logEntry := &models.RequestLog{
+		GroupID:     group.ID,
+		KeyID:       keyID,
+		IsSuccess:   finalError == nil && statusCode < 400,
+		SourceIP:    c.ClientIP(),
+		StatusCode:  statusCode,
+		RequestPath: c.Request.URL.String(),
+		Duration:    duration,
+		UserAgent:   c.Request.UserAgent(),
+		Retries:     retries,
+	}
+
+	if finalError != nil {
+		logEntry.ErrorMessage = finalError.Error()
+	}
+
+	if err := ps.requestLogService.Record(logEntry); err != nil {
+		logrus.Errorf("Failed to record request log: %v", err)
 	}
 }

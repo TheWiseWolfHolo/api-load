@@ -351,6 +351,7 @@ func (sm *SystemSettingsManager) DisplaySystemConfig(settings types.SystemSettin
 	logrus.Info("--- System Settings ---")
 	logrus.Infof("  App URL: %s", settings.AppUrl)
 	logrus.Infof("  Request Log Retention: %d days", settings.RequestLogRetentionDays)
+	logrus.Infof("  Request Log Write Interval: %d minutes", settings.RequestLogWriteIntervalMinutes)
 
 	logrus.Info("--- Request Behavior ---")
 	logrus.Infof("  Request Timeout: %d seconds", settings.RequestTimeout)

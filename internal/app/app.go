@@ -29,6 +29,7 @@ type App struct {
 	settingsManager   *config.SystemSettingsManager
 	groupManager      *services.GroupManager
 	logCleanupService *services.LogCleanupService
+	requestLogService *services.RequestLogService
 	keyCronService    *services.KeyCronService
 	keyValidationPool *services.KeyValidationPool
 	keyPoolProvider   *keypool.KeyProvider
@@ -37,7 +38,6 @@ type App struct {
 	storage           store.Store
 	db                *gorm.DB
 	httpServer        *http.Server
-	requestLogChan    chan models.RequestLog
 	wg                sync.WaitGroup
 }
 
@@ -49,6 +49,7 @@ type AppParams struct {
 	SettingsManager   *config.SystemSettingsManager
 	GroupManager      *services.GroupManager
 	LogCleanupService *services.LogCleanupService
+	RequestLogService *services.RequestLogService
 	KeyCronService    *services.KeyCronService
 	KeyValidationPool *services.KeyValidationPool
 	KeyPoolProvider   *keypool.KeyProvider
@@ -56,7 +57,6 @@ type AppParams struct {
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
-	RequestLogChan    chan models.RequestLog
 }
 
 // NewApp is the constructor for App, with dependencies injected by dig.
@@ -67,6 +67,7 @@ func NewApp(params AppParams) *App {
 		settingsManager:   params.SettingsManager,
 		groupManager:      params.GroupManager,
 		logCleanupService: params.LogCleanupService,
+		requestLogService: params.RequestLogService,
 		keyCronService:    params.KeyCronService,
 		keyValidationPool: params.KeyValidationPool,
 		keyPoolProvider:   params.KeyPoolProvider,
@@ -74,7 +75,6 @@ func NewApp(params AppParams) *App {
 		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
-		requestLogChan:    params.RequestLogChan,
 	}
 }
 
@@ -139,7 +139,7 @@ func (a *App) Start() error {
 
 	a.groupManager.Initialize()
 
-	a.startRequestLogger()
+	a.requestLogService.Start()
 	a.logCleanupService.Start()
 	a.keyValidationPool.Start()
 	a.keyCronService.Start()
@@ -182,58 +182,10 @@ func (a *App) Stop(ctx context.Context) {
 	a.keyValidationPool.Stop()
 	a.leaderService.Stop()
 	a.logCleanupService.Stop()
+	a.requestLogService.Stop()
 	a.groupManager.Stop()
 	a.settingsManager.Stop()
 	a.storage.Close()
 
-	// Wait for the logger to finish writing all logs
-	logrus.Info("Closing request log channel...")
-	close(a.requestLogChan)
-	a.wg.Wait()
-	logrus.Info("All logs have been written.")
-
 	logrus.Info("Server exited gracefully")
-}
-
-// startRequestLogger runs a background goroutine to batch-insert request logs.
-func (a *App) startRequestLogger() {
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		logBuffer := make([]models.RequestLog, 0, 100)
-
-		for {
-			select {
-			case logEntry, ok := <-a.requestLogChan:
-				if !ok {
-					// Channel closed, flush remaining logs and exit
-					if len(logBuffer) > 0 {
-						if err := a.db.Create(&logBuffer).Error; err != nil {
-							logrus.Errorf("Failed to write remaining request logs: %v", err)
-						}
-					}
-					logrus.Info("Request logger stopped.")
-					return
-				}
-				logBuffer = append(logBuffer, logEntry)
-				if len(logBuffer) >= 100 {
-					if err := a.db.Create(&logBuffer).Error; err != nil {
-						logrus.Errorf("Failed to write request logs: %v", err)
-					}
-					logBuffer = make([]models.RequestLog, 0, 100) // Reset buffer
-				}
-			case <-ticker.C:
-				// Flush logs periodically
-				if len(logBuffer) > 0 {
-					if err := a.db.Create(&logBuffer).Error; err != nil {
-						logrus.Errorf("Failed to write request logs on tick: %v", err)
-					}
-					logBuffer = make([]models.RequestLog, 0, 100) // Reset buffer
-				}
-			}
-		}
-	}()
 }

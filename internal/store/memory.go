@@ -14,12 +14,9 @@ type memoryStoreItem struct {
 }
 
 // MemoryStore is an in-memory key-value store that is safe for concurrent use.
-// It now supports simple K/V, HASH, and LIST data types.
 type MemoryStore struct {
-	mu   sync.RWMutex
-	data map[string]any
-
-	// For Pub/Sub
+	mu            sync.RWMutex
+	data          map[string]any
 	muSubscribers sync.RWMutex
 	subscribers   map[string]map[chan *Message]struct{}
 }
@@ -30,14 +27,11 @@ func NewMemoryStore() *MemoryStore {
 		data:        make(map[string]any),
 		subscribers: make(map[string]map[chan *Message]struct{}),
 	}
-	// The cleanup loop was removed as it's not compatible with multiple data types
-	// without a unified expiration mechanism, and the KeyPool feature does not rely on TTLs.
 	return s
 }
 
 // Close cleans up resources.
 func (s *MemoryStore) Close() error {
-	// Nothing to close for now.
 	return nil
 }
 
@@ -73,9 +67,7 @@ func (s *MemoryStore) Get(key string) ([]byte, error) {
 		return nil, fmt.Errorf("type mismatch: key '%s' holds a different data type", key)
 	}
 
-	// Check for expiration
 	if item.expiresAt > 0 && time.Now().UnixNano() > item.expiresAt {
-		// Lazy deletion
 		s.mu.Lock()
 		delete(s.data, key)
 		s.mu.Unlock()
@@ -93,6 +85,16 @@ func (s *MemoryStore) Delete(key string) error {
 	return nil
 }
 
+// Del removes multiple values by their keys.
+func (s *MemoryStore) Del(keys ...string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, key := range keys {
+		delete(s.data, key)
+	}
+	return nil
+}
+
 // Exists checks if a key exists.
 func (s *MemoryStore) Exists(key string) (bool, error) {
 	s.mu.RLock()
@@ -103,10 +105,8 @@ func (s *MemoryStore) Exists(key string) (bool, error) {
 		return false, nil
 	}
 
-	// Check for expiration only if it's a simple K/V item
 	if item, ok := rawItem.(memoryStoreItem); ok {
 		if item.expiresAt > 0 && time.Now().UnixNano() > item.expiresAt {
-			// Lazy deletion
 			s.mu.Lock()
 			delete(s.data, key)
 			s.mu.Unlock()
@@ -122,12 +122,10 @@ func (s *MemoryStore) SetNX(key string, value []byte, ttl time.Duration) (bool, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// In memory store, we need to manually check for existence and expiration
 	rawItem, exists := s.data[key]
 	if exists {
 		if item, ok := rawItem.(memoryStoreItem); ok {
 			if item.expiresAt == 0 || time.Now().UnixNano() < item.expiresAt {
-				// Key exists and is not expired
 				return false, nil
 			}
 		} else {
@@ -179,7 +177,6 @@ func (s *MemoryStore) HGetAll(key string) (map[string]string, error) {
 
 	rawHash, exists := s.data[key]
 	if !exists {
-		// Per Redis convention, HGETALL on a non-existent key returns an empty map, not an error.
 		return make(map[string]string), nil
 	}
 
@@ -188,7 +185,6 @@ func (s *MemoryStore) HGetAll(key string) (map[string]string, error) {
 		return nil, fmt.Errorf("type mismatch: key '%s' holds a different data type", key)
 	}
 
-	// Return a copy to prevent race conditions on the returned map
 	result := make(map[string]string, len(hash))
 	for k, v := range hash {
 		result[k] = v
@@ -265,9 +261,7 @@ func (s *MemoryStore) LRem(key string, count int64, value any) error {
 	strValue := fmt.Sprint(value)
 	newList := make([]string, 0, len(list))
 
-	// LREM with count = 0: Remove all elements equal to value.
 	if count != 0 {
-		// For now, only implement count = 0 behavior as it's what we need.
 		return fmt.Errorf("LRem with non-zero count is not implemented in MemoryStore")
 	}
 
@@ -298,7 +292,6 @@ func (s *MemoryStore) Rotate(key string) (string, error) {
 		return "", ErrNotFound
 	}
 
-	// "RPOP"
 	lastIndex := len(list) - 1
 	item := list[lastIndex]
 
@@ -307,6 +300,63 @@ func (s *MemoryStore) Rotate(key string) (string, error) {
 	s.data[key] = newList
 
 	return item, nil
+}
+
+// --- SET operations ---
+
+// SAdd adds members to a set.
+func (s *MemoryStore) SAdd(key string, members ...any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var set map[string]struct{}
+	rawSet, exists := s.data[key]
+	if !exists {
+		set = make(map[string]struct{})
+		s.data[key] = set
+	} else {
+		var ok bool
+		set, ok = rawSet.(map[string]struct{})
+		if !ok {
+			return fmt.Errorf("type mismatch: key '%s' holds a different data type", key)
+		}
+	}
+
+	for _, member := range members {
+		set[fmt.Sprint(member)] = struct{}{}
+	}
+	return nil
+}
+
+// SPopN randomly removes and returns the given number of members from a set.
+func (s *MemoryStore) SPopN(key string, count int64) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rawSet, exists := s.data[key]
+	if !exists {
+		return []string{}, nil
+	}
+
+	set, ok := rawSet.(map[string]struct{})
+	if !ok {
+		return nil, fmt.Errorf("type mismatch: key '%s' holds a different data type", key)
+	}
+
+	if count > int64(len(set)) {
+		count = int64(len(set))
+	}
+
+	popped := make([]string, 0, count)
+	for member := range set {
+		if int64(len(popped)) >= count {
+			break
+		}
+		popped = append(popped, member)
+		delete(set, member)
+	}
+
+	return popped, nil
 }
 
 // --- Pub/Sub operations ---
@@ -350,11 +400,10 @@ func (s *MemoryStore) Publish(channel string, message []byte) error {
 
 	if subs, ok := s.subscribers[channel]; ok {
 		for subCh := range subs {
-			// Non-blocking send
 			go func(c chan *Message) {
 				select {
 				case c <- msg:
-				case <-time.After(1 * time.Second): // Prevent goroutine leak if receiver is stuck
+				case <-time.After(1 * time.Second):
 				}
 			}(subCh)
 		}

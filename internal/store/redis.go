@@ -42,6 +42,14 @@ func (s *RedisStore) Delete(key string) error {
 	return s.client.Del(context.Background(), key).Err()
 }
 
+// Del removes multiple values from Redis.
+func (s *RedisStore) Del(keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	return s.client.Del(context.Background(), keys...).Err()
+}
+
 // Exists checks if a key exists in Redis.
 func (s *RedisStore) Exists(key string) (bool, error) {
 	val, err := s.client.Exists(context.Background(), key).Result()
@@ -96,6 +104,16 @@ func (s *RedisStore) Rotate(key string) (string, error) {
 	return val, nil
 }
 
+// --- SET operations ---
+
+func (s *RedisStore) SAdd(key string, members ...any) error {
+	return s.client.SAdd(context.Background(), key, members...).Err()
+}
+
+func (s *RedisStore) SPopN(key string, count int64) ([]string, error) {
+	return s.client.SPopN(context.Background(), key, count).Result()
+}
+
 // --- Pipeliner implementation ---
 
 type redisPipeliner struct {
@@ -121,7 +139,7 @@ func (s *RedisStore) Pipeline() Pipeliner {
 }
 
 // Eval executes a Lua script on Redis.
-func (s *RedisStore) Eval(script string, keys []string, args ...interface{}) (interface{}, error) {
+func (s *RedisStore) Eval(script string, keys []string, args ...any) (any, error) {
 	return s.client.Eval(context.Background(), script, keys, args...).Result()
 }
 
@@ -165,7 +183,6 @@ func (s *RedisStore) Publish(channel string, message []byte) error {
 func (s *RedisStore) Subscribe(channel string) (Subscription, error) {
 	pubsub := s.client.Subscribe(context.Background(), channel)
 
-	// Wait for confirmation that subscription is created.
 	_, err := pubsub.Receive(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to channel %s: %w", channel, err)

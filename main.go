@@ -11,7 +11,6 @@ import (
 
 	"gpt-load/internal/app"
 	"gpt-load/internal/container"
-	"gpt-load/internal/models"
 	"gpt-load/internal/types"
 	"gpt-load/internal/utils"
 
@@ -37,12 +36,6 @@ func main() {
 	}
 	if err := container.Provide(func() []byte { return indexPage }); err != nil {
 		logrus.Fatalf("Failed to provide indexPage: %v", err)
-	}
-
-	// Provide the request log channel as a value
-	requestLogChan := make(chan models.RequestLog, 1000)
-	if err := container.Provide(func() chan models.RequestLog { return requestLogChan }); err != nil {
-		logrus.Fatalf("Failed to provide request log channel: %v", err)
 	}
 
 	// Initialzie global logger
