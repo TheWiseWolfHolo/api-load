@@ -200,7 +200,7 @@ func (s *LeaderService) tryToBeLeader() error {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	if acquired {
-		logrus.WithField("nodeID", s.nodeID).Debug("Successfully acquired leadership.")
+		logrus.WithField("nodeID", s.nodeID).Info("Successfully acquired leadership.")
 		s.isLeader.Store(true)
 	}
 	return nil
