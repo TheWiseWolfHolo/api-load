@@ -18,7 +18,7 @@ export interface VersionInfo {
 }
 
 const CACHE_KEY = "gpt-load-version-info";
-const CACHE_DURATION = 60 * 60 * 1000; // 1小时
+const CACHE_DURATION = 30 * 60 * 1000;
 
 class VersionService {
   private currentVersion: string;

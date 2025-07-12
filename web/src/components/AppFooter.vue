@@ -90,7 +90,7 @@ onMounted(() => {
           - 高性能 AI API 轮询代理服务
         </span>
 
-        <span class="divider">|</span>
+        <n-divider vertical />
 
         <!-- 版本信息 -->
         <div
@@ -108,22 +108,29 @@ onMounted(() => {
             :size="14"
             class="version-icon"
           />
-          <span class="version-text" :style="{ color: statusConfig[versionInfo.status].color }">
+          <span class="version-text">
             {{ formatVersion(versionInfo.currentVersion) }}
+            -
             <template v-if="versionInfo.status === 'latest'">
-              ({{ statusConfig[versionInfo.status].text }})
+              <span :style="{ color: statusConfig[versionInfo.status].color }">
+                {{ statusConfig[versionInfo.status].text }}
+              </span>
             </template>
             <template v-else-if="versionInfo.status === 'update-available'">
-              ({{ statusConfig[versionInfo.status].text }}:
-              {{ formatVersion(versionInfo.latestVersion || "") }})
+              <span :style="{ color: statusConfig[versionInfo.status].color }">
+                {{ statusConfig[versionInfo.status].text }}
+                [{{ formatVersion(versionInfo.latestVersion || "") }}]
+              </span>
             </template>
             <template v-else-if="versionInfo.status === 'checking'">
-              ({{ statusConfig[versionInfo.status].text }})
+              <span :style="{ color: statusConfig[versionInfo.status].color }">
+                {{ statusConfig[versionInfo.status].text }}
+              </span>
             </template>
           </span>
         </div>
 
-        <span class="divider">|</span>
+        <n-divider vertical />
 
         <!-- 链接区 -->
         <div class="links-container">
@@ -173,7 +180,7 @@ onMounted(() => {
           </n-tooltip>
         </div>
 
-        <span class="divider">|</span>
+        <n-divider vertical />
 
         <!-- 版权信息 -->
         <div class="copyright-container">
@@ -234,11 +241,6 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.divider {
-  color: #d0d0d0;
-  margin: 0 4px;
-}
-
 /* 版本信息区域 */
 .version-container {
   display: flex;
@@ -257,6 +259,7 @@ onMounted(() => {
 .version-text {
   font-weight: 500;
   font-size: 13px;
+  color: #666;
 }
 
 .version-clickable {
