@@ -205,7 +205,7 @@ function resetPage() {
             </n-grid-item>
             <n-grid-item span="1">
               <n-statistic
-                :label="`近1小时：${formatNumber(stats?.hourly_stats?.total_requests ?? 0)}`"
+                :label="`1小时请求：${formatNumber(stats?.hourly_stats?.total_requests ?? 0)}`"
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
@@ -228,7 +228,7 @@ function resetPage() {
             </n-grid-item>
             <n-grid-item span="1">
               <n-statistic
-                :label="`近24小时：${formatNumber(stats?.daily_stats?.total_requests ?? 0)}`"
+                :label="`24小时请求：${formatNumber(stats?.daily_stats?.total_requests ?? 0)}`"
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
@@ -251,7 +251,7 @@ function resetPage() {
             </n-grid-item>
             <n-grid-item span="1">
               <n-statistic
-                :label="`近7天：${formatNumber(stats?.weekly_stats?.total_requests ?? 0)}`"
+                :label="`近7天请求：${formatNumber(stats?.weekly_stats?.total_requests ?? 0)}`"
               >
                 <n-tooltip trigger="hover">
                   <template #trigger>
