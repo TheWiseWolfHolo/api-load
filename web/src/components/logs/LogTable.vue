@@ -8,7 +8,6 @@ import {
   NDataTable,
   NDatePicker,
   NEllipsis,
-  NEmpty,
   NIcon,
   NInput,
   NInputGroup,
@@ -257,9 +256,6 @@ function changePageSize(size: number) {
         <div class="table-container">
           <n-spin :show="loading">
             <n-data-table :columns="columns" :data="logs" :bordered="false" remote size="small" />
-            <div v-if="logs.length === 0 && !loading" class="empty-container">
-              <n-empty description="没有找到匹配的日志" />
-            </div>
           </n-spin>
         </div>
 
