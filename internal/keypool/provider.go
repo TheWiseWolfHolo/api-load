@@ -140,11 +140,11 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 		return fmt.Errorf("failed to get key details from store: %w", err)
 	}
 
-	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-
 	if keyDetails["status"] == models.KeyStatusInvalid {
 		return nil
 	}
+
+	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
 
 	// 获取该分组的有效配置
 	blacklistThreshold := group.EffectiveConfig.BlacklistThreshold

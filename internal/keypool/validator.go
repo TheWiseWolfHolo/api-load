@@ -6,6 +6,7 @@ import (
 	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"go.uber.org/dig"
@@ -46,10 +47,9 @@ func NewKeyValidator(params KeyValidatorParams) *KeyValidator {
 }
 
 // ValidateSingleKey performs a validation check on a single API key.
-func (s *KeyValidator) ValidateSingleKey(ctx context.Context, key *models.APIKey, group *models.Group) (bool, error) {
-	if ctx.Err() != nil {
-		return false, fmt.Errorf("context cancelled or timed out: %w", ctx.Err())
-	}
+func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	ch, err := s.channelFactory.GetChannel(group)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s *KeyValidator) ValidateSingleKey(ctx context.Context, key *models.APIKey
 }
 
 // TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.
-func (s *KeyValidator) TestMultipleKeys(ctx context.Context, group *models.Group, keyValues []string) ([]KeyTestResult, error) {
+func (s *KeyValidator) TestMultipleKeys(group *models.Group, keyValues []string) ([]KeyTestResult, error) {
 	results := make([]KeyTestResult, len(keyValues))
 
 	// Find which of the provided keys actually exist in the database for this group
@@ -103,7 +103,8 @@ func (s *KeyValidator) TestMultipleKeys(ctx context.Context, group *models.Group
 			continue
 		}
 
-		isValid, validationErr := s.ValidateSingleKey(ctx, &apiKey, group)
+		isValid, validationErr := s.ValidateSingleKey(&apiKey, group)
+
 		results[i] = KeyTestResult{
 			KeyValue: kv,
 			IsValid:  isValid,

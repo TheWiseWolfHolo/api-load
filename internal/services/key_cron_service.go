@@ -1,8 +1,8 @@
 package services
 
 import (
-	"context"
 	"gpt-load/internal/config"
+	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"sync"
 	"time"
@@ -11,11 +11,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// KeyCronService is responsible for periodically submitting keys for validation.
+// KeyCronService is responsible for periodically validating invalid keys.
 type KeyCronService struct {
 	DB              *gorm.DB
 	SettingsManager *config.SystemSettingsManager
-	Pool            *KeyValidationPool
+	Validator       *keypool.KeyValidator
 	LeaderService   *LeaderService
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
@@ -25,13 +25,13 @@ type KeyCronService struct {
 func NewKeyCronService(
 	db *gorm.DB,
 	settingsManager *config.SystemSettingsManager,
-	pool *KeyValidationPool,
+	validator *keypool.KeyValidator,
 	leaderService *LeaderService,
 ) *KeyCronService {
 	return &KeyCronService{
 		DB:              db,
 		SettingsManager: settingsManager,
-		Pool:            pool,
+		Validator:       validator,
 		LeaderService:   leaderService,
 		stopChan:        make(chan struct{}),
 	}
@@ -77,7 +77,7 @@ func (s *KeyCronService) runLoop() {
 	}
 }
 
-// submitValidationJobs finds groups and keys that need validation and submits them to the pool.
+// submitValidationJobs finds groups whose keys need validation and validates them.
 func (s *KeyCronService) submitValidationJobs() {
 	var groups []models.Group
 	if err := s.DB.Find(&groups).Error; err != nil {
@@ -86,61 +86,47 @@ func (s *KeyCronService) submitValidationJobs() {
 	}
 
 	validationStartTime := time.Now()
-	groupsToUpdateTimestamp := make(map[uint]*models.Group)
 
-	total := 0
 	for i := range groups {
 		group := &groups[i]
 		effectiveSettings := s.SettingsManager.GetEffectiveConfig(group.Config)
 		interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
 
 		if group.LastValidatedAt == nil || validationStartTime.Sub(*group.LastValidatedAt) > interval {
-			groupsToUpdateTimestamp[group.ID] = group
-			var keys []models.APIKey
-			if err := s.DB.Where("group_id = ?", group.ID).Find(&keys).Error; err != nil {
-				logrus.Errorf("KeyCronService: Failed to get keys for group %s: %v", group.Name, err)
+			groupProcessStart := time.Now()
+			var invalidKeys []models.APIKey
+			err := s.DB.Where("group_id = ? AND status = ?", group.ID, models.KeyStatusInvalid).Find(&invalidKeys).Error
+			if err != nil {
+				logrus.Errorf("KeyCronService: Failed to get invalid keys for group %s: %v", group.Name, err)
 				continue
 			}
 
-			lenKey := len(keys)
+			validatedCount := len(invalidKeys)
+			becameValidCount := 0
+			if validatedCount > 0 {
+				logrus.Debugf("KeyCronService: Found %d invalid keys to validate for group %s.", validatedCount, group.Name)
+				for j := range invalidKeys {
+					key := &invalidKeys[j]
+					isValid, _ := s.Validator.ValidateSingleKey(key, group)
 
-			if lenKey == 0 {
-				continue
-			}
-
-			total += lenKey
-
-			if lenKey > 0 {
-				logrus.Infof("KeyCronService: Submitting %d keys for group %s for validation.", lenKey, group.Name)
-			}
-
-			for _, key := range keys {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-				job := ValidationJob{
-					Key:        key,
-					Group:      group,
-					Ctx:        ctx,
-					CancelFunc: cancel,
+					if isValid {
+						becameValidCount++
+					}
 				}
-
-				s.Pool.SubmitJob(job)
 			}
+
+			if err := s.DB.Model(group).Update("last_validated_at", time.Now()).Error; err != nil {
+				logrus.Errorf("KeyCronService: Failed to update last_validated_at for group %s: %v", group.Name, err)
+			}
+
+			duration := time.Since(groupProcessStart)
+			logrus.Infof(
+				"KeyCronService: Group '%s' validation finished. Total checked: %d, became valid: %d. Duration: %s.",
+				group.Name,
+				validatedCount,
+				becameValidCount,
+				duration.String(),
+			)
 		}
-	}
-
-	// Update timestamps for all groups that were due for validation
-	if len(groupsToUpdateTimestamp) > 0 {
-		s.updateGroupTimestamps(groupsToUpdateTimestamp, validationStartTime)
-	}
-}
-
-func (s *KeyCronService) updateGroupTimestamps(groups map[uint]*models.Group, validationStartTime time.Time) {
-	var groupIDs []uint
-	for id := range groups {
-		groupIDs = append(groupIDs, id)
-	}
-	if err := s.DB.Model(&models.Group{}).Where("id IN ?", groupIDs).Update("last_validated_at", validationStartTime).Error; err != nil {
-		logrus.Errorf("KeyCronService: Failed to batch update last_validated_at for groups: %v", err)
 	}
 }

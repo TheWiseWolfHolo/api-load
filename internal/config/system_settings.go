@@ -227,7 +227,7 @@ func (sm *SystemSettingsManager) GetEffectiveConfig(groupConfigJSON datatypes.JS
 	gcv := reflect.ValueOf(groupConfig)
 	ecv := reflect.ValueOf(&effectiveConfig).Elem()
 
-	for i := 0; i < gcv.NumField(); i++ {
+	for i := range gcv.NumField() {
 		groupField := gcv.Field(i)
 		if groupField.Kind() == reflect.Ptr && !groupField.IsNil() {
 			groupFieldValue := groupField.Elem()

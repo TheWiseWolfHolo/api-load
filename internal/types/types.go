@@ -62,7 +62,6 @@ type CORSConfig struct {
 // PerformanceConfig represents performance configuration
 type PerformanceConfig struct {
 	MaxConcurrentRequests int `json:"max_concurrent_requests"`
-	KeyValidationPoolSize int `json:"key_validation_pool_size"`
 }
 
 // LogConfig represents logging configuration

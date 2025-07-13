@@ -211,7 +211,7 @@ func (s *Server) TestMultipleKeys(c *gin.Context) {
 		return
 	}
 
-	results, err := s.KeyService.TestMultipleKeys(c.Request.Context(), group, req.KeysText)
+	results, err := s.KeyService.TestMultipleKeys(group, req.KeysText)
 	if err != nil {
 		if strings.Contains(err.Error(), "batch size exceeds the limit") {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))

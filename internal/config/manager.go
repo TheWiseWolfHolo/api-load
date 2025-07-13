@@ -89,7 +89,6 @@ func (m *Manager) ReloadConfig() error {
 		},
 		Performance: types.PerformanceConfig{
 			MaxConcurrentRequests: utils.ParseInteger(os.Getenv("MAX_CONCURRENT_REQUESTS"), 100),
-			KeyValidationPoolSize: utils.ParseInteger(os.Getenv("KEY_VALIDATION_POOL_SIZE"), 10),
 		},
 		Log: types.LogConfig{
 			Level:      utils.GetEnvOrDefault("LOG_LEVEL", "info"),
@@ -193,7 +192,6 @@ func (m *Manager) DisplayServerConfig() {
 
 	logrus.Info("--- Performance ---")
 	logrus.Infof("  Max Concurrent Requests: %d", perfConfig.MaxConcurrentRequests)
-	logrus.Infof("  Key Validation Pool Size: %d", perfConfig.KeyValidationPoolSize)
 
 	logrus.Info("--- Security ---")
 	logrus.Infof("  Authentication: enabled (key loaded)")

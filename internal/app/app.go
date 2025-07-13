@@ -31,7 +31,6 @@ type App struct {
 	logCleanupService *services.LogCleanupService
 	requestLogService *services.RequestLogService
 	keyCronService    *services.KeyCronService
-	keyValidationPool *services.KeyValidationPool
 	keyPoolProvider   *keypool.KeyProvider
 	leaderService     *services.LeaderService
 	proxyServer       *proxy.ProxyServer
@@ -50,7 +49,6 @@ type AppParams struct {
 	LogCleanupService *services.LogCleanupService
 	RequestLogService *services.RequestLogService
 	KeyCronService    *services.KeyCronService
-	KeyValidationPool *services.KeyValidationPool
 	KeyPoolProvider   *keypool.KeyProvider
 	LeaderService     *services.LeaderService
 	ProxyServer       *proxy.ProxyServer
@@ -68,7 +66,6 @@ func NewApp(params AppParams) *App {
 		logCleanupService: params.LogCleanupService,
 		requestLogService: params.RequestLogService,
 		keyCronService:    params.KeyCronService,
-		keyValidationPool: params.KeyValidationPool,
 		keyPoolProvider:   params.KeyPoolProvider,
 		leaderService:     params.LeaderService,
 		proxyServer:       params.ProxyServer,
@@ -141,7 +138,6 @@ func (a *App) Start() error {
 
 	a.requestLogService.Start()
 	a.logCleanupService.Start()
-	a.keyValidationPool.Start()
 	a.keyCronService.Start()
 
 	// Create HTTP server
@@ -179,7 +175,6 @@ func (a *App) Stop(ctx context.Context) {
 
 	// Stop background services
 	a.keyCronService.Stop()
-	a.keyValidationPool.Stop()
 	a.leaderService.Stop()
 	a.logCleanupService.Stop()
 	a.requestLogService.Stop()

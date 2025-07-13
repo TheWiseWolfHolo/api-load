@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"gpt-load/internal/config"
 	"gpt-load/internal/keypool"
@@ -71,12 +70,8 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	jobs := make(chan models.APIKey, len(keys))
 	results := make(chan bool, len(keys))
 
-	performanceConfig := s.ConfigManager.GetPerformanceConfig()
-	concurrency := performanceConfig.KeyValidationPoolSize
-
-	if concurrency <= 0 {
-		concurrency = 10
-	}
+	// 固定10并发，避免超频
+	concurrency := 10
 
 	var wg sync.WaitGroup
 	for range concurrency {
@@ -136,7 +131,7 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 func (s *KeyManualValidationService) validationWorker(wg *sync.WaitGroup, group *models.Group, jobs <-chan models.APIKey, results chan<- bool) {
 	defer wg.Done()
 	for key := range jobs {
-		isValid, _ := s.Validator.ValidateSingleKey(context.Background(), &key, group)
+		isValid, _ := s.Validator.ValidateSingleKey(&key, group)
 		results <- isValid
 	}
 }
