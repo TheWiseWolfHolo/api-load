@@ -145,6 +145,7 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		HTTPClient:      httpClient,
 		StreamClient:    streamClient,
 		TestModel:       group.TestModel,
+		channelType:     group.ChannelType,
 		groupUpstreams:  group.Upstreams,
 		effectiveConfig: &group.EffectiveConfig,
 	}, nil
