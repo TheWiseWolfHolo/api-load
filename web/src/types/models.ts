@@ -105,6 +105,8 @@ export interface RequestLog {
   retries: number;
   group_name?: string;
   key_value?: string;
+  upstream_addr: string;
+  is_stream: boolean;
 }
 
 export interface Pagination {

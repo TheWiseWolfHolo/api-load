@@ -10,3 +10,11 @@ func MaskAPIKey(key string) string {
 	}
 	return fmt.Sprintf("%s****%s", key[:4], key[length-4:])
 }
+
+// TruncateString shortens a string to a maximum length.
+func TruncateString(s string, maxLength int) string {
+	if len(s) > maxLength {
+		return s[:maxLength]
+	}
+	return s
+}

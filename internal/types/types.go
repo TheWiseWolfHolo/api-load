@@ -85,4 +85,5 @@ type RetryError struct {
 	ParsedErrorMessage string `json:"-"`
 	KeyID              string `json:"key_id"`
 	Attempt            int    `json:"attempt"`
+	UpstreamAddr       string `json:"-"`
 }

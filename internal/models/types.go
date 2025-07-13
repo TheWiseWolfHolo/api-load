@@ -80,11 +80,13 @@ type RequestLog struct {
 	IsSuccess    bool      `gorm:"not null" json:"is_success"`
 	SourceIP     string    `gorm:"type:varchar(45)" json:"source_ip"`
 	StatusCode   int       `gorm:"not null" json:"status_code"`
-	RequestPath  string    `gorm:"type:varchar(1024)" json:"request_path"`
+	RequestPath  string    `gorm:"type:varchar(500)" json:"request_path"`
 	Duration     int64     `gorm:"not null" json:"duration_ms"`
 	ErrorMessage string    `gorm:"type:text" json:"error_message"`
 	UserAgent    string    `gorm:"type:varchar(512)" json:"user_agent"`
 	Retries      int       `gorm:"not null" json:"retries"`
+	UpstreamAddr string    `gorm:"type:varchar(500)" json:"upstream_addr"`
+	IsStream     bool      `gorm:"not null" json:"is_stream"`
 }
 
 // StatCard 用于仪表盘的单个统计卡片数据

@@ -116,11 +116,11 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			logrus.Debugf("Max retries exceeded for group %s after %d attempts. Parsed Error: %s", group.Name, retryCount, logMessage)
 
 			keyID, _ := strconv.ParseUint(lastError.KeyID, 10, 64)
-			ps.logRequest(c, group, uint(keyID), startTime, lastError.StatusCode, retryCount, errors.New(logMessage))
+			ps.logRequest(c, group, uint(keyID), startTime, lastError.StatusCode, retryCount, errors.New(logMessage), isStream, lastError.UpstreamAddr)
 		} else {
 			response.Error(c, app_errors.ErrMaxRetriesExceeded)
 			logrus.Debugf("Max retries exceeded for group %s after %d attempts.", group.Name, retryCount)
-			ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, app_errors.ErrMaxRetriesExceeded)
+			ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, app_errors.ErrMaxRetriesExceeded, isStream, "")
 		}
 		return
 	}
@@ -129,7 +129,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
-		ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, err)
+		ps.logRequest(c, group, 0, startTime, http.StatusServiceUnavailable, retryCount, err, isStream, "")
 		return
 	}
 
@@ -177,7 +177,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil || (resp != nil && resp.StatusCode >= 400) {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
-			ps.logRequest(c, group, apiKey.ID, startTime, 499, retryCount+1, err)
+			ps.logRequest(c, group, apiKey.ID, startTime, 499, retryCount+1, err, isStream, upstreamURL)
 			return
 		}
 
@@ -212,6 +212,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			ParsedErrorMessage: parsedError,
 			KeyID:              fmt.Sprintf("%d", apiKey.ID),
 			Attempt:            retryCount + 1,
+			UpstreamAddr:       upstreamURL,
 		})
 		ps.executeRequestWithRetry(c, channelHandler, group, bodyBytes, isStream, startTime, retryCount+1, newRetryErrors)
 		return
@@ -219,7 +220,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 
 	ps.keyProvider.UpdateStatus(apiKey, group, true)
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
-	ps.logRequest(c, group, apiKey.ID, startTime, resp.StatusCode, retryCount+1, nil)
+	ps.logRequest(c, group, apiKey.ID, startTime, resp.StatusCode, retryCount+1, nil, isStream, upstreamURL)
 
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -244,6 +245,8 @@ func (ps *ProxyServer) logRequest(
 	statusCode int,
 	retries int,
 	finalError error,
+	isStream bool,
+	upstreamAddr string,
 ) {
 	if ps.requestLogService == nil {
 		return
@@ -252,15 +255,17 @@ func (ps *ProxyServer) logRequest(
 	duration := time.Since(startTime).Milliseconds()
 
 	logEntry := &models.RequestLog{
-		GroupID:     group.ID,
-		KeyID:       keyID,
-		IsSuccess:   finalError == nil && statusCode < 400,
-		SourceIP:    c.ClientIP(),
-		StatusCode:  statusCode,
-		RequestPath: c.Request.URL.String(),
-		Duration:    duration,
-		UserAgent:   c.Request.UserAgent(),
-		Retries:     retries,
+		GroupID:      group.ID,
+		KeyID:        keyID,
+		IsSuccess:    finalError == nil && statusCode < 400,
+		SourceIP:     c.ClientIP(),
+		StatusCode:   statusCode,
+		RequestPath:  utils.TruncateString(c.Request.URL.String(), 500),
+		Duration:     duration,
+		UserAgent:    c.Request.UserAgent(),
+		Retries:      retries,
+		IsStream:     isStream,
+		UpstreamAddr: utils.TruncateString(upstreamAddr, 500),
 	}
 
 	if finalError != nil {

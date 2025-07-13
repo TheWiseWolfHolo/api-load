@@ -112,8 +112,20 @@ const createColumns = () => [
         { default: () => (row.is_success ? "成功" : "失败") }
       ),
   },
+  {
+    title: "类型",
+    key: "is_stream",
+    width: 80,
+    render: (row: LogRow) =>
+      h(
+        NTag,
+        { type: row.is_stream ? "info" : "default", size: "small", round: true },
+        { default: () => (row.is_stream ? "流式" : "非流") }
+      ),
+  },
   { title: "状态码", key: "status_code", width: 80 },
   { title: "耗时(ms)", key: "duration_ms", width: 100 },
+  { title: "重试", key: "retries", width: 60 },
   { title: "分组", key: "group_name", width: 120 },
   {
     title: "Key",
@@ -142,12 +154,24 @@ const createColumns = () => [
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.request_path }),
   },
+  {
+    title: "上游地址",
+    key: "upstream_addr",
+    render: (row: LogRow) =>
+      h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.upstream_addr }),
+  },
   { title: "源IP", key: "source_ip", width: 130 },
   {
     title: "错误信息",
     key: "error_message",
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 250px" }, { default: () => row.error_message || "-" }),
+  },
+  {
+    title: "User Agent",
+    key: "user_agent",
+    render: (row: LogRow) =>
+      h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.user_agent }),
   },
 ];
 
