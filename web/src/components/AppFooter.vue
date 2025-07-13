@@ -136,7 +136,7 @@ onMounted(() => {
           <n-tooltip trigger="hover" placement="top">
             <template #trigger>
               <a
-                href="https://gpt-load.com"
+                href="https://www.gpt-load.com/docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="footer-link"
