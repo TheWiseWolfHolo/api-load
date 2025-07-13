@@ -19,7 +19,7 @@ import (
 const (
 	RequestLogCachePrefix    = "request_log:"
 	PendingLogKeysSet        = "pending_log_keys"
-	DefaultLogFlushBatchSize = 1000
+	DefaultLogFlushBatchSize = 200
 )
 
 // RequestLogService is responsible for managing request logs.
