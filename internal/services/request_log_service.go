@@ -19,7 +19,7 @@ import (
 const (
 	RequestLogCachePrefix    = "request_log:"
 	PendingLogKeysSet        = "pending_log_keys"
-	DefaultLogFlushBatchSize = 500
+	DefaultLogFlushBatchSize = 1000
 )
 
 // RequestLogService is responsible for managing request logs.
@@ -131,7 +131,6 @@ func (s *RequestLogService) flush() {
 		}
 
 		if len(keys) == 0 {
-			logrus.Debug("No more request logs to flush in this cycle.")
 			return
 		}
 
@@ -249,7 +248,7 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 			for key, counts := range hourlyStats {
 				err := tx.Clauses(clause.OnConflict{
 					Columns: []clause.Column{{Name: "time"}, {Name: "group_id"}},
-					DoUpdates: clause.Assignments(map[string]interface{}{
+					DoUpdates: clause.Assignments(map[string]any{
 						"success_count": gorm.Expr("success_count + ?", counts.Success),
 						"failure_count": gorm.Expr("failure_count + ?", counts.Failure),
 						"updated_at":    time.Now(),
