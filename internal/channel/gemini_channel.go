@@ -86,7 +86,7 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, err
 	payload := gin.H{
 		"contents": []gin.H{
 			{"parts": []gin.H{
-				{"text": "Only output 'ok'"},
+				{"text": "hi"},
 			}},
 		},
 	}
