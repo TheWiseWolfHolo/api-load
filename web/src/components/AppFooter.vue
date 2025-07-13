@@ -87,7 +87,6 @@ onMounted(() => {
           <a href="https://github.com/tbphp/gpt-load" target="_blank" rel="noopener noreferrer">
             <b>GPT-Load</b>
           </a>
-          - 高性能 AI API 轮询代理服务
         </span>
 
         <n-divider vertical />
