@@ -1,4 +1,4 @@
-package services
+package store
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"gpt-load/internal/store"
 
 	"github.com/sirupsen/logrus"
 )
@@ -36,9 +34,9 @@ else
     return 0
 end`
 
-// LeaderService provides a mechanism for electing a single leader in a cluster.
-type LeaderService struct {
-	store        store.Store
+// LeaderLock provides a mechanism for electing a single leader in a cluster.
+type LeaderLock struct {
+	store        Store
 	nodeID       string
 	isLeader     atomic.Bool
 	stopChan     chan struct{}
@@ -46,10 +44,10 @@ type LeaderService struct {
 	isSingleNode bool
 }
 
-// NewLeaderService creates a new LeaderService.
-func NewLeaderService(s store.Store) *LeaderService {
-	_, isDistributed := s.(store.LuaScripter)
-	service := &LeaderService{
+// NewLeaderLock creates a new LeaderLock.
+func NewLeaderLock(s Store) *LeaderLock {
+	_, isDistributed := s.(LuaScripter)
+	service := &LeaderLock{
 		store:        s,
 		nodeID:       generateNodeID(),
 		stopChan:     make(chan struct{}),
@@ -65,7 +63,7 @@ func NewLeaderService(s store.Store) *LeaderService {
 }
 
 // Start performs an initial leader election and starts the background leadership maintenance loop.
-func (s *LeaderService) Start() error {
+func (s *LeaderLock) Start() error {
 	if s.isSingleNode {
 		return nil
 	}
@@ -81,7 +79,7 @@ func (s *LeaderService) Start() error {
 }
 
 // Stop gracefully stops the leadership maintenance process.
-func (s *LeaderService) Stop() {
+func (s *LeaderLock) Stop() {
 	if s.isSingleNode {
 		return
 	}
@@ -96,12 +94,12 @@ func (s *LeaderService) Stop() {
 }
 
 // IsLeader returns true if the current node is the leader.
-func (s *LeaderService) IsLeader() bool {
+func (s *LeaderLock) IsLeader() bool {
 	return s.isLeader.Load()
 }
 
 // AcquireInitializingLock sets a temporary lock to indicate that initialization is in progress.
-func (s *LeaderService) AcquireInitializingLock() (bool, error) {
+func (s *LeaderLock) AcquireInitializingLock() (bool, error) {
 	if !s.IsLeader() {
 		return false, nil
 	}
@@ -110,7 +108,7 @@ func (s *LeaderService) AcquireInitializingLock() (bool, error) {
 }
 
 // ReleaseInitializingLock removes the initialization lock.
-func (s *LeaderService) ReleaseInitializingLock() {
+func (s *LeaderLock) ReleaseInitializingLock() {
 	if !s.IsLeader() {
 		return
 	}
@@ -121,7 +119,7 @@ func (s *LeaderService) ReleaseInitializingLock() {
 }
 
 // WaitForInitializationToComplete waits until the initialization lock is released.
-func (s *LeaderService) WaitForInitializationToComplete() error {
+func (s *LeaderLock) WaitForInitializationToComplete() error {
 	if s.isSingleNode || s.IsLeader() {
 		return nil
 	}
@@ -165,7 +163,7 @@ func (s *LeaderService) WaitForInitializationToComplete() error {
 }
 
 // maintainLeadershipLoop is the background process that keeps trying to acquire or renew the lock.
-func (s *LeaderService) maintainLeadershipLoop() {
+func (s *LeaderLock) maintainLeadershipLoop() {
 	defer s.wg.Done()
 	ticker := time.NewTicker(leaderRenewalInterval)
 	defer ticker.Stop()
@@ -185,7 +183,7 @@ func (s *LeaderService) maintainLeadershipLoop() {
 }
 
 // tryToBeLeader is an idempotent function that attempts to acquire or renew the lock.
-func (s *LeaderService) tryToBeLeader() error {
+func (s *LeaderLock) tryToBeLeader() error {
 	if s.isLeader.Load() {
 		err := s.renewLock()
 		if err != nil {
@@ -206,12 +204,12 @@ func (s *LeaderService) tryToBeLeader() error {
 	return nil
 }
 
-func (s *LeaderService) acquireLock() (bool, error) {
+func (s *LeaderLock) acquireLock() (bool, error) {
 	return s.store.SetNX(leaderLockKey, []byte(s.nodeID), leaderLockTTL)
 }
 
-func (s *LeaderService) renewLock() error {
-	luaStore := s.store.(store.LuaScripter)
+func (s *LeaderLock) renewLock() error {
+	luaStore := s.store.(LuaScripter)
 	ttlSeconds := int(leaderLockTTL.Seconds())
 	res, err := luaStore.Eval(renewLockScript, []string{leaderLockKey}, s.nodeID, ttlSeconds)
 	if err != nil {
@@ -223,8 +221,8 @@ func (s *LeaderService) renewLock() error {
 	return nil
 }
 
-func (s *LeaderService) releaseLock() {
-	luaStore := s.store.(store.LuaScripter)
+func (s *LeaderLock) releaseLock() {
+	luaStore := s.store.(LuaScripter)
 	if _, err := luaStore.Eval(releaseLockScript, []string{leaderLockKey}, s.nodeID); err != nil {
 		logrus.WithError(err).Error("Failed to release leader lock on shutdown.")
 	} else {

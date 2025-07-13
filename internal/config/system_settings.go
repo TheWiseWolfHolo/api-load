@@ -35,12 +35,12 @@ type groupManager interface {
 	Invalidate() error
 }
 
-type leaderService interface {
+type leaderLock interface {
 	IsLeader() bool
 }
 
 // Initialize initializes the SystemSettingsManager with database and store dependencies.
-func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, leader leaderService) error {
+func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, leaderLock leaderLock) error {
 	settingsLoader := func() (types.SystemSettings, error) {
 		var dbSettings []models.SystemSetting
 		if err := db.DB.Find(&dbSettings).Error; err != nil {
@@ -82,7 +82,7 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, 
 	}
 
 	afterLoader := func(newData types.SystemSettings) {
-		if !leader.IsLeader() {
+		if !leaderLock.IsLeader() {
 			return
 		}
 		if err := gm.Invalidate(); err != nil {

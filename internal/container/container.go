@@ -25,9 +25,6 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(config.NewManager); err != nil {
 		return nil, err
 	}
-	if err := container.Provide(services.NewLeaderService); err != nil {
-		return nil, err
-	}
 	if err := container.Provide(db.NewDB); err != nil {
 		return nil, err
 	}
@@ -35,6 +32,9 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(store.NewStore); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(store.NewLeaderLock); err != nil {
 		return nil, err
 	}
 	if err := container.Provide(httpclient.NewHTTPClientManager); err != nil {
@@ -49,9 +49,6 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(services.NewKeyManualValidationService); err != nil {
-		return nil, err
-	}
-	if err := container.Provide(services.NewKeyCronService); err != nil {
 		return nil, err
 	}
 	if err := container.Provide(services.NewKeyService); err != nil {
@@ -70,6 +67,9 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(keypool.NewKeyValidator); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(keypool.NewCronChecker); err != nil {
 		return nil, err
 	}
 

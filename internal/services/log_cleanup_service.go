@@ -3,6 +3,7 @@ package services
 import (
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
+	"gpt-load/internal/store"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -13,16 +14,16 @@ import (
 type LogCleanupService struct {
 	db              *gorm.DB
 	settingsManager *config.SystemSettingsManager
-	leaderService   *LeaderService
+	leaderLock      *store.LeaderLock
 	stopCh          chan struct{}
 }
 
 // NewLogCleanupService 创建新的日志清理服务
-func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager, leaderService *LeaderService) *LogCleanupService {
+func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager, leaderLock *store.LeaderLock) *LogCleanupService {
 	return &LogCleanupService{
 		db:              db,
 		settingsManager: settingsManager,
-		leaderService:   leaderService,
+		leaderLock:      leaderLock,
 		stopCh:          make(chan struct{}),
 	}
 }
@@ -59,7 +60,7 @@ func (s *LogCleanupService) run() {
 
 // cleanupExpiredLogs 清理过期的请求日志
 func (s *LogCleanupService) cleanupExpiredLogs() {
-	if !s.leaderService.IsLeader() {
+	if !s.leaderLock.IsLeader() {
 		logrus.Debug("Not the leader, skipping log cleanup.")
 		return
 	}

@@ -30,9 +30,9 @@ type App struct {
 	groupManager      *services.GroupManager
 	logCleanupService *services.LogCleanupService
 	requestLogService *services.RequestLogService
-	keyCronService    *services.KeyCronService
+	cronChecker       *keypool.CronChecker
 	keyPoolProvider   *keypool.KeyProvider
-	leaderService     *services.LeaderService
+	leaderLock        *store.LeaderLock
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -48,9 +48,9 @@ type AppParams struct {
 	GroupManager      *services.GroupManager
 	LogCleanupService *services.LogCleanupService
 	RequestLogService *services.RequestLogService
-	KeyCronService    *services.KeyCronService
+	CronChecker       *keypool.CronChecker
 	KeyPoolProvider   *keypool.KeyProvider
-	LeaderService     *services.LeaderService
+	LeaderLock        *store.LeaderLock
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -65,9 +65,9 @@ func NewApp(params AppParams) *App {
 		groupManager:      params.GroupManager,
 		logCleanupService: params.LogCleanupService,
 		requestLogService: params.RequestLogService,
-		keyCronService:    params.KeyCronService,
+		cronChecker:       params.CronChecker,
 		keyPoolProvider:   params.KeyPoolProvider,
-		leaderService:     params.LeaderService,
+		leaderLock:        params.LeaderLock,
 		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
@@ -77,25 +77,25 @@ func NewApp(params AppParams) *App {
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
 
-	// 启动 Leader Service 并等待选举结果
-	if err := a.leaderService.Start(); err != nil {
+	// 启动 Leader Lock 服务并等待选举结果
+	if err := a.leaderLock.Start(); err != nil {
 		return fmt.Errorf("leader service failed to start: %w", err)
 	}
 
 	// Leader 节点执行初始化，Follower 节点等待
-	if a.leaderService.IsLeader() {
+	if a.leaderLock.IsLeader() {
 		logrus.Info("Leader mode. Performing initial one-time tasks...")
-		acquired, err := a.leaderService.AcquireInitializingLock()
+		acquired, err := a.leaderLock.AcquireInitializingLock()
 		if err != nil {
 			return fmt.Errorf("failed to acquire initializing lock: %w", err)
 		}
 		if !acquired {
 			logrus.Warn("Could not acquire initializing lock, another leader might be active. Switching to follower mode for initialization.")
-			if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
+			if err := a.leaderLock.WaitForInitializationToComplete(); err != nil {
 				return fmt.Errorf("failed to wait for initialization as a fallback follower: %w", err)
 			}
 		} else {
-			defer a.leaderService.ReleaseInitializingLock()
+			defer a.leaderLock.ReleaseInitializingLock()
 
 			// 数据库迁移
 			if err := a.db.AutoMigrate(
@@ -115,7 +115,7 @@ func (a *App) Start() error {
 			}
 			logrus.Info("System settings initialized in DB.")
 
-			a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderService)
+			a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderLock)
 
 			// 从数据库加载密钥到 Redis
 			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
@@ -125,10 +125,10 @@ func (a *App) Start() error {
 		}
 	} else {
 		logrus.Info("Follower Mode. Waiting for leader to complete initialization.")
-		if err := a.leaderService.WaitForInitializationToComplete(); err != nil {
+		if err := a.leaderLock.WaitForInitializationToComplete(); err != nil {
 			return fmt.Errorf("follower failed to start: %w", err)
 		}
-		a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderService)
+		a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderLock)
 	}
 
 	// 显示配置并启动所有后台服务
@@ -138,7 +138,7 @@ func (a *App) Start() error {
 
 	a.requestLogService.Start()
 	a.logCleanupService.Start()
-	a.keyCronService.Start()
+	a.cronChecker.Start()
 
 	// Create HTTP server
 	serverConfig := a.configManager.GetEffectiveServerConfig()
@@ -174,8 +174,8 @@ func (a *App) Stop(ctx context.Context) {
 	}
 
 	// Stop background services
-	a.keyCronService.Stop()
-	a.leaderService.Stop()
+	a.cronChecker.Stop()
+	a.leaderLock.Stop()
 	a.logCleanupService.Stop()
 	a.requestLogService.Stop()
 	a.groupManager.Stop()

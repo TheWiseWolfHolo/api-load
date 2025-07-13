@@ -27,20 +27,20 @@ type RequestLogService struct {
 	db              *gorm.DB
 	store           store.Store
 	settingsManager *config.SystemSettingsManager
-	leaderService   *LeaderService
+	leaderLock      *store.LeaderLock
 	ctx             context.Context
 	cancel          context.CancelFunc
 	ticker          *time.Ticker
 }
 
 // NewRequestLogService creates a new RequestLogService instance
-func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSettingsManager, ls *LeaderService) *RequestLogService {
+func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSettingsManager, ls *store.LeaderLock) *RequestLogService {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &RequestLogService{
 		db:              db,
 		store:           store,
 		settingsManager: sm,
-		leaderService:   ls,
+		leaderLock:      ls,
 		ctx:             ctx,
 		cancel:          cancel,
 	}
@@ -116,7 +116,7 @@ func (s *RequestLogService) flush() {
 		return
 	}
 
-	if !s.leaderService.IsLeader() {
+	if !s.leaderLock.IsLeader() {
 		logrus.Debug("Not a leader, skipping log flush.")
 		return
 	}
