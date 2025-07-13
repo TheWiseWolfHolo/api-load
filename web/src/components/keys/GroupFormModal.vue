@@ -80,6 +80,8 @@ const formData = reactive<GroupFormData>({
 
 const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
+const channelTypesFetched = ref(false);
+const configOptionsFetched = ref(false);
 
 // 表单验证规则
 const rules: FormRules = {
@@ -124,6 +126,12 @@ watch(
   () => props.show,
   show => {
     if (show) {
+      if (!channelTypesFetched.value) {
+        fetchChannelTypes();
+      }
+      if (!configOptionsFetched.value) {
+        fetchGroupConfigOptions();
+      }
       resetForm();
       if (props.group) {
         loadGroupData();
@@ -174,7 +182,6 @@ function loadGroupData() {
   });
 }
 
-fetchChannelTypes();
 async function fetchChannelTypes() {
   const options = (await settingsApi.getChannelTypes()) || [];
   channelTypeOptions.value =
@@ -182,6 +189,7 @@ async function fetchChannelTypes() {
       label: type,
       value: type,
     })) || [];
+  channelTypesFetched.value = true;
 }
 
 // 添加上游地址
@@ -199,10 +207,10 @@ function removeUpstream(index: number) {
   }
 }
 
-fetchGroupConfigOptions();
 async function fetchGroupConfigOptions() {
   const options = await keysApi.getGroupConfigOptions();
   configOptions.value = options || [];
+  configOptionsFetched.value = true;
 }
 
 // 添加配置项

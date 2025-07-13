@@ -79,8 +79,13 @@ watch(
   () => props.selectedGroup,
   async newGroup => {
     if (newGroup) {
+      // 检查重置页面是否会触发分页观察者。
+      const willWatcherTrigger = currentPage.value !== 1 || statusFilter.value !== "all";
       resetPage();
-      await loadKeys();
+      // 如果分页观察者不触发，则手动加载。
+      if (!willWatcherTrigger) {
+        await loadKeys();
+      }
     }
   },
   { immediate: true }
