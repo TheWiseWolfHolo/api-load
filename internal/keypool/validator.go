@@ -48,7 +48,10 @@ func NewKeyValidator(params KeyValidatorParams) *KeyValidator {
 
 // ValidateSingleKey performs a validation check on a single API key.
 func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if group.EffectiveConfig.AppUrl == "" {
+		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(group.EffectiveConfig.KeyValidationTimeoutSeconds)*time.Second)
 	defer cancel()
 
 	ch, err := s.channelFactory.GetChannel(group)
@@ -58,7 +61,6 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 
 	isValid, validationErr := ch.ValidateKey(ctx, key.KeyValue)
 
-	group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
 	s.keypoolProvider.UpdateStatus(key, group, isValid)
 
 	if !isValid {

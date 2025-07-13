@@ -6,6 +6,7 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -89,7 +90,7 @@ func (s *CronChecker) runLoop() {
 	}
 }
 
-// submitValidationJobs finds groups whose keys need validation and validates them.
+// submitValidationJobs finds groups whose keys need validation and validates them concurrently.
 func (s *CronChecker) submitValidationJobs() {
 	var groups []models.Group
 	if err := s.DB.Find(&groups).Error; err != nil {
@@ -98,51 +99,93 @@ func (s *CronChecker) submitValidationJobs() {
 	}
 
 	validationStartTime := time.Now()
+	var wg sync.WaitGroup
 
 	for i := range groups {
 		group := &groups[i]
-		effectiveSettings := s.SettingsManager.GetEffectiveConfig(group.Config)
-		interval := time.Duration(effectiveSettings.KeyValidationIntervalMinutes) * time.Minute
+		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
+		interval := time.Duration(group.EffectiveConfig.KeyValidationIntervalMinutes) * time.Minute
 
 		if group.LastValidatedAt == nil || validationStartTime.Sub(*group.LastValidatedAt) > interval {
-			groupProcessStart := time.Now()
-			var invalidKeys []models.APIKey
-			err := s.DB.Where("group_id = ? AND status = ?", group.ID, models.KeyStatusInvalid).Find(&invalidKeys).Error
-			if err != nil {
-				logrus.Errorf("CronChecker: Failed to get invalid keys for group %s: %v", group.Name, err)
-				continue
-			}
-
-			validatedCount := len(invalidKeys)
-			becameValidCount := 0
-			if validatedCount > 0 {
-				for j := range invalidKeys {
-					select {
-					case <-s.stopChan:
-						return
-					default:
-					}
-					key := &invalidKeys[j]
-					isValid, _ := s.Validator.ValidateSingleKey(key, group)
-
-					if isValid {
-						becameValidCount++
-					}
-				}
-			}
-
-			if err := s.DB.Model(group).Update("last_validated_at", time.Now()).Error; err != nil {
-				logrus.Errorf("CronChecker: Failed to update last_validated_at for group %s: %v", group.Name, err)
-			}
-
-			duration := time.Since(groupProcessStart)
-			logrus.Infof(
-				"CronChecker: Group '%s' validation finished. Total checked: %d, became valid: %d. Duration: %s.",
-				group.Name,
-				validatedCount,
-				becameValidCount,
-				duration.String(),
-			)
+			wg.Add(1)
+			g := group
+			go func() {
+				defer wg.Done()
+				s.validateGroupKeys(g)
+			}()
 		}
 	}
+
+	wg.Wait()
+}
+
+// validateGroupKeys validates all invalid keys for a single group concurrently.
+func (s *CronChecker) validateGroupKeys(group *models.Group) {
+	groupProcessStart := time.Now()
+
+	var invalidKeys []models.APIKey
+	err := s.DB.Where("group_id = ? AND status = ?", group.ID, models.KeyStatusInvalid).Find(&invalidKeys).Error
+	if err != nil {
+		logrus.Errorf("CronChecker: Failed to get invalid keys for group %s: %v", group.Name, err)
+		return
+	}
+
+	if len(invalidKeys) == 0 {
+		if err := s.DB.Model(group).Update("last_validated_at", time.Now()).Error; err != nil {
+			logrus.Errorf("CronChecker: Failed to update last_validated_at for group %s: %v", group.Name, err)
+		}
+		logrus.Infof("CronChecker: Group '%s' has no invalid keys to check.", group.Name)
+		return
+	}
+
+	var becameValidCount int32
+	var keyWg sync.WaitGroup
+	jobs := make(chan *models.APIKey, len(invalidKeys))
+
+	concurrency := group.EffectiveConfig.KeyValidationConcurrency
+	for range concurrency {
+		keyWg.Add(1)
+		go func() {
+			defer keyWg.Done()
+			for {
+				select {
+				case key, ok := <-jobs:
+					if !ok {
+						return
+					}
+					isValid, _ := s.Validator.ValidateSingleKey(key, group)
+					if isValid {
+						atomic.AddInt32(&becameValidCount, 1)
+					}
+				case <-s.stopChan:
+					return
+				}
+			}
+		}()
+	}
+
+DistributeLoop:
+	for i := range invalidKeys {
+		select {
+		case jobs <- &invalidKeys[i]:
+		case <-s.stopChan:
+			break DistributeLoop
+		}
+	}
+	close(jobs)
+
+	keyWg.Wait()
+
+	if err := s.DB.Model(group).Update("last_validated_at", time.Now()).Error; err != nil {
+		logrus.Errorf("CronChecker: Failed to update last_validated_at for group %s: %v", group.Name, err)
+	}
+
+	duration := time.Since(groupProcessStart)
+	logrus.Infof(
+		"CronChecker: Group '%s' validation finished. Total checked: %d, became valid: %d. Duration: %s.",
+		group.Name,
+		len(invalidKeys),
+		becameValidCount,
+		duration.String(),
+	)
 }

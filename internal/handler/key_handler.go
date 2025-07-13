@@ -201,8 +201,14 @@ func (s *Server) TestMultipleKeys(c *gin.Context) {
 		return
 	}
 
-	group, ok := s.findGroupByID(c, req.GroupID)
+	groupDB, ok := s.findGroupByID(c, req.GroupID)
 	if !ok {
+		return
+	}
+
+	group, err := s.GroupManager.GetGroupByName(groupDB.Name)
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrResourceNotFound, fmt.Sprintf("Group '%s' not found", groupDB.Name)))
 		return
 	}
 
@@ -234,8 +240,14 @@ func (s *Server) ValidateGroupKeys(c *gin.Context) {
 		return
 	}
 
-	group, ok := s.findGroupByID(c, req.GroupID)
+	groupDB, ok := s.findGroupByID(c, req.GroupID)
 	if !ok {
+		return
+	}
+
+	group, err := s.GroupManager.GetGroupByName(groupDB.Name)
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrResourceNotFound, fmt.Sprintf("Group '%s' not found", groupDB.Name)))
 		return
 	}
 

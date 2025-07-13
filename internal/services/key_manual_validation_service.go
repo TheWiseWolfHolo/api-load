@@ -70,8 +70,7 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	jobs := make(chan models.APIKey, len(keys))
 	results := make(chan bool, len(keys))
 
-	// 固定10并发，避免超频
-	concurrency := 10
+	concurrency := group.EffectiveConfig.KeyValidationConcurrency
 
 	var wg sync.WaitGroup
 	for range concurrency {
@@ -84,7 +83,6 @@ func (s *KeyManualValidationService) runValidation(group *models.Group, keys []m
 	}
 	close(jobs)
 
-	// Wait for all workers to complete in a separate goroutine
 	go func() {
 		wg.Wait()
 		close(results)

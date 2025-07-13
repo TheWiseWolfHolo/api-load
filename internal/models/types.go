@@ -34,6 +34,8 @@ type GroupConfig struct {
 	MaxRetries                   *int `json:"max_retries,omitempty"`
 	BlacklistThreshold           *int `json:"blacklist_threshold,omitempty"`
 	KeyValidationIntervalMinutes *int `json:"key_validation_interval_minutes,omitempty"`
+	KeyValidationConcurrency     *int `json:"key_validation_concurrency,omitempty"`
+	KeyValidationTimeoutSeconds  *int `json:"key_validation_timeout_seconds,omitempty"`
 }
 
 // Group 对应 groups 表
@@ -96,10 +98,10 @@ type StatCard struct {
 
 // DashboardStatsResponse 用于仪表盘基础统计的API响应
 type DashboardStatsResponse struct {
-	KeyCount      StatCard `json:"key_count"`
-	GroupCount    StatCard `json:"group_count"`
-	RequestCount  StatCard `json:"request_count"`
-	ErrorRate     StatCard `json:"error_rate"`
+	KeyCount     StatCard `json:"key_count"`
+	GroupCount   StatCard `json:"group_count"`
+	RequestCount StatCard `json:"request_count"`
+	ErrorRate    StatCard `json:"error_rate"`
 }
 
 // ChartDataset 用于图表的数据集
