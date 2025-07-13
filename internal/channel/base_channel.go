@@ -75,11 +75,10 @@ func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, group *models.Group
 
 	finalURL := *base
 	proxyPrefix := "/proxy/" + group.Name
-	if strings.HasPrefix(originalURL.Path, proxyPrefix) {
-		finalURL.Path = strings.TrimPrefix(originalURL.Path, proxyPrefix)
-	} else {
-		finalURL.Path = originalURL.Path
-	}
+	requestPath := originalURL.Path
+	requestPath = strings.TrimPrefix(requestPath, proxyPrefix)
+
+	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + requestPath
 
 	finalURL.RawQuery = originalURL.RawQuery
 
