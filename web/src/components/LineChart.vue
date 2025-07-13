@@ -72,6 +72,16 @@ const yTicks = computed(() => {
   return Array.from({ length: tickCount }, (_, i) => min + i * step);
 });
 
+// 格式化时间标签
+const formatTimeLabel = (isoString: string) => {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
 // 生成可见的X轴标签（避免重叠）
 const visibleLabels = computed(() => {
   if (!chartData.value) {
@@ -82,7 +92,9 @@ const visibleLabels = computed(() => {
   const maxLabels = 8; // 最多显示8个标签
   const step = Math.ceil(labels.length / maxLabels);
 
-  return labels.map((label, index) => ({ text: label, index })).filter((_, i) => i % step === 0);
+  return labels
+    .map((label, index) => ({ text: formatTimeLabel(label), index }))
+    .filter((_, i) => i % step === 0);
 });
 
 // 位置计算函数
@@ -266,7 +278,7 @@ const handleMouseMove = (event: MouseEvent) => {
     };
 
     tooltipData.value = {
-      time: chartData.value.labels[closestTimeIndex],
+      time: formatTimeLabel(chartData.value.labels[closestTimeIndex]),
       datasets: datasetsAtTime,
     };
   } else {

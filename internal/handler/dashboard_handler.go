@@ -135,7 +135,7 @@ func (s *Server) Chart(c *gin.Context) {
 
 	for i := 0; i < 24; i++ {
 		hour := twentyFourHoursAgo.Add(time.Duration(i) * time.Hour).Truncate(time.Hour)
-		labels = append(labels, hour.Format("15:04"))
+		labels = append(labels, hour.Format(time.RFC3339))
 
 		if data, ok := statsByHour[hour]; ok {
 			successData = append(successData, data["success"])
