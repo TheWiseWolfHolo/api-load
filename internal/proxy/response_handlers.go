@@ -24,6 +24,7 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		select {
 		case <-c.Request.Context().Done():
@@ -36,7 +37,7 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 			logUpstreamError("writing stream to client", err)
 			return
 		}
-		if _, err := c.Writer.Write([]byte("\n\n")); err != nil {
+		if _, err := c.Writer.Write([]byte("\n")); err != nil {
 			logUpstreamError("writing stream newline to client", err)
 			return
 		}
