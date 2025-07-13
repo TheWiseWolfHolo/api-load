@@ -79,18 +79,28 @@ func (s *LeaderLock) Start() error {
 }
 
 // Stop gracefully stops the leadership maintenance process.
-func (s *LeaderLock) Stop() {
+func (s *LeaderLock) Stop(ctx context.Context) {
 	if s.isSingleNode {
 		return
 	}
-	logrus.Info("Stopping leadership maintenance process...")
 	close(s.stopChan)
-	s.wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logrus.Info("Leadership maintenance process stopped gracefully.")
+	case <-ctx.Done():
+		logrus.Warn("Leadership maintenance process stop timed out.")
+	}
 
 	if s.isLeader.Load() {
 		s.releaseLock()
 	}
-	logrus.Info("Leadership maintenance process stopped.")
 }
 
 // IsLeader returns true if the current node is the leader.
@@ -176,7 +186,6 @@ func (s *LeaderLock) maintainLeadershipLoop() {
 				logrus.WithError(err).Warn("Error during leadership maintenance cycle.")
 			}
 		case <-s.stopChan:
-			logrus.Info("Leadership maintenance loop stopping.")
 			return
 		}
 	}

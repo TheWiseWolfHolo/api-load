@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"gpt-load/internal/config"
@@ -168,19 +169,47 @@ func (a *App) Start() error {
 func (a *App) Stop(ctx context.Context) {
 	logrus.Info("Shutting down server...")
 
-	// Shutdown http server
 	if err := a.httpServer.Shutdown(ctx); err != nil {
 		logrus.Errorf("Server forced to shutdown: %v", err)
 	}
 
-	// Stop background services
-	a.cronChecker.Stop()
-	a.leaderLock.Stop()
-	a.logCleanupService.Stop()
-	a.requestLogService.Stop()
-	a.groupManager.Stop()
-	a.settingsManager.Stop()
-	a.storage.Close()
+	stoppableServices := []func(context.Context){
+		a.cronChecker.Stop,
+		a.leaderLock.Stop,
+		a.logCleanupService.Stop,
+		a.requestLogService.Stop,
+		a.groupManager.Stop,
+		a.settingsManager.Stop,
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(stoppableServices))
+
+	for _, stopFunc := range stoppableServices {
+		go func(stop func(context.Context)) {
+			defer wg.Done()
+			stop(ctx)
+		}(stopFunc)
+	}
+
+	// Wait for all services to stop, or for the context to be done.
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logrus.Info("All background services stopped.")
+	case <-ctx.Done():
+		logrus.Warn("Shutdown timed out, some services may not have stopped gracefully.")
+	}
+
+	// Step 3: Close storage connection last.
+	if a.storage != nil {
+		a.storage.Close()
+	}
 
 	logrus.Info("Server exited gracefully")
 }

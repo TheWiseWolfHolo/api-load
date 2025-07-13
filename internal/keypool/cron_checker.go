@@ -1,6 +1,7 @@
 package keypool
 
 import (
+	"context"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
@@ -44,12 +45,23 @@ func (s *CronChecker) Start() {
 	go s.runLoop()
 }
 
-// Stop stops the cron job.
-func (s *CronChecker) Stop() {
-	logrus.Info("Stopping CronChecker...")
+// Stop stops the cron job, respecting the context for shutdown timeout.
+func (s *CronChecker) Stop(ctx context.Context) {
 	close(s.stopChan)
-	s.wg.Wait()
-	logrus.Info("CronChecker stopped.")
+
+	// Wait for the goroutine to finish, or for the shutdown to time out.
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logrus.Info("CronChecker stopped gracefully.")
+	case <-ctx.Done():
+		logrus.Warn("CronChecker stop timed out.")
+	}
 }
 
 func (s *CronChecker) runLoop() {
@@ -104,8 +116,12 @@ func (s *CronChecker) submitValidationJobs() {
 			validatedCount := len(invalidKeys)
 			becameValidCount := 0
 			if validatedCount > 0 {
-				logrus.Debugf("CronChecker: Found %d invalid keys to validate for group %s.", validatedCount, group.Name)
 				for j := range invalidKeys {
+					select {
+					case <-s.stopChan:
+						return
+					default:
+					}
 					key := &invalidKeys[j]
 					isValid, _ := s.Validator.ValidateSingleKey(key, group)
 

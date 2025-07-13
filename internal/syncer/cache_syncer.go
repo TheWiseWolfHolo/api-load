@@ -68,7 +68,6 @@ func (s *CacheSyncer[T]) Invalidate() error {
 
 // Stop gracefully shuts down the syncer's background goroutine.
 func (s *CacheSyncer[T]) Stop() {
-	s.logger.Debug("stopping cache syncer...")
 	close(s.stopChan)
 	s.wg.Wait()
 	s.logger.Info("cache syncer stopped.")
@@ -139,7 +138,6 @@ func (s *CacheSyncer[T]) listenForUpdates() {
 					s.logger.Errorf("failed to reload cache after notification: %v", err)
 				}
 			case <-s.stopChan:
-				s.logger.Info("received stop signal, exiting subscriber loop.")
 				if err := subscription.Close(); err != nil {
 					s.logger.Errorf("failed to close subscription: %v", err)
 				}

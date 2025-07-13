@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
@@ -93,7 +94,7 @@ func (gm *GroupManager) Invalidate() error {
 }
 
 // Stop gracefully stops the GroupManager's background syncer.
-func (gm *GroupManager) Stop() {
+func (gm *GroupManager) Stop(ctx context.Context) {
 	if gm.syncer != nil {
 		gm.syncer.Stop()
 	}

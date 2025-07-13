@@ -1,9 +1,11 @@
 package services
 
 import (
+	"context"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -16,6 +18,7 @@ type LogCleanupService struct {
 	settingsManager *config.SystemSettingsManager
 	leaderLock      *store.LeaderLock
 	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 // NewLogCleanupService 创建新的日志清理服务
@@ -30,18 +33,32 @@ func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsMan
 
 // Start 启动日志清理服务
 func (s *LogCleanupService) Start() {
+	s.wg.Add(1)
 	go s.run()
 	logrus.Debug("Log cleanup service started")
 }
 
 // Stop 停止日志清理服务
-func (s *LogCleanupService) Stop() {
+func (s *LogCleanupService) Stop(ctx context.Context) {
 	close(s.stopCh)
-	logrus.Info("Log cleanup service stopped")
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logrus.Info("LogCleanupService stopped gracefully.")
+	case <-ctx.Done():
+		logrus.Warn("LogCleanupService stop timed out.")
+	}
 }
 
 // run 运行日志清理的主循环
 func (s *LogCleanupService) run() {
+	defer s.wg.Done()
 	ticker := time.NewTicker(2 * time.Hour)
 	defer ticker.Stop()
 

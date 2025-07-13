@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"gpt-load/internal/db"
@@ -106,7 +107,7 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, 
 }
 
 // Stop gracefully stops the SystemSettingsManager's background syncer.
-func (sm *SystemSettingsManager) Stop() {
+func (sm *SystemSettingsManager) Stop(ctx context.Context) {
 	if sm.syncer != nil {
 		sm.syncer.Stop()
 	}

@@ -8,6 +8,7 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,61 +29,77 @@ type RequestLogService struct {
 	store           store.Store
 	settingsManager *config.SystemSettingsManager
 	leaderLock      *store.LeaderLock
-	ctx             context.Context
-	cancel          context.CancelFunc
+	stopChan        chan struct{}
+	wg              sync.WaitGroup
 	ticker          *time.Ticker
 }
 
 // NewRequestLogService creates a new RequestLogService instance
 func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSettingsManager, ls *store.LeaderLock) *RequestLogService {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &RequestLogService{
 		db:              db,
 		store:           store,
 		settingsManager: sm,
 		leaderLock:      ls,
-		ctx:             ctx,
-		cancel:          cancel,
+		stopChan:        make(chan struct{}),
 	}
 }
 
 // Start initializes the service and starts the periodic flush routine
 func (s *RequestLogService) Start() {
-	go s.flush()
+	s.wg.Add(1)
+	go s.runLoop()
+}
+
+func (s *RequestLogService) runLoop() {
+	defer s.wg.Done()
+
+	// Initial flush on start
+	s.flush()
 
 	interval := time.Duration(s.settingsManager.GetSettings().RequestLogWriteIntervalMinutes) * time.Minute
 	if interval <= 0 {
 		interval = time.Minute
 	}
 	s.ticker = time.NewTicker(interval)
+	defer s.ticker.Stop()
 
-	go func() {
-		for {
-			select {
-			case <-s.ticker.C:
-				newInterval := time.Duration(s.settingsManager.GetSettings().RequestLogWriteIntervalMinutes) * time.Minute
-				if newInterval <= 0 {
-					newInterval = time.Minute
-				}
-				if newInterval != interval {
-					s.ticker.Reset(newInterval)
-					interval = newInterval
-					logrus.Debugf("Request log write interval updated to: %v", interval)
-				}
-				s.flush()
-			case <-s.ctx.Done():
-				s.ticker.Stop()
-				logrus.Info("RequestLogService stopped.")
-				return
+	for {
+		select {
+		case <-s.ticker.C:
+			newInterval := time.Duration(s.settingsManager.GetSettings().RequestLogWriteIntervalMinutes) * time.Minute
+			if newInterval <= 0 {
+				newInterval = time.Minute
 			}
+			if newInterval != interval {
+				s.ticker.Reset(newInterval)
+				interval = newInterval
+				logrus.Debugf("Request log write interval updated to: %v", interval)
+			}
+			s.flush()
+		case <-s.stopChan:
+			return
 		}
-	}()
+	}
 }
 
 // Stop gracefully stops the RequestLogService
-func (s *RequestLogService) Stop() {
-	s.flush()
-	s.cancel()
+func (s *RequestLogService) Stop(ctx context.Context) {
+	close(s.stopChan)
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		s.flush()
+		logrus.Info("RequestLogService stopped gracefully.")
+	case <-ctx.Done():
+		logrus.Warn("RequestLogService stop timed out.")
+	}
 }
 
 // Record logs a request to the database and cache
