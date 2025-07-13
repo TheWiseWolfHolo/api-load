@@ -538,7 +538,6 @@ onMounted(() => {
   padding: 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
   backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: white;
