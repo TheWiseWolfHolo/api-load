@@ -339,7 +339,6 @@ onMounted(() => {
         size="small"
         style="width: 150px"
         clearable
-        @update:value="fetchChartData"
       />
     </div>
 
