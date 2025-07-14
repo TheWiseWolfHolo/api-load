@@ -107,11 +107,10 @@ func (s *Server) Stats(c *gin.Context) {
 func (s *Server) Chart(c *gin.Context) {
 	groupID := c.Query("groupId")
 
-	now := time.Now()
-	twentyFourHoursAgo := now.Add(-24 * time.Hour)
+	twentyFourHoursAgo := time.Now().Add(-24 * time.Hour)
 
 	var hourlyStats []models.GroupHourlyStat
-	query := s.DB.Where("time >= ? AND time < ?", twentyFourHoursAgo, now)
+	query := s.DB.Where("time >= ? ", twentyFourHoursAgo)
 	if groupID != "" {
 		query = query.Where("group_id = ?", groupID)
 	}
@@ -133,8 +132,8 @@ func (s *Server) Chart(c *gin.Context) {
 	var labels []string
 	var successData, failureData []int64
 
-	for i := 0; i < 24; i++ {
-		hour := twentyFourHoursAgo.Add(time.Duration(i) * time.Hour).Truncate(time.Hour)
+	for i := range 24 {
+		hour := twentyFourHoursAgo.Add(time.Duration(i+1) * time.Hour).Truncate(time.Hour)
 		labels = append(labels, hour.Format(time.RFC3339))
 
 		if data, ok := statsByHour[hour]; ok {
