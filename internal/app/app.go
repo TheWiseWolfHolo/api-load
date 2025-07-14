@@ -169,10 +169,26 @@ func (a *App) Start() error {
 func (a *App) Stop(ctx context.Context) {
 	logrus.Info("Shutting down server...")
 
-	if err := a.httpServer.Shutdown(ctx); err != nil {
-		logrus.Errorf("Server forced to shutdown: %v", err)
-	}
+	serverConfig := a.configManager.GetEffectiveServerConfig()
+	totalTimeout := time.Duration(serverConfig.GracefulShutdownTimeout) * time.Second
 
+	// 动态计算 HTTP 关机超时时间，为后台服务固定预留 5 秒
+	httpShutdownTimeout := totalTimeout - 5*time.Second
+
+	// 为 HTTP 服务器的优雅关闭创建一个独立的 context
+	httpShutdownCtx, cancelHttpShutdown := context.WithTimeout(context.Background(), httpShutdownTimeout)
+	defer cancelHttpShutdown()
+
+	logrus.Debugf("Attempting to gracefully shut down HTTP server (max %v)...", httpShutdownTimeout)
+	if err := a.httpServer.Shutdown(httpShutdownCtx); err != nil {
+		logrus.Debugf("HTTP server graceful shutdown timed out as expected, forcing remaining connections to close.")
+		if closeErr := a.httpServer.Close(); closeErr != nil {
+			logrus.Errorf("Error forcing HTTP server to close: %v", closeErr)
+		}
+	}
+	logrus.Info("HTTP server has been shut down.")
+
+	// 使用原始的总超时 context 继续关闭其他后台服务
 	stoppableServices := []func(context.Context){
 		a.cronChecker.Stop,
 		a.leaderLock.Stop,
@@ -192,7 +208,6 @@ func (a *App) Stop(ctx context.Context) {
 		}(stopFunc)
 	}
 
-	// Wait for all services to stop, or for the context to be done.
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()

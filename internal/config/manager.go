@@ -164,6 +164,12 @@ func (m *Manager) Validate() error {
 		validationErrors = append(validationErrors, "AUTH_KEY is required and cannot be empty")
 	}
 
+	// Validate GracefulShutdownTimeout and reset if necessary
+	if m.config.Server.GracefulShutdownTimeout < 10 {
+		logrus.Warnf("SERVER_GRACEFUL_SHUTDOWN_TIMEOUT value %ds is too short, resetting to minimum 10s.", m.config.Server.GracefulShutdownTimeout)
+		m.config.Server.GracefulShutdownTimeout = 10
+	}
+
 	if len(validationErrors) > 0 {
 		logrus.Error("Configuration validation failed:")
 		for _, err := range validationErrors {
