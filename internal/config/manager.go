@@ -189,42 +189,45 @@ func (m *Manager) DisplayServerConfig() {
 	logConfig := m.GetLogConfig()
 	dbConfig := m.GetDatabaseConfig()
 
-	logrus.Info("--- Server Configuration ---")
-	logrus.Infof("  Listen Address: %s:%d", serverConfig.Host, serverConfig.Port)
-	logrus.Infof("  Graceful Shutdown Timeout: %d seconds", serverConfig.GracefulShutdownTimeout)
-	logrus.Infof("  Read Timeout: %d seconds", serverConfig.ReadTimeout)
-	logrus.Infof("  Write Timeout: %d seconds", serverConfig.WriteTimeout)
-	logrus.Infof("  Idle Timeout: %d seconds", serverConfig.IdleTimeout)
+	logrus.Info("")
+	logrus.Info("======= Server Configuration =======")
+	logrus.Info("  --- Server ---")
+	logrus.Infof("    Listen Address: %s:%d", serverConfig.Host, serverConfig.Port)
+	logrus.Infof("    Graceful Shutdown Timeout: %d seconds", serverConfig.GracefulShutdownTimeout)
+	logrus.Infof("    Read Timeout: %d seconds", serverConfig.ReadTimeout)
+	logrus.Infof("    Write Timeout: %d seconds", serverConfig.WriteTimeout)
+	logrus.Infof("    Idle Timeout: %d seconds", serverConfig.IdleTimeout)
 
-	logrus.Info("--- Performance ---")
-	logrus.Infof("  Max Concurrent Requests: %d", perfConfig.MaxConcurrentRequests)
+	logrus.Info("  --- Performance ---")
+	logrus.Infof("    Max Concurrent Requests: %d", perfConfig.MaxConcurrentRequests)
 
-	logrus.Info("--- Security ---")
-	logrus.Infof("  Authentication: enabled (key loaded)")
+	logrus.Info("  --- Security ---")
+	logrus.Infof("    Authentication: enabled (key loaded)")
 	corsStatus := "disabled"
 	if corsConfig.Enabled {
 		corsStatus = fmt.Sprintf("enabled (Origins: %s)", strings.Join(corsConfig.AllowedOrigins, ", "))
 	}
-	logrus.Infof("  CORS: %s", corsStatus)
+	logrus.Infof("    CORS: %s", corsStatus)
 
-	logrus.Info("--- Logging ---")
-	logrus.Infof("  Log Level: %s", logConfig.Level)
-	logrus.Infof("  Log Format: %s", logConfig.Format)
-	logrus.Infof("  File Logging: %t", logConfig.EnableFile)
+	logrus.Info("  --- Logging ---")
+	logrus.Infof("    Log Level: %s", logConfig.Level)
+	logrus.Infof("    Log Format: %s", logConfig.Format)
+	logrus.Infof("    File Logging: %t", logConfig.EnableFile)
 	if logConfig.EnableFile {
-		logrus.Infof("  Log File Path: %s", logConfig.FilePath)
+		logrus.Infof("    Log File Path: %s", logConfig.FilePath)
 	}
 
-	logrus.Info("--- Dependencies ---")
+	logrus.Info("  --- Dependencies ---")
 	if dbConfig.DSN != "" {
-		logrus.Info("  Database: configured")
+		logrus.Info("    Database: configured")
 	} else {
-		logrus.Info("  Database: not configured")
+		logrus.Info("    Database: not configured")
 	}
 	if m.config.RedisDSN != "" {
-		logrus.Info("  Redis: configured")
+		logrus.Info("    Redis: configured")
 	} else {
-		logrus.Info("  Redis: not configured")
+		logrus.Info("    Redis: not configured")
 	}
-	logrus.Info("--------------------------")
+	logrus.Info("====================================")
+	logrus.Info("")
 }
