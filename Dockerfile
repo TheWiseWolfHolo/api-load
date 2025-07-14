@@ -32,5 +32,5 @@ RUN apk upgrade --no-cache \
     && update-ca-certificates
 
 COPY --from=builder2 /build/gpt-load .
-EXPOSE 3000
+EXPOSE 3001
 ENTRYPOINT ["/app/gpt-load"]

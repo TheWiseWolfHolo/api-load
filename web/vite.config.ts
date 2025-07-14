@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       // 代理配置示例
       proxy: {
         "/api": {
-          target: env.VITE_API_BASE_URL || "http://127.0.0.1:3000",
+          target: env.VITE_API_BASE_URL || "http://127.0.0.1:3001",
           changeOrigin: true,
         },
       },

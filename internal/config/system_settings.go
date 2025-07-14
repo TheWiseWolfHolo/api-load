@@ -130,7 +130,7 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 				}
 				port := os.Getenv("PORT")
 				if port == "" {
-					port = "3000"
+					port = "3001"
 				}
 				value = fmt.Sprintf("http://%s:%s", host, port)
 			}
@@ -172,7 +172,7 @@ func (sm *SystemSettingsManager) GetAppUrl() string {
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3000"
+		port = "3001"
 	}
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
