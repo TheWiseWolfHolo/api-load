@@ -14,11 +14,8 @@ const formatValue = (value: number, type: "count" | "rate" = "count"): string =>
   if (type === "rate") {
     return `${value.toFixed(2)}%`;
   }
-  if (value >= 10000) {
-    return `${(value / 10000).toFixed(1)}w`;
-  }
   if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
+    return `${(value / 1000).toFixed(1)}K`;
   }
   return value.toString();
 };
@@ -39,12 +36,14 @@ const fetchStats = async () => {
     // 添加动画效果
     setTimeout(() => {
       animatedValues.value = {
-        key_count: 1,
+        key_count:
+          (stats.value?.key_count?.value ?? 0) /
+          ((stats.value?.key_count?.value ?? 1) + (stats.value?.key_count?.sub_value ?? 1)),
         group_count: 1,
-        request_count: 1,
-        error_rate: 1,
+        request_count: Math.min(100 + (stats.value?.request_count?.trend ?? 0), 100) / 100,
+        error_rate: (100 - (stats.value?.error_rate?.value ?? 0)) / 100,
       };
-    }, 150);
+    }, 0);
   } catch (error) {
     console.error("获取统计数据失败:", error);
   } finally {
@@ -78,7 +77,7 @@ onMounted(() => {
 
             <div class="stat-content">
               <div class="stat-value">
-                {{ stats ? formatValue(stats.key_count.value) : "--" }}
+                {{ stats?.key_count?.value ?? 0 }}
               </div>
               <div class="stat-title">秘钥数量</div>
             </div>
@@ -87,7 +86,7 @@ onMounted(() => {
               <div
                 class="stat-bar-fill key-bar"
                 :style="{
-                  width: `${animatedValues.key_count * 100}%`,
+                  width: `${(animatedValues.key_count ?? 0) * 100}%`,
                 }"
               />
             </div>
@@ -103,7 +102,7 @@ onMounted(() => {
 
             <div class="stat-content">
               <div class="stat-value">
-                {{ stats ? formatValue(stats.group_count.value) : "--" }}
+                {{ stats?.group_count?.value ?? 0 }}
               </div>
               <div class="stat-title">分组数量</div>
             </div>
@@ -112,7 +111,7 @@ onMounted(() => {
               <div
                 class="stat-bar-fill group-bar"
                 :style="{
-                  width: `${animatedValues.group_count * 100}%`,
+                  width: `${(animatedValues.group_count ?? 0) * 100}%`,
                 }"
               />
             </div>
@@ -145,7 +144,7 @@ onMounted(() => {
               <div
                 class="stat-bar-fill request-bar"
                 :style="{
-                  width: `${animatedValues.request_count * 100}%`,
+                  width: `${(animatedValues.request_count ?? 0) * 100}%`,
                 }"
               />
             </div>
@@ -169,7 +168,7 @@ onMounted(() => {
 
             <div class="stat-content">
               <div class="stat-value">
-                {{ stats ? formatValue(stats.error_rate.value, "rate") : "--" }}
+                {{ stats ? formatValue(stats.error_rate.value ?? 0, "rate") : "--" }}
               </div>
               <div class="stat-title">24小时错误率</div>
             </div>
@@ -178,7 +177,7 @@ onMounted(() => {
               <div
                 class="stat-bar-fill error-bar"
                 :style="{
-                  width: `${animatedValues.error_rate * 100}%`,
+                  width: `${(animatedValues.error_rate ?? 0) * 100}%`,
                 }"
               />
             </div>
@@ -288,7 +287,7 @@ onMounted(() => {
 .stat-bar-fill {
   height: 100%;
   border-radius: 2px;
-  transition: width 1s ease-out;
+  transition: width 0.5s ease-out;
   transition-delay: 0.2s;
 }
 

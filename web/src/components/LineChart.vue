@@ -177,9 +177,10 @@ const generateAreaPath = (data: number[]) => {
 
 // 数字格式化
 const formatNumber = (value: number) => {
-  if (value >= 1000000) {
-    return `${(value / 1000000).toFixed(1)}M`;
-  } else if (value >= 1000) {
+  // if (value >= 1000000) {
+  //   return `${(value / 1000000).toFixed(1)}M`;
+  // } else
+  if (value >= 1000) {
     return `${(value / 1000).toFixed(1)}K`;
   }
   return Math.round(value).toString();
