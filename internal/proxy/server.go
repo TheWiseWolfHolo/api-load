@@ -218,7 +218,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		return
 	}
 
-	ps.keyProvider.UpdateStatus(apiKey, group, true)
+	// ps.keyProvider.UpdateStatus(apiKey, group, true) // 请求成功不再重置成功次数，减少IO消耗
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
 	ps.logRequest(c, group, apiKey.ID, startTime, resp.StatusCode, retryCount+1, nil, isStream, upstreamURL)
 
