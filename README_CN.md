@@ -213,11 +213,11 @@ GPT-Load 采用双层配置架构：
 
 ### 界面展示
 
-<img src="screenshot/dashboard.png" alt="仪表盘" style="width: 600px;border: 1px solid #dfdfdf"/>
+<img src="screenshot/dashboard.png" alt="仪表盘" width="600" />
 
 <br/>
 
-<img src="screenshot/keys.png" alt="密钥管理" style="width: 600px;border: 1px solid #dfdfdf"/>
+<img src="screenshot/keys.png" alt="密钥管理" width="600" />
 
 <br/>
 

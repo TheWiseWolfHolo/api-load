@@ -213,11 +213,11 @@ Access the management console at: <http://localhost:3001> (default address)
 
 ### Interface Overview
 
-<img src="screenshot/dashboard.png" alt="Dashboard" style="width: 600px;border: 1px solid #dfdfdf"/>
+<img src="screenshot/dashboard.png" alt="Dashboard" width="600"/>
 
 <br/>
 
-<img src="screenshot/keys.png" alt="Key Management" style="width: 600px;border: 1px solid #dfdfdf"/>
+<img src="screenshot/keys.png" alt="Key Management" width="600"/>
 
 <br/>
 
