@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"gpt-load/internal/config"
-	"gpt-load/internal/models"
 	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 
@@ -93,20 +92,6 @@ func (s *Server) Login(c *gin.Context) {
 
 // Health handles health check requests
 func (s *Server) Health(c *gin.Context) {
-	var totalKeys, healthyKeys int64
-	s.DB.Model(&models.APIKey{}).Count(&totalKeys)
-	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusActive).Count(&healthyKeys)
-
-	status := "healthy"
-	httpStatus := http.StatusOK
-
-	// Check if there are any healthy keys
-	if healthyKeys == 0 && totalKeys > 0 {
-		status = "unhealthy"
-		httpStatus = http.StatusServiceUnavailable
-	}
-
-	// Calculate uptime (this should be tracked from server start time)
 	uptime := "unknown"
 	if startTime, exists := c.Get("serverStartTime"); exists {
 		if st, ok := startTime.(time.Time); ok {
@@ -114,11 +99,9 @@ func (s *Server) Health(c *gin.Context) {
 		}
 	}
 
-	c.JSON(httpStatus, gin.H{
-		"status":       status,
-		"timestamp":    time.Now().UTC().Format(time.RFC3339),
-		"healthy_keys": healthyKeys,
-		"total_keys":   totalKeys,
-		"uptime":       uptime,
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "healthy",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"uptime":    uptime,
 	})
 }
