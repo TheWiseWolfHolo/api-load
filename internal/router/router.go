@@ -57,8 +57,9 @@ func NewRouter(
 	router.Use(middleware.Logger(configManager.GetLogConfig()))
 	router.Use(middleware.CORS(configManager.GetCORSConfig()))
 	router.Use(middleware.RateLimiter(configManager.GetPerformanceConfig()))
+	startTime := time.Now()
 	router.Use(func(c *gin.Context) {
-		c.Set("serverStartTime", time.Now())
+		c.Set("serverStartTime", startTime)
 		c.Next()
 	})
 
@@ -74,7 +75,6 @@ func NewRouter(
 // registerSystemRoutes 注册系统级路由
 func registerSystemRoutes(router *gin.Engine, serverHandler *handler.Server) {
 	router.GET("/health", serverHandler.Health)
-	router.GET("/stats", serverHandler.Stats)
 }
 
 // registerAPIRoutes 注册API路由

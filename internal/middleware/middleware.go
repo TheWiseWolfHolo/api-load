@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"gpt-load/internal/response"
-	"gpt-load/internal/types"
 	"gpt-load/internal/channel"
-	"gpt-load/internal/services"
 	app_errors "gpt-load/internal/errors"
+	"gpt-load/internal/response"
+	"gpt-load/internal/services"
+	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -124,7 +124,7 @@ func Auth(
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// Skip authentication for health/stats endpoints
+		// Skip authentication for health endpoints
 		if isMonitoringEndpoint(path) {
 			c.Next()
 			return
@@ -223,7 +223,7 @@ func ErrorHandler() gin.HandlerFunc {
 
 // isMonitoringEndpoint checks if the path is a monitoring endpoint
 func isMonitoringEndpoint(path string) bool {
-	monitoringPaths := []string{"/health", "/stats"}
+	monitoringPaths := []string{"/health"}
 	for _, monitoringPath := range monitoringPaths {
 		if path == monitoringPath {
 			return true
