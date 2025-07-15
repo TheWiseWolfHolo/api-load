@@ -72,7 +72,11 @@ const loadLogs = async () => {
     } else {
       logs.value = [];
       total.value = 0;
-      window.$message.error(res.message || "加载日志失败");
+      window.$message.error(res.message || "加载日志失败", {
+        keepAliveOnHover: true,
+        duration: 5000,
+        closable: true,
+      });
     }
   } catch (_error) {
     window.$message.error("加载日志请求失败");

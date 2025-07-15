@@ -136,10 +136,10 @@ function handleClose() {
 <style scoped>
 .global-task-progress {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  bottom: 62px;
+  right: 10px;
   z-index: 9999;
-  width: 360px;
+  width: 350px;
   background: white;
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);
