@@ -10,14 +10,14 @@ services:
     env_file:
       - .env
     restart: always
-    stop_grace_period: ${SERVER_GRACEFUL_SHUTDOWN_TIMEOUT:-60}s
+    stop_grace_period: ${SERVER_GRACEFUL_SHUTDOWN_TIMEOUT:-10}s
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-3001}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
