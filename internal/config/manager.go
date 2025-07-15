@@ -70,7 +70,7 @@ func (m *Manager) ReloadConfig() error {
 
 	config := &Config{
 		Server: types.ServerConfig{
-			IsMaster:                !utils.ParseBoolean(os.Getenv("IS_SLAVE"), true),
+			IsMaster:                !utils.ParseBoolean(os.Getenv("IS_SLAVE"), false),
 			Port:                    utils.ParseInteger(os.Getenv("PORT"), 3001),
 			Host:                    utils.GetEnvOrDefault("HOST", "0.0.0.0"),
 			ReadTimeout:             utils.ParseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 120),
