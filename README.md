@@ -2,60 +2,79 @@
 
 [中文文档](README_CN.md) | English
 
-![Docker Build](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)
-![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)
+[![Release](https://img.shields.io/github/v/release/tbphp/gpt-load)](https://github.com/tbphp/gpt-load/releases)
+[![Build Docker Image](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml)
+![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-A high-performance proxy server for OpenAI-compatible APIs with multi-key rotation and load balancing, built with Go.
+A high-performance, enterprise-grade AI API transparent proxy service designed specifically for enterprises and developers who need to integrate multiple AI services. Built with Go, featuring intelligent key management, load balancing, and comprehensive monitoring capabilities, designed for high-concurrency production environments.
+
+For detailed documentation, please visit [Official Documentation](https://www.gpt-load.com/docs)
 
 ## Features
 
-- **Multi-key Rotation**: Automatic API key rotation with load balancing
-- **Multi-Target Load Balancing**: Supports round-robin load balancing across multiple upstream API targets
-- **Intelligent Blacklisting**: Distinguishes between permanent and temporary errors for smart key management
-- **Real-time Monitoring**: Comprehensive statistics, health checks, and blacklist management
-- **Flexible Configuration**: Environment-based configuration with .env file support
-- **CORS Support**: Full cross-origin request support
-- **Structured Logging**: Detailed logging with response times and key information
-- **Optional Authentication**: Project-level Bearer token authentication
-- **High Performance**: Zero-copy streaming, concurrent processing, and atomic operations
-- **Production Ready**: Graceful shutdown, error recovery, and memory management
+- **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI and Google Gemini among other formats (continuously expanding)
+- **Intelligent Key Management**: High-performance key pool with group-based management, automatic rotation, and failure recovery
+- **Load Balancing**: Weighted load balancing across multiple upstream endpoints to enhance service availability
+- **Smart Failure Handling**: Automatic key blacklist management and recovery mechanisms to ensure service continuity
+- **Dynamic Configuration**: System settings and group configurations support hot-reload without requiring restarts
+- **Enterprise Architecture**: Distributed leader-follower deployment supporting horizontal scaling and high availability
+- **Modern Management**: Vue 3-based web management interface that is intuitive and user-friendly
+- **Comprehensive Monitoring**: Real-time statistics, health checks, and detailed request logging
+- **High-Performance Design**: Zero-copy streaming, connection pool reuse, and atomic operations
+- **Production Ready**: Graceful shutdown, error recovery, and comprehensive security mechanisms
+
+## Supported AI Services
+
+GPT-Load serves as a transparent proxy service, completely preserving the native API formats of various AI service providers:
+
+- **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
+- **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
+- **Extensibility**: Plugin-based architecture design for rapid integration of new AI service providers and their native formats
 
 ## Quick Start
 
-### Prerequisites
+### System Requirements
 
-- Go 1.21+ (for building from source)
+- Go 1.23+ (for source builds)
 - Docker (for containerized deployment)
+- MySQL 8.2+ (for database storage)
+- Redis (for caching and distributed coordination, optional)
 
-### Option 1: Using Docker (Recommended)
-
-```bash
-# Pull the latest image
-docker pull ghcr.io/tbphp/gpt-load:latest
-
-# Create keys.txt file with your API keys (one per line)
-echo "sk-your-api-key-1" > keys.txt
-echo "sk-your-api-key-2" >> keys.txt
-
-# Run the container
-docker run -d -p 3000:3000 \
-  -v $(pwd)/keys.txt:/app/keys.txt:ro \
-  --name gpt-load \
-  ghcr.io/tbphp/gpt-load:latest
-```
-
-### Option 2: Using Docker Compose
+### Method 1: Using Docker Compose (Recommended)
 
 ```bash
-# Start the service
-docker-compose up -d
+# Download configuration files
+wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
+wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
 
-# Stop the service
-docker-compose down
+# Edit configuration file (modify service port and authentication key as needed)
+vim .env
+
+# Start services (includes MySQL and Redis)
+docker compose up -d
+
+# Check service status
+docker compose ps
+
+# View logs
+docker compose logs -f gpt-load
+
+# Common operations
+docker compose restart gpt-load    # Restart service
+docker compose pull && docker compose down && docker compose up -d    # Update to latest version
 ```
 
-### Option 3: Build from Source
+After deployment:
+
+- Access Web Management Interface: <http://localhost:3001>
+- API Proxy Address: <http://localhost:3001/proxy>
+
+> Use the default authentication key `sk-123456` to login to the management interface. The authentication key can be modified via AUTH_KEY in the .env file.
+
+### Method 2: Source Build
+
+Source build requires locally installed MySQL and Redis (optional).
 
 ```bash
 # Clone and build
@@ -65,213 +84,270 @@ go mod tidy
 
 # Create configuration
 cp .env.example .env
-echo "sk-your-api-key" > keys.txt
+
+# Modify DATABASE_DSN and REDIS_DSN configurations in .env
+# REDIS_DSN is optional; if not configured, memory storage will be enabled
 
 # Run
 make run
 ```
 
-## Configuration
+After deployment:
 
-### Supported API Providers
+- Access Web Management Interface: <http://localhost:3001>
+- API Proxy Address: <http://localhost:3001/proxy>
 
-This proxy server works with any OpenAI-compatible API, including:
+> Use the default authentication key `sk-123456` to login to the management interface. The authentication key can be modified via AUTH_KEY in the .env file.
 
-- **OpenAI**: `https://api.openai.com`
-- **Azure OpenAI**: `https://your-resource.openai.azure.com`
-- **Anthropic Claude**: `https://api.anthropic.com` (with compatible endpoints)
-- **Third-party Providers**: Any service implementing OpenAI API format
+### Method 3: Cluster Deployment
 
-### Environment Variables
+Cluster deployment requires all nodes to connect to the same MySQL and Redis, with Redis being mandatory. It's recommended to use unified distributed MySQL and Redis clusters.
 
-Copy the example configuration file and modify as needed:
+**Deployment Requirements:**
 
-```bash
-cp .env.example .env
-```
+- All nodes must configure identical `AUTH_KEY`, `DATABASE_DSN`, `REDIS_DSN`
+- Leader-follower architecture where follower nodes must configure environment variable: `IS_SLAVE=true`
 
-### Key Configuration Options
+For details, please refer to [Cluster Deployment Documentation](https://www.gpt-load.com/docs/cluster)
 
-| Setting                 | Environment Variable               | Default                     | Description                                                                                 |
-| ----------------------- | ---------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
-| Server Port             | `PORT`                             | 3000                        | Server listening port                                                                       |
-| Server Host             | `HOST`                             | 0.0.0.0                     | Server binding address                                                                      |
-| Keys File               | `KEYS_FILE`                        | keys.txt                    | API keys file path                                                                          |
-| Start Index             | `START_INDEX`                      | 0                           | Starting key index for rotation                                                             |
-| Blacklist Threshold     | `BLACKLIST_THRESHOLD`              | 1                           | Error count before blacklisting                                                             |
-| Max Retries             | `MAX_RETRIES`                      | 3                           | Maximum retry attempts with different keys                                                  |
-| Upstream URL            | `OPENAI_BASE_URL`                  | `https://api.openai.com`    | OpenAI-compatible API base URL. Supports multiple, comma-separated URLs for load balancing. |
-| Max Concurrent Requests | `MAX_CONCURRENT_REQUESTS`          | 100                         | Maximum number of concurrent requests                                                       |
-| Enable Gzip             | `ENABLE_GZIP`                      | true                        | Enable Gzip compression for responses                                                       |
-| Auth Key                | `AUTH_KEY`                         | -                           | Optional authentication key                                                                 |
-| CORS                    | `ENABLE_CORS`                      | true                        | Enable CORS support                                                                         |
-| Allowed Origins         | `ALLOWED_ORIGINS`                  | \*                          | CORS allowed origins (comma-separated, \* for all)                                          |
-| Allowed Methods         | `ALLOWED_METHODS`                  | GET,POST,PUT,DELETE,OPTIONS | CORS allowed HTTP methods                                                                   |
-| Allowed Headers         | `ALLOWED_HEADERS`                  | \*                          | CORS allowed headers (comma-separated, \* for all)                                          |
-| Allow Credentials       | `ALLOW_CREDENTIALS`                | false                       | CORS allow credentials                                                                      |
-| Log Level               | `LOG_LEVEL`                        | info                        | Logging level (debug, info, warn, error)                                                    |
-| Log Format              | `LOG_FORMAT`                       | text                        | Log format (text, json)                                                                     |
-| Enable File Logging     | `LOG_ENABLE_FILE`                  | false                       | Enable logging to file                                                                      |
-| Log File Path           | `LOG_FILE_PATH`                    | logs/app.log                | Log file path                                                                               |
-| Enable Request Logging  | `LOG_ENABLE_REQUEST`               | true                        | Enable request logging (set to false in production for performance)                         |
-| Server Read Timeout     | `SERVER_READ_TIMEOUT`              | 120                         | HTTP server read timeout in seconds                                                         |
-| Server Write Timeout    | `SERVER_WRITE_TIMEOUT`             | 1800                        | HTTP server write timeout in seconds                                                        |
-| Server Idle Timeout     | `SERVER_IDLE_TIMEOUT`              | 120                         | HTTP server idle timeout in seconds                                                         |
-| Graceful Shutdown       | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 60                          | Graceful shutdown timeout in seconds                                                        |
-| Request Timeout         | `REQUEST_TIMEOUT`                  | 30                          | Request timeout in seconds                                                                  |
-| Response Timeout        | `RESPONSE_TIMEOUT`                 | 30                          | Response timeout in seconds (TLS handshake & response header)                               |
-| Idle Connection Timeout | `IDLE_CONN_TIMEOUT`                | 120                         | Idle connection timeout in seconds                                                          |
+## Configuration System
 
-### Configuration Examples
+### Configuration Architecture Overview
 
-#### OpenAI (Default)
+GPT-Load adopts a dual-layer configuration architecture:
 
-```bash
-OPENAI_BASE_URL=https://api.openai.com
-# Use OpenAI API keys: sk-...
-```
+#### 1. Static Configuration (Environment Variables)
 
-#### Azure OpenAI
+- **Characteristics**: Read at application startup, immutable during runtime, requires application restart to take effect
+- **Purpose**: Infrastructure configuration such as database connections, server ports, authentication keys, etc.
+- **Management**: Set via `.env` files or system environment variables
 
-```bash
-OPENAI_BASE_URL=https://your-resource.openai.azure.com
-# Use Azure API keys and adjust endpoints as needed
-```
+#### 2. Dynamic Configuration (Hot-Reload)
 
-#### Third-party Provider
+- **System Settings**: Stored in database, providing unified behavioral standards for the entire application
+- **Group Configuration**: Behavior parameters customized for specific groups, can override system settings
+- **Configuration Priority**: Group Configuration > System Settings
+- **Characteristics**: Supports hot-reload, takes effect immediately after modification without application restart
 
-```bash
-OPENAI_BASE_URL=https://api.your-provider.com
-# Use provider-specific API keys
-```
+### Static Configuration (Environment Variables)
 
-#### Multi-Target Load Balancing
+#### Server Configuration
 
-```bash
-# Use a comma-separated list of target URLs
-OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/.../openai,https://api.openai.com/v1,https://api.another-provider.com/v1
-```
+| Setting                   | Environment Variable               | Default         | Description                                     |
+| ------------------------- | ---------------------------------- | --------------- | ----------------------------------------------- |
+| Service Port              | `PORT`                             | 3001            | HTTP server listening port                      |
+| Service Address           | `HOST`                             | 0.0.0.0         | HTTP server binding address                     |
+| Read Timeout              | `SERVER_READ_TIMEOUT`              | 60              | HTTP server read timeout (seconds)              |
+| Write Timeout             | `SERVER_WRITE_TIMEOUT`             | 600             | HTTP server write timeout (seconds)             |
+| Idle Timeout              | `SERVER_IDLE_TIMEOUT`              | 120             | HTTP connection idle timeout (seconds)          |
+| Graceful Shutdown Timeout | `SERVER_GRACEFUL_SHUTDOWN_TIMEOUT` | 10              | Service graceful shutdown wait time (seconds)   |
+| Follower Mode             | `IS_SLAVE`                         | false           | Follower node identifier for cluster deployment |
+| Timezone                  | `TZ`                               | `Asia/Shanghai` | Specify timezone                                |
 
-## API Key Validation
+#### Authentication & Database Configuration
 
-The project includes a high-performance API key validation tool:
+| Setting             | Environment Variable | Default     | Description                                                                     |
+| ------------------- | -------------------- | ----------- | ------------------------------------------------------------------------------- |
+| Authentication Key  | `AUTH_KEY`           | `sk-123456` | Unique authentication key for accessing management interface and proxy requests |
+| Database Connection | `DATABASE_DSN`       | -           | MySQL database connection string                                                |
+| Redis Connection    | `REDIS_DSN`          | -           | Redis connection string, uses memory storage when empty                         |
 
-```bash
-# Validate keys automatically
-make validate-keys
+#### Performance & CORS Configuration
 
-# Or run directly
-./scripts/validate-keys.py
-```
+| Setting                 | Environment Variable      | Default                       | Description                                     |
+| ----------------------- | ------------------------- | ----------------------------- | ----------------------------------------------- |
+| Max Concurrent Requests | `MAX_CONCURRENT_REQUESTS` | 100                           | Maximum concurrent requests allowed by system   |
+| Enable CORS             | `ENABLE_CORS`             | true                          | Whether to enable Cross-Origin Resource Sharing |
+| Allowed Origins         | `ALLOWED_ORIGINS`         | `*`                           | Allowed origins, comma-separated                |
+| Allowed Methods         | `ALLOWED_METHODS`         | `GET,POST,PUT,DELETE,OPTIONS` | Allowed HTTP methods                            |
+| Allowed Headers         | `ALLOWED_HEADERS`         | `*`                           | Allowed request headers, comma-separated        |
+| Allow Credentials       | `ALLOW_CREDENTIALS`       | false                         | Whether to allow sending credentials            |
 
-## Monitoring Endpoints
+#### Logging Configuration
 
-| Endpoint      | Method | Description                   |
-| ------------- | ------ | ----------------------------- |
-| `/health`     | GET    | Health check and basic status |
-| `/stats`      | GET    | Detailed statistics           |
-| `/blacklist`  | GET    | Blacklist information         |
-| `/reset-keys` | GET    | Reset all key states          |
+| Setting             | Environment Variable | Default        | Description                         |
+| ------------------- | -------------------- | -------------- | ----------------------------------- |
+| Log Level           | `LOG_LEVEL`          | `info`         | Log level: debug, info, warn, error |
+| Log Format          | `LOG_FORMAT`         | `text`         | Log format: text, json              |
+| Enable File Logging | `LOG_ENABLE_FILE`    | false          | Whether to enable file log output   |
+| Log File Path       | `LOG_FILE_PATH`      | `logs/app.log` | Log file storage path               |
 
-## Development
+### Dynamic Configuration (Hot-Reload)
 
-### Available Commands
+Dynamic configuration is stored in the database and supports real-time modification through the web management interface, taking effect immediately without restart.
 
-```bash
-# Build
-make build      # Build binary
-make build-all  # Build for all platforms
-make clean      # Clean build files
+**Configuration Priority**: Group Configuration > System Settings
 
-# Run
-make run        # Run server
-make dev        # Development mode with race detection
+#### Basic Settings
 
-# Test
-make test       # Run tests
-make coverage   # Generate coverage report
-make bench      # Run benchmarks
+| Setting            | Field Name                           | Default                 | Group Override | Description                                  |
+| ------------------ | ------------------------------------ | ----------------------- | -------------- | -------------------------------------------- |
+| Project URL        | `app_url`                            | `http://localhost:3001` | ❌             | Project base URL                             |
+| Log Retention Days | `request_log_retention_days`         | 7                       | ❌             | Request log retention days, 0 for no cleanup |
+| Log Write Interval | `request_log_write_interval_minutes` | 5                       | ❌             | Log write to database cycle (minutes)        |
 
-# Code Quality
-make lint       # Code linting
-make fmt        # Format code
-make tidy       # Tidy dependencies
+#### Request Settings
 
-# Management
-make health     # Health check
-make stats      # View statistics
-make reset-keys # Reset key states
-make blacklist  # View blacklist
+| Setting                       | Field Name                | Default | Group Override | Description                                                         |
+| ----------------------------- | ------------------------- | ------- | -------------- | ------------------------------------------------------------------- |
+| Request Timeout               | `request_timeout`         | 600     | ✅             | Forward request complete lifecycle timeout (seconds)                |
+| Connection Timeout            | `connect_timeout`         | 15      | ✅             | Timeout for establishing connection with upstream service (seconds) |
+| Idle Connection Timeout       | `idle_conn_timeout`       | 120     | ✅             | HTTP client idle connection timeout (seconds)                       |
+| Response Header Timeout       | `response_header_timeout` | 15      | ✅             | Timeout for waiting upstream response headers (seconds)             |
+| Max Idle Connections          | `max_idle_conns`          | 100     | ✅             | Connection pool maximum total idle connections                      |
+| Max Idle Connections Per Host | `max_idle_conns_per_host` | 50      | ✅             | Maximum idle connections per upstream host                          |
 
-# Help
-make help       # Show all commands
-```
+#### Key Configuration
 
-### Project Structure
+| Setting                    | Field Name                        | Default | Group Override | Description                                                                |
+| -------------------------- | --------------------------------- | ------- | -------------- | -------------------------------------------------------------------------- |
+| Max Retries                | `max_retries`                     | 3       | ✅             | Maximum retry count using different keys for single request                |
+| Blacklist Threshold        | `blacklist_threshold`             | 3       | ✅             | Number of consecutive failures before key enters blacklist                 |
+| Key Validation Interval    | `key_validation_interval_minutes` | 60      | ✅             | Background scheduled key validation cycle (minutes)                        |
+| Key Validation Concurrency | `key_validation_concurrency`      | 10      | ✅             | Concurrency for background validation of invalid keys                      |
+| Key Validation Timeout     | `key_validation_timeout_seconds`  | 20      | ✅             | API request timeout for validating individual keys in background (seconds) |
+
+## Web Management Interface
+
+Access the management console at: <http://localhost:3001> (default address)
+
+The web management interface provides the following features:
+
+- **Dashboard**: Real-time statistics and system status overview
+- **Key Management**: Create and configure AI service provider groups, add, delete, and monitor API keys
+- **Request Logs**: Detailed request history and debugging information
+- **System Settings**: Global configuration management and hot-reload
+
+## API Usage Guide
+
+### Proxy Interface Invocation
+
+GPT-Load routes requests to different AI services through group names. Usage is as follows:
+
+#### 1. Proxy Endpoint Format
 
 ```text
-/
-├── cmd/
-│   └── gpt-load/
-│       └── main.go          # Main entry point
-├── internal/
-│   ├── config/
-│   │   └── manager.go       # Configuration management
-│   ├── errors/
-│   │   └── errors.go        # Custom error types
-│   ├── handler/
-│   │   └── handler.go       # HTTP handlers
-│   ├── keymanager/
-│   │   └── manager.go       # Key manager
-│   ├── middleware/
-│   │   └── middleware.go    # HTTP middleware
-│   └── proxy/
-│       └── server.go        # Proxy server core
-├── pkg/
-│   └── types/
-│       └── interfaces.go    # Common interfaces and types
-├── scripts/
-│   └── validate-keys.py     # Key validation script
-├── .github/
-│   └── workflows/
-│       └── docker-build.yml # GitHub Actions CI/CD
-├── build/                   # Build output directory
-├── .env.example            # Configuration template
-├── Dockerfile              # Docker build file
-├── docker-compose.yml      # Docker Compose configuration
-├── Makefile               # Build scripts
-├── go.mod                 # Go module file
-├── LICENSE                # MIT License
-└── README.md              # Project documentation
+http://localhost:3001/proxy/{group_name}/{original_api_path}
 ```
 
-## Architecture
+- `{group_name}`: Group name created in the management interface
+- `{original_api_path}`: Maintain complete consistency with original AI service paths
 
-### Performance Features
+#### 2. Authentication Methods
 
-- **Concurrent Processing**: Leverages Go's goroutines for high concurrency
-- **Memory Efficiency**: Zero-copy streaming with minimal memory allocation
-- **Connection Pooling**: HTTP/2 support with optimized connection reuse
-- **Atomic Operations**: Lock-free concurrent operations
-- **Pre-compiled Patterns**: Regex patterns compiled at startup
+As a transparent proxy service, GPT-Load completely preserves the native authentication formats of various AI services:
 
-### Security & Reliability
+- **OpenAI Format**: Uses `Authorization: Bearer {AUTH_KEY}` header authentication
+- **Gemini Format**: Uses URL parameter `key={AUTH_KEY}` authentication
+- **Unified Key**: All services use the unified key value configured in the `AUTH_KEY` environment variable
 
-- **Memory Safety**: Go's built-in memory safety prevents buffer overflows
-- **Concurrent Safety**: Uses sync.Map and atomic operations for thread safety
-- **Error Handling**: Comprehensive error handling and recovery mechanisms
-- **Resource Management**: Automatic cleanup prevents resource leaks
+#### 3. OpenAI Interface Example
 
-## Sponsor
+Assuming a group named `openai` was created:
 
-<a href="https://edgeone.ai/?from=github"><img width="200" src="https://edgeone.ai/media/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png"></a>
+**Original invocation:**
 
-CDN acceleration and security protection for this project are sponsored by Tencent EdgeOne.
+```bash
+curl -X POST https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-openai-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hello"}]}'
+```
 
-## 🌟 Star History
+**Proxy invocation:**
 
-[![Stargazers over time](https://starchart.cc/tbphp/gpt-load.svg?variant=adaptive)](https://starchart.cc/tbphp/gpt-load)
+```bash
+curl -X POST http://localhost:3001/proxy/openai/v1/chat/completions \
+  -H "Authorization: Bearer sk-123456" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+**Changes required:**
+
+- Replace `https://api.openai.com` with `http://localhost:3001/proxy/openai`
+- Replace original API Key with unified authentication key `sk-123456` (default value)
+
+#### 4. Gemini Interface Example
+
+Assuming a group named `gemini` was created:
+
+**Original invocation:**
+
+```bash
+curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=your-gemini-key \
+  -H "Content-Type: application/json" \
+  -d '{"contents": [{"parts": [{"text": "Hello"}]}]}'
+```
+
+**Proxy invocation:**
+
+```bash
+curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:generateContent?key=sk-123456 \
+  -H "Content-Type: application/json" \
+  -d '{"contents": [{"parts": [{"text": "Hello"}]}]}'
+```
+
+**Changes required:**
+
+- Replace `https://generativelanguage.googleapis.com` with `http://localhost:3001/proxy/gemini`
+- Replace `key=your-gemini-key` in URL parameter with unified authentication key `sk-123456` (default value)
+
+#### 5. Supported Interfaces
+
+**OpenAI Format:**
+
+- `/v1/chat/completions` - Chat conversations
+- `/v1/completions` - Text completion
+- `/v1/embeddings` - Text embeddings
+- `/v1/models` - Model list
+- And all other OpenAI-compatible interfaces
+
+**Gemini Format:**
+
+- `/v1beta/models/*/generateContent` - Content generation
+- `/v1beta/models` - Model list
+- And all other Gemini native interfaces
+
+#### 6. Client SDK Configuration
+
+**OpenAI Python SDK:**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-123456",  # Use unified authentication key
+    base_url="http://localhost:3001/proxy/openai"  # Use proxy endpoint
+)
+
+response = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[{"role": "user", "content": "Hello"}]
+)
+```
+
+**Google Gemini SDK (Python):**
+
+```python
+import google.generativeai as genai
+
+# Configure API key and base URL
+genai.configure(
+    api_key="sk-123456",  # Use unified authentication key
+    client_options={"api_endpoint": "http://localhost:3001/proxy/gemini"}
+)
+
+model = genai.GenerativeModel('gemini-2.5-pro')
+response = model.generate_content("Hello")
+```
+
+> **Important Note**: As a transparent proxy service, GPT-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the unified key value for seamless migration.
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+## Star History
+
+[![Stargazers over time](https://starchart.cc/tbphp/gpt-load.svg?variant=adaptive)](https://starchart.cc/tbphp/gpt-load)
