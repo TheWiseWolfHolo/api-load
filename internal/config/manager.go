@@ -70,6 +70,7 @@ func (m *Manager) ReloadConfig() error {
 
 	config := &Config{
 		Server: types.ServerConfig{
+			IsMaster:                !utils.ParseBoolean(os.Getenv("IS_SLAVE"), true),
 			Port:                    utils.ParseInteger(os.Getenv("PORT"), 3001),
 			Host:                    utils.GetEnvOrDefault("HOST", "0.0.0.0"),
 			ReadTimeout:             utils.ParseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 120),
@@ -109,6 +110,11 @@ func (m *Manager) ReloadConfig() error {
 	}
 
 	return nil
+}
+
+// IsMaster returns Server mode
+func (m *Manager) IsMaster() bool {
+	return m.config.Server.IsMaster
 }
 
 // GetAuthConfig returns authentication configuration

@@ -138,11 +138,6 @@ func (s *RedisStore) Pipeline() Pipeliner {
 	}
 }
 
-// Eval executes a Lua script on Redis.
-func (s *RedisStore) Eval(script string, keys []string, args ...any) (any, error) {
-	return s.client.Eval(context.Background(), script, keys, args...).Result()
-}
-
 // --- Pub/Sub operations ---
 
 // redisSubscription wraps the redis.PubSub to implement the Subscription interface.

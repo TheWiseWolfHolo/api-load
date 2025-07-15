@@ -34,9 +34,6 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(store.NewStore); err != nil {
 		return nil, err
 	}
-	if err := container.Provide(store.NewLeaderLock); err != nil {
-		return nil, err
-	}
 	if err := container.Provide(httpclient.NewHTTPClientManager); err != nil {
 		return nil, err
 	}

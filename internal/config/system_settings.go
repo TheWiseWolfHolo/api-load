@@ -36,12 +36,8 @@ type groupManager interface {
 	Invalidate() error
 }
 
-type leaderLock interface {
-	IsLeader() bool
-}
-
 // Initialize initializes the SystemSettingsManager with database and store dependencies.
-func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, leaderLock leaderLock) error {
+func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, isMaster bool) error {
 	settingsLoader := func() (types.SystemSettings, error) {
 		var dbSettings []models.SystemSetting
 		if err := db.DB.Find(&dbSettings).Error; err != nil {
@@ -83,12 +79,10 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, 
 	}
 
 	afterLoader := func(newData types.SystemSettings) {
-		if !leaderLock.IsLeader() {
+		if !isMaster {
 			return
 		}
-		if err := gm.Invalidate(); err != nil {
-			logrus.Debugf("Failed to invalidate group manager cache after settings update: %v", err)
-		}
+		gm.Invalidate()
 	}
 
 	syncer, err := syncer.NewCacheSyncer(

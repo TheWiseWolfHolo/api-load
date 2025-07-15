@@ -33,7 +33,6 @@ type App struct {
 	requestLogService *services.RequestLogService
 	cronChecker       *keypool.CronChecker
 	keyPoolProvider   *keypool.KeyProvider
-	leaderLock        *store.LeaderLock
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -51,7 +50,6 @@ type AppParams struct {
 	RequestLogService *services.RequestLogService
 	CronChecker       *keypool.CronChecker
 	KeyPoolProvider   *keypool.KeyProvider
-	LeaderLock        *store.LeaderLock
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -68,7 +66,6 @@ func NewApp(params AppParams) *App {
 		requestLogService: params.RequestLogService,
 		cronChecker:       params.CronChecker,
 		keyPoolProvider:   params.KeyPoolProvider,
-		leaderLock:        params.LeaderLock,
 		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
@@ -77,69 +74,49 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
+	// Master 节点执行初始化
+	if a.configManager.IsMaster() {
+		logrus.Info("Starting as Master Node.")
 
-	// 启动 Leader Lock 服务并等待选举结果
-	if err := a.leaderLock.Start(); err != nil {
-		return fmt.Errorf("leader service failed to start: %w", err)
-	}
-
-	// Leader 节点执行初始化，Follower 节点等待
-	if a.leaderLock.IsLeader() {
-		logrus.Info("Leader mode. Performing initial one-time tasks...")
-		acquired, err := a.leaderLock.AcquireInitializingLock()
-		if err != nil {
-			return fmt.Errorf("failed to acquire initializing lock: %w", err)
+		// 数据库迁移
+		if err := a.db.AutoMigrate(
+			&models.SystemSetting{},
+			&models.Group{},
+			&models.APIKey{},
+			&models.RequestLog{},
+			&models.GroupHourlyStat{},
+		); err != nil {
+			return fmt.Errorf("database auto-migration failed: %w", err)
 		}
-		if !acquired {
-			logrus.Warn("Could not acquire initializing lock, another leader might be active. Switching to follower mode for initialization.")
-			if err := a.leaderLock.WaitForInitializationToComplete(); err != nil {
-				return fmt.Errorf("failed to wait for initialization as a fallback follower: %w", err)
-			}
-		} else {
-			defer a.leaderLock.ReleaseInitializingLock()
+		logrus.Info("Database auto-migration completed.")
 
-			// 数据库迁移
-			if err := a.db.AutoMigrate(
-				&models.SystemSetting{},
-				&models.Group{},
-				&models.APIKey{},
-				&models.RequestLog{},
-				&models.GroupHourlyStat{},
-			); err != nil {
-				return fmt.Errorf("database auto-migration failed: %w", err)
-			}
-			logrus.Info("Database auto-migration completed.")
-
-			// 初始化系统设置
-			if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
-				return fmt.Errorf("failed to initialize system settings: %w", err)
-			}
-			logrus.Info("System settings initialized in DB.")
-
-			a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderLock)
-
-			// 从数据库加载密钥到 Redis
-			if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
-				return fmt.Errorf("failed to load keys into key pool: %w", err)
-			}
-			logrus.Debug("API keys loaded into Redis cache by leader.")
+		// 初始化系统设置
+		if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
+			return fmt.Errorf("failed to initialize system settings: %w", err)
 		}
+		logrus.Info("System settings initialized in DB.")
+
+		a.settingsManager.Initialize(a.storage, a.groupManager, a.configManager.IsMaster())
+
+		// 从数据库加载密钥到 Redis
+		if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
+			return fmt.Errorf("failed to load keys into key pool: %w", err)
+		}
+		logrus.Debug("API keys loaded into Redis cache by master.")
+
+		// 仅 Master 节点启动的服务
+		a.requestLogService.Start()
+		a.logCleanupService.Start()
+		a.cronChecker.Start()
 	} else {
-		logrus.Info("Follower Mode. Waiting for leader to complete initialization.")
-		if err := a.leaderLock.WaitForInitializationToComplete(); err != nil {
-			return fmt.Errorf("follower failed to start: %w", err)
-		}
-		a.settingsManager.Initialize(a.storage, a.groupManager, a.leaderLock)
+		logrus.Info("Starting as Slave Node.")
+		a.settingsManager.Initialize(a.storage, a.groupManager, a.configManager.IsMaster())
 	}
 
 	// 显示配置并启动所有后台服务
 	a.configManager.DisplayServerConfig()
 
 	a.groupManager.Initialize()
-
-	a.requestLogService.Start()
-	a.logCleanupService.Start()
-	a.cronChecker.Start()
 
 	// Create HTTP server
 	serverConfig := a.configManager.GetEffectiveServerConfig()
@@ -174,8 +151,6 @@ func (a *App) Stop(ctx context.Context) {
 
 	// 动态计算 HTTP 关机超时时间，为后台服务固定预留 5 秒
 	httpShutdownTimeout := totalTimeout - 5*time.Second
-
-	// 为 HTTP 服务器的优雅关闭创建一个独立的 context
 	httpShutdownCtx, cancelHttpShutdown := context.WithTimeout(context.Background(), httpShutdownTimeout)
 	defer cancelHttpShutdown()
 
@@ -190,12 +165,16 @@ func (a *App) Stop(ctx context.Context) {
 
 	// 使用原始的总超时 context 继续关闭其他后台服务
 	stoppableServices := []func(context.Context){
-		a.cronChecker.Stop,
-		a.leaderLock.Stop,
-		a.logCleanupService.Stop,
-		a.requestLogService.Stop,
 		a.groupManager.Stop,
 		a.settingsManager.Stop,
+	}
+
+	if serverConfig.IsMaster {
+		stoppableServices = append(stoppableServices,
+			a.cronChecker.Stop,
+			a.logCleanupService.Stop,
+			a.requestLogService.Stop,
+		)
 	}
 
 	var wg sync.WaitGroup
@@ -221,7 +200,6 @@ func (a *App) Stop(ctx context.Context) {
 		logrus.Warn("Shutdown timed out, some services may not have stopped gracefully.")
 	}
 
-	// Step 3: Close storage connection last.
 	if a.storage != nil {
 		a.storage.Close()
 	}

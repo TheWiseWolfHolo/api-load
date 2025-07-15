@@ -4,7 +4,6 @@ import (
 	"context"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"sync"
 	"time"
 
@@ -16,17 +15,15 @@ import (
 type LogCleanupService struct {
 	db              *gorm.DB
 	settingsManager *config.SystemSettingsManager
-	leaderLock      *store.LeaderLock
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
 }
 
 // NewLogCleanupService 创建新的日志清理服务
-func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager, leaderLock *store.LeaderLock) *LogCleanupService {
+func NewLogCleanupService(db *gorm.DB, settingsManager *config.SystemSettingsManager) *LogCleanupService {
 	return &LogCleanupService{
 		db:              db,
 		settingsManager: settingsManager,
-		leaderLock:      leaderLock,
 		stopCh:          make(chan struct{}),
 	}
 }
@@ -77,11 +74,6 @@ func (s *LogCleanupService) run() {
 
 // cleanupExpiredLogs 清理过期的请求日志
 func (s *LogCleanupService) cleanupExpiredLogs() {
-	if !s.leaderLock.IsLeader() {
-		logrus.Debug("Not the leader, skipping log cleanup.")
-		return
-	}
-
 	// 获取日志保留天数配置
 	settings := s.settingsManager.GetSettings()
 	retentionDays := settings.RequestLogRetentionDays

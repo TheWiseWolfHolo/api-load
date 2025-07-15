@@ -4,7 +4,6 @@ import (
 	"context"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +17,6 @@ type CronChecker struct {
 	DB              *gorm.DB
 	SettingsManager *config.SystemSettingsManager
 	Validator       *KeyValidator
-	LeaderLock      *store.LeaderLock
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 }
@@ -28,13 +26,11 @@ func NewCronChecker(
 	db *gorm.DB,
 	settingsManager *config.SystemSettingsManager,
 	validator *KeyValidator,
-	leaderLock *store.LeaderLock,
 ) *CronChecker {
 	return &CronChecker{
 		DB:              db,
 		SettingsManager: settingsManager,
 		Validator:       validator,
-		LeaderLock:      leaderLock,
 		stopChan:        make(chan struct{}),
 	}
 }
@@ -68,9 +64,7 @@ func (s *CronChecker) Stop(ctx context.Context) {
 func (s *CronChecker) runLoop() {
 	defer s.wg.Done()
 
-	if s.LeaderLock.IsLeader() {
-		s.submitValidationJobs()
-	}
+	s.submitValidationJobs()
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -78,12 +72,8 @@ func (s *CronChecker) runLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			if s.LeaderLock.IsLeader() {
-				logrus.Debug("CronChecker: Running as leader, submitting validation jobs.")
-				s.submitValidationJobs()
-			} else {
-				logrus.Debug("CronChecker: Not the leader. Standing by.")
-			}
+			logrus.Debug("CronChecker: Running as Master, submitting validation jobs.")
+			s.submitValidationJobs()
 		case <-s.stopChan:
 			return
 		}

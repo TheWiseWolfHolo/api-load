@@ -74,8 +74,3 @@ type Pipeliner interface {
 type RedisPipeliner interface {
 	Pipeline() Pipeliner
 }
-
-// LuaScripter is an optional interface that a Store can implement to provide Lua script execution.
-type LuaScripter interface {
-	Eval(script string, keys []string, args ...any) (any, error)
-}

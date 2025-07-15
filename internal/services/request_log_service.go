@@ -28,19 +28,17 @@ type RequestLogService struct {
 	db              *gorm.DB
 	store           store.Store
 	settingsManager *config.SystemSettingsManager
-	leaderLock      *store.LeaderLock
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 	ticker          *time.Ticker
 }
 
 // NewRequestLogService creates a new RequestLogService instance
-func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSettingsManager, ls *store.LeaderLock) *RequestLogService {
+func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSettingsManager) *RequestLogService {
 	return &RequestLogService{
 		db:              db,
 		store:           store,
 		settingsManager: sm,
-		leaderLock:      ls,
 		stopChan:        make(chan struct{}),
 	}
 }
@@ -133,12 +131,7 @@ func (s *RequestLogService) flush() {
 		return
 	}
 
-	if !s.leaderLock.IsLeader() {
-		logrus.Debug("Not a leader, skipping log flush.")
-		return
-	}
-
-	logrus.Debug("Leader starting to flush request logs...")
+	logrus.Debug("Master starting to flush request logs...")
 
 	for {
 		keys, err := s.store.SPopN(PendingLogKeysSet, DefaultLogFlushBatchSize)
