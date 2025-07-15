@@ -22,8 +22,6 @@ const handleLogin = async () => {
   loading.value = false;
   if (success) {
     router.push("/");
-  } else {
-    message.error("登录失败，请检查您的授权密钥");
   }
 };
 </script>

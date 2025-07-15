@@ -45,9 +45,11 @@ http.interceptors.response.use(
       // The request was made and the server responded with a status code
       // that falls out of the range of 2xx
       if (error.response.status === 401) {
-        const { logout } = useAuthService();
-        logout();
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+          const { logout } = useAuthService();
+          logout();
+          window.location.href = "/login";
+        }
       }
       window.$message.error(error.response.data?.message || `请求失败: ${error.response.status}`);
     } else if (error.request) {
