@@ -176,7 +176,11 @@ async function testKey(_key: KeyRow) {
     if (curValid.is_valid) {
       window.$message.success("密钥测试成功");
     } else {
-      window.$message.error(curValid.error || "密钥测试失败: 无效的API密钥");
+      window.$message.error(curValid.error || "密钥测试失败: 无效的API密钥", {
+        keepAliveOnHover: true,
+        duration: 5000,
+        closable: true,
+      });
     }
   } catch (_error) {
     console.error("测试失败");

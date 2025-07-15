@@ -71,7 +71,7 @@ const Message = defineComponent({
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <n-loading-bar-provider>
-      <n-message-provider>
+      <n-message-provider placement="top-right">
         <n-dialog-provider>
           <slot />
           <loading-bar />

@@ -35,26 +35,28 @@ http.interceptors.response.use(
   response => {
     appState.loading = false;
     if (response.config.method !== "get" && !response.config.hideMessage) {
-      window.$message.success("操作成功");
+      window.$message.success(response.data.message ?? "操作成功");
     }
     return response.data;
   },
   error => {
     appState.loading = false;
     if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
       if (error.response.status === 401) {
-        const { logout } = useAuthService();
-        logout();
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+          const { logout } = useAuthService();
+          logout();
+          window.location.href = "/login";
+        }
       }
-      window.$message.error(error.response.data?.message || `请求失败: ${error.response.status}`);
+      window.$message.error(error.response.data?.message || `请求失败: ${error.response.status}`, {
+        keepAliveOnHover: true,
+        duration: 5000,
+        closable: true,
+      });
     } else if (error.request) {
-      // The request was made but no response was received
       window.$message.error("网络错误，请检查您的连接");
     } else {
-      // Something happened in setting up the request that triggered an Error
       window.$message.error("请求设置错误");
     }
     return Promise.reject(error);
