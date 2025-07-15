@@ -211,6 +211,16 @@ Dynamic configuration is stored in the database and supports real-time modificat
 
 Access the management console at: <http://localhost:3001> (default address)
 
+### Interface Overview
+
+<img src="screenshot/dashboard.png" alt="Dashboard" style="width: 600px;border: 1px solid #dfdfdf"/>
+
+<br/>
+
+<img src="screenshot/keys.png" alt="Key Management" style="width: 600px;border: 1px solid #dfdfdf"/>
+
+<br/>
+
 The web management interface provides the following features:
 
 - **Dashboard**: Real-time statistics and system status overview

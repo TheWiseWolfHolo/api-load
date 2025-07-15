@@ -211,6 +211,16 @@ GPT-Load 采用双层配置架构：
 
 访问管理控制台：<http://localhost:3001>（默认地址）
 
+### 界面展示
+
+<img src="screenshot/dashboard.png" alt="仪表盘" style="width: 600px;border: 1px solid #dfdfdf"/>
+
+<br/>
+
+<img src="screenshot/keys.png" alt="密钥管理" style="width: 600px;border: 1px solid #dfdfdf"/>
+
+<br/>
+
 Web 管理界面提供以下功能：
 
 - **仪表盘**: 实时统计信息和系统状态概览
