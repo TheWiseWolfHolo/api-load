@@ -43,26 +43,37 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 
 ### Method 1: Using Docker Compose (Recommended)
 
+**Installation Commands:**
+
 ```bash
+# Create Directory
+mkdir -p gpt-load && cd gpt-load
+
 # Download configuration files
 wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
 wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
 
 # Edit configuration file (modify service port and authentication key as needed)
-vim .env
+# vim .env
 
 # Start services (includes MySQL and Redis)
 docker compose up -d
+```
 
+**Other Commands:**
+
+```bash
 # Check service status
 docker compose ps
 
 # View logs
-docker compose logs -f gpt-load
+docker compose logs -f
 
-# Common operations
-docker compose restart gpt-load    # Restart service
-docker compose pull && docker compose down && docker compose up -d    # Update to latest version
+# Restart Service
+docker compose down && docker compose up -d
+
+# Update to latest version
+docker compose pull && docker compose down && docker compose up -d
 ```
 
 After deployment:

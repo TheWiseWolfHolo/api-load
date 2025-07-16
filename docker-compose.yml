@@ -14,8 +14,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        restart: true
       redis:
         condition: service_healthy
+        restart: true
     healthcheck:
       test: wget -q --spider -T 10 -O /dev/null http://localhost:${PORT:-3001}/health
       interval: 30s

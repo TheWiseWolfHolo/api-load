@@ -43,26 +43,37 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 
 ### 方式一：使用 Docker Compose（推荐）
 
+**安装命令：**
+
 ```bash
+# 创建目录
+mkdir -p gpt-load && cd gpt-load
+
 # 下载配置文件
 wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
 wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
 
 # 编辑配置文件（根据需要修改服务端口和认证Key等）
-vim .env
+# vim .env
 
 # 启动服务（包含 MySQL 和 Redis）
 docker compose up -d
+```
 
+**其他命令：**
+
+```bash
 # 查看服务状态
 docker compose ps
 
 # 查看日志
-docker compose logs -f gpt-load
+docker compose logs -f
 
-# 常用操作
-docker compose restart gpt-load    # 重启服务
-docker compose pull && docker compose down && docker compose up -d    # 更新到最新版本
+# 重启服务
+docker compose down && docker compose up -d
+
+# 更新到最新版本
+docker compose pull && docker compose down && docker compose up -d
 ```
 
 部署完成后：
