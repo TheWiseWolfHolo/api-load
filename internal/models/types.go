@@ -76,7 +76,8 @@ type RequestLog struct {
 	ID           string    `gorm:"type:varchar(36);primaryKey" json:"id"`
 	Timestamp    time.Time `gorm:"type:datetime(3);not null;index" json:"timestamp"`
 	GroupID      uint      `gorm:"not null;index" json:"group_id"`
-	KeyID        uint      `gorm:"not null;index" json:"key_id"`
+	GroupName    string    `gorm:"type:varchar(255);index" json:"group_name"`
+	KeyValue     string    `gorm:"type:varchar(512)" json:"key_value"`
 	IsSuccess    bool      `gorm:"not null" json:"is_success"`
 	SourceIP     string    `gorm:"type:varchar(45)" json:"source_ip"`
 	StatusCode   int       `gorm:"not null" json:"status_code"`
