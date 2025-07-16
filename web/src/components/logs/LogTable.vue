@@ -43,7 +43,7 @@ const filters = reactive({
 });
 
 const successOptions = [
-  { label: "全部状态", value: "" },
+  { label: "状态", value: "" },
   { label: "成功", value: "true" },
   { label: "失败", value: "false" },
 ];
@@ -102,13 +102,13 @@ const createColumns = () => [
   {
     title: "时间",
     key: "timestamp",
-    width: 180,
+    width: 160,
     render: (row: LogRow) => formatDateTime(row.timestamp),
   },
   {
     title: "状态",
     key: "is_success",
-    width: 80,
+    width: 50,
     render: (row: LogRow) =>
       h(
         NTag,
@@ -119,7 +119,7 @@ const createColumns = () => [
   {
     title: "类型",
     key: "is_stream",
-    width: 80,
+    width: 50,
     render: (row: LogRow) =>
       h(
         NTag,
@@ -127,9 +127,9 @@ const createColumns = () => [
         { default: () => (row.is_stream ? "流式" : "非流") }
       ),
   },
-  { title: "状态码", key: "status_code", width: 80 },
-  { title: "耗时(ms)", key: "duration_ms", width: 100 },
-  { title: "重试", key: "retries", width: 60 },
+  { title: "状态码", key: "status_code", width: 60 },
+  { title: "耗时(ms)", key: "duration_ms", width: 80 },
+  { title: "重试", key: "retries", width: 50 },
   { title: "分组", key: "group_name", width: 120 },
   {
     title: "Key",
@@ -155,18 +155,21 @@ const createColumns = () => [
   {
     title: "请求路径",
     key: "request_path",
+    width: 220,
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.request_path }),
   },
   {
     title: "上游地址",
     key: "upstream_addr",
+    width: 220,
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.upstream_addr }),
   },
   { title: "源IP", key: "source_ip", width: 130 },
   {
     title: "错误信息",
+    width: 270,
     key: "error_message",
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 250px" }, { default: () => row.error_message || "-" }),
@@ -174,6 +177,7 @@ const createColumns = () => [
   {
     title: "User Agent",
     key: "user_agent",
+    width: 220,
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.user_agent }),
   },
@@ -223,7 +227,7 @@ function changePageSize(size: number) {
               v-model:value="filters.is_success"
               :options="successOptions"
               size="small"
-              style="width: 120px"
+              style="width: 80px"
               @update:value="handleSearch"
             />
             <n-date-picker
@@ -242,10 +246,14 @@ function changePageSize(size: number) {
               placeholder="结束时间"
               style="width: 180px"
             />
-          </n-space>
-        </div>
-        <div class="toolbar-right">
-          <n-space>
+            <n-input
+              v-model:value="filters.status_code"
+              placeholder="状态码"
+              size="small"
+              clearable
+              style="width: 90px"
+              @keyup.enter="handleSearch"
+            />
             <n-input
               v-model:value="filters.group_name"
               placeholder="分组名"
@@ -256,10 +264,10 @@ function changePageSize(size: number) {
             />
             <n-input
               v-model:value="filters.key_value"
-              placeholder="Key 片段"
+              placeholder="密钥"
               size="small"
               clearable
-              style="width: 150px"
+              style="width: 180px"
               @keyup.enter="handleSearch"
             />
             <n-input-group>
@@ -340,7 +348,7 @@ function changePageSize(size: number) {
   background: white;
   border-radius: 8px;
   display: flex;
-  justify-content: space-between;
+  justify-content: left;
   align-items: center;
   padding: 12px;
   border-bottom: 1px solid #f0f0f0;
