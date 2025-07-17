@@ -207,24 +207,24 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 			return fmt.Errorf("failed to batch insert request logs: %w", err)
 		}
 
-		keyStats := make(map[uint]int64)
+		keyStats := make(map[string]int64)
 		for _, log := range logs {
-			if log.IsSuccess {
-				keyStats[log.KeyID]++
+			if log.IsSuccess && log.KeyValue != "" {
+				keyStats[log.KeyValue]++
 			}
 		}
 
 		if len(keyStats) > 0 {
 			var caseStmt strings.Builder
-			var keyIDs []uint
-			caseStmt.WriteString("CASE id ")
-			for keyID, count := range keyStats {
-				caseStmt.WriteString(fmt.Sprintf("WHEN %d THEN request_count + %d ", keyID, count))
-				keyIDs = append(keyIDs, keyID)
+			var keyValues []string
+			caseStmt.WriteString("CASE key_value ")
+			for keyValue, count := range keyStats {
+				caseStmt.WriteString(fmt.Sprintf("WHEN '%s' THEN request_count + %d ", keyValue, count))
+				keyValues = append(keyValues, keyValue)
 			}
 			caseStmt.WriteString("END")
 
-			if err := tx.Model(&models.APIKey{}).Where("id IN ?", keyIDs).
+			if err := tx.Model(&models.APIKey{}).Where("key_value IN ?", keyValues).
 				Updates(map[string]any{
 					"request_count": gorm.Expr(caseStmt.String()),
 					"last_used_at":  time.Now(),
