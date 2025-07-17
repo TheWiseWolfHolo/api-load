@@ -3,7 +3,6 @@
 中文文档 | [English](README_EN.md)
 
 [![Release](https://img.shields.io/github/v/release/tbphp/gpt-load)](https://github.com/tbphp/gpt-load/releases)
-[![Build Docker Image](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml)
 ![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -38,7 +37,7 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 
 - Go 1.23+ (源码构建)
 - Docker (容器化部署)
-- MySQL 8.2+ (数据库存储)
+- MySQL, PostgreSQL, 或 SQLite (数据库存储)
 - Redis (缓存和分布式协调，可选)
 
 ### 方式一：使用 Docker Compose（推荐）
@@ -53,12 +52,13 @@ mkdir -p gpt-load && cd gpt-load
 wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
 wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
 
-# 编辑配置文件（根据需要修改服务端口和认证Key等）
-# vim .env
-
-# 启动服务（包含 MySQL 和 Redis）
+# 启动服务
 docker compose up -d
 ```
+
+默认安装的是 SQLite 版本，适合轻量单机应用。
+
+如需安装 MySQL, PostgreSQL 及 Redis，请在 `docker-compose.yml` 文件中取消所需服务的注释，并配置好对应的环境配置重启即可。
 
 **其他命令：**
 
@@ -85,7 +85,7 @@ docker compose pull && docker compose down && docker compose up -d
 
 ### 方式二：源码构建
 
-源码构建需要本地已安装 MySQL 和 Redis（可选）。
+源码构建需要本地已安装数据库（SQLite、MySQL 或 PostgreSQL）和 Redis（可选）。
 
 ```bash
 # 克隆并构建
@@ -112,7 +112,7 @@ make run
 
 ### 方式三：集群部署
 
-集群部署需要所有节点都连接同一个 MySQL 和 Redis，并且 Redis 是必须要求。建议使用统一的分布式 MySQL 和 Redis 集群。
+集群部署需要所有节点都连接同一个 MySQL（或者 PostgreSQL） 和 Redis，并且 Redis 是必须要求。建议使用统一的分布式 MySQL 和 Redis 集群。
 
 **部署要求：**
 
@@ -157,11 +157,11 @@ GPT-Load 采用双层配置架构：
 
 #### 认证与数据库配置
 
-| 配置项     | 环境变量       | 默认值      | 说明                                 |
-| ---------- | -------------- | ----------- | ------------------------------------ |
-| 认证密钥   | `AUTH_KEY`     | `sk-123456` | 访问管理端以及请求代理的唯一认证密钥 |
-| 数据库连接 | `DATABASE_DSN` | -           | MySQL 数据库连接字符串               |
-| Redis 连接 | `REDIS_DSN`    | -           | Redis 连接字符串，为空时使用内存存储 |
+| 配置项     | 环境变量       | 默认值             | 说明                                 |
+| ---------- | -------------- | ------------------ | ------------------------------------ |
+| 认证密钥   | `AUTH_KEY`     | `sk-123456`        | 访问管理端以及请求代理的唯一认证密钥 |
+| 数据库连接 | `DATABASE_DSN` | ./data/gpt-load.db | 数据库连接字符串 (DSN) 或文件路径    |
+| Redis 连接 | `REDIS_DSN`    | -                  | Redis 连接字符串，为空时使用内存存储 |
 
 #### 性能与跨域配置
 
@@ -176,12 +176,12 @@ GPT-Load 采用双层配置架构：
 
 #### 日志配置
 
-| 配置项       | 环境变量          | 默认值         | 说明                               |
-| ------------ | ----------------- | -------------- | ---------------------------------- |
-| 日志级别     | `LOG_LEVEL`       | `info`         | 日志级别：debug, info, warn, error |
-| 日志格式     | `LOG_FORMAT`      | `text`         | 日志格式：text, json               |
-| 启用文件日志 | `LOG_ENABLE_FILE` | false          | 是否启用文件日志输出               |
-| 日志文件路径 | `LOG_FILE_PATH`   | `logs/app.log` | 日志文件存储路径                   |
+| 配置项       | 环境变量          | 默认值                | 说明                               |
+| ------------ | ----------------- | --------------------- | ---------------------------------- |
+| 日志级别     | `LOG_LEVEL`       | `info`                | 日志级别：debug, info, warn, error |
+| 日志格式     | `LOG_FORMAT`      | `text`                | 日志格式：text, json               |
+| 启用文件日志 | `LOG_ENABLE_FILE` | false                 | 是否启用文件日志输出               |
+| 日志文件路径 | `LOG_FILE_PATH`   | `./data/logs/app.log` | 日志文件存储路径                   |
 
 ### 动态配置（热重载）
 
@@ -195,7 +195,7 @@ GPT-Load 采用双层配置架构：
 | ------------ | ------------------------------------ | ----------------------- | ---------- | ---------------------------- |
 | 项目地址     | `app_url`                            | `http://localhost:3001` | ❌         | 项目基础 URL                 |
 | 日志保留天数 | `request_log_retention_days`         | 7                       | ❌         | 请求日志保留天数，0 为不清理 |
-| 日志写入间隔 | `request_log_write_interval_minutes` | 5                       | ❌         | 日志写入数据库周期（分钟）   |
+| 日志写入间隔 | `request_log_write_interval_minutes` | 1                       | ❌         | 日志写入数据库周期（分钟）   |
 
 #### 请求设置
 

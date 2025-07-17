@@ -3,8 +3,10 @@ package errors
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -62,20 +64,28 @@ func ParseDBError(err error) *APIError {
 		return nil
 	}
 
-	// Handle record not found error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrResourceNotFound
 	}
 
-	// Handle MySQL specific errors
-	var mysqlErr *mysql.MySQLError
-	if errors.As(err, &mysqlErr) {
-		switch mysqlErr.Number {
-		case 1062: // Duplicate entry for unique key
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		if pgErr.Code == "23505" { // unique_violation
 			return ErrDuplicateResource
 		}
 	}
 
-	// Default to a generic database error
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		if mysqlErr.Number == 1062 { // Duplicate entry
+			return ErrDuplicateResource
+		}
+	}
+
+	// Generic check for SQLite
+	if strings.Contains(strings.ToLower(err.Error()), "unique constraint failed") {
+		return ErrDuplicateResource
+	}
+
 	return ErrDatabase
 }

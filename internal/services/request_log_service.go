@@ -259,8 +259,8 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 				err := tx.Clauses(clause.OnConflict{
 					Columns: []clause.Column{{Name: "time"}, {Name: "group_id"}},
 					DoUpdates: clause.Assignments(map[string]any{
-						"success_count": gorm.Expr("success_count + ?", counts.Success),
-						"failure_count": gorm.Expr("failure_count + ?", counts.Failure),
+						"success_count": gorm.Expr("group_hourly_stats.success_count + ?", counts.Success),
+						"failure_count": gorm.Expr("group_hourly_stats.failure_count + ?", counts.Failure),
 						"updated_at":    time.Now(),
 					}),
 				}).Create(&models.GroupHourlyStat{
