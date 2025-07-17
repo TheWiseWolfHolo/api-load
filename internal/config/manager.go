@@ -95,10 +95,10 @@ func (m *Manager) ReloadConfig() error {
 			Level:      utils.GetEnvOrDefault("LOG_LEVEL", "info"),
 			Format:     utils.GetEnvOrDefault("LOG_FORMAT", "text"),
 			EnableFile: utils.ParseBoolean(os.Getenv("LOG_ENABLE_FILE"), false),
-			FilePath:   utils.GetEnvOrDefault("LOG_FILE_PATH", "logs/app.log"),
+			FilePath:   utils.GetEnvOrDefault("LOG_FILE_PATH", "./data/logs/app.log"),
 		},
 		Database: types.DatabaseConfig{
-			DSN: os.Getenv("DATABASE_DSN"),
+			DSN: utils.GetEnvOrDefault("DATABASE_DSN", "./data/gpt-load.db"),
 		},
 		RedisDSN: os.Getenv("REDIS_DSN"),
 	}

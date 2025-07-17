@@ -3,7 +3,6 @@
 [中文文档](README.md) | English
 
 [![Release](https://img.shields.io/github/v/release/tbphp/gpt-load)](https://github.com/tbphp/gpt-load/releases)
-[![Build Docker Image](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml/badge.svg)](https://github.com/tbphp/gpt-load/actions/workflows/docker-build.yml)
 ![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -38,7 +37,7 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 
 - Go 1.23+ (for source builds)
 - Docker (for containerized deployment)
-- MySQL 8.2+ (for database storage)
+- MySQL, PostgreSQL, or SQLite (for database storage)
 - Redis (for caching and distributed coordination, optional)
 
 ### Method 1: Using Docker Compose (Recommended)
@@ -53,12 +52,13 @@ mkdir -p gpt-load && cd gpt-load
 wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
 wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
 
-# Edit configuration file (modify service port and authentication key as needed)
-# vim .env
-
-# Start services (includes MySQL and Redis)
+# Start services
 docker compose up -d
 ```
+
+The default installation uses the SQLite version, which is suitable for lightweight, single-instance applications.
+
+If you need to install MySQL, PostgreSQL, and Redis, please uncomment the required services in the `docker-compose.yml` file, configure the corresponding environment variables, and restart.
 
 **Other Commands:**
 
@@ -85,7 +85,7 @@ After deployment:
 
 ### Method 2: Source Build
 
-Source build requires locally installed MySQL and Redis (optional).
+Source build requires a locally installed database (SQLite, MySQL, or PostgreSQL) and Redis (optional).
 
 ```bash
 # Clone and build
@@ -112,7 +112,7 @@ After deployment:
 
 ### Method 3: Cluster Deployment
 
-Cluster deployment requires all nodes to connect to the same MySQL and Redis, with Redis being mandatory. It's recommended to use unified distributed MySQL and Redis clusters.
+Cluster deployment requires all nodes to connect to the same MySQL (or PostgreSQL) and Redis, with Redis being mandatory. It's recommended to use unified distributed MySQL and Redis clusters.
 
 **Deployment Requirements:**
 
@@ -157,11 +157,11 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 #### Authentication & Database Configuration
 
-| Setting             | Environment Variable | Default     | Description                                                                     |
-| ------------------- | -------------------- | ----------- | ------------------------------------------------------------------------------- |
-| Authentication Key  | `AUTH_KEY`           | `sk-123456` | Unique authentication key for accessing management interface and proxy requests |
-| Database Connection | `DATABASE_DSN`       | -           | MySQL database connection string                                                |
-| Redis Connection    | `REDIS_DSN`          | -           | Redis connection string, uses memory storage when empty                         |
+| Setting             | Environment Variable | Default              | Description                                                                     |
+| ------------------- | -------------------- | -------------------- | ------------------------------------------------------------------------------- |
+| Authentication Key  | `AUTH_KEY`           | `sk-123456`          | Unique authentication key for accessing management interface and proxy requests |
+| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path                                   |
+| Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty                         |
 
 #### Performance & CORS Configuration
 
@@ -176,12 +176,12 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 #### Logging Configuration
 
-| Setting             | Environment Variable | Default        | Description                         |
-| ------------------- | -------------------- | -------------- | ----------------------------------- |
-| Log Level           | `LOG_LEVEL`          | `info`         | Log level: debug, info, warn, error |
-| Log Format          | `LOG_FORMAT`         | `text`         | Log format: text, json              |
-| Enable File Logging | `LOG_ENABLE_FILE`    | false          | Whether to enable file log output   |
-| Log File Path       | `LOG_FILE_PATH`      | `logs/app.log` | Log file storage path               |
+| Setting             | Environment Variable | Default               | Description                         |
+| ------------------- | -------------------- | --------------------- | ----------------------------------- |
+| Log Level           | `LOG_LEVEL`          | `info`                | Log level: debug, info, warn, error |
+| Log Format          | `LOG_FORMAT`         | `text`                | Log format: text, json              |
+| Enable File Logging | `LOG_ENABLE_FILE`    | false                 | Whether to enable file log output   |
+| Log File Path       | `LOG_FILE_PATH`      | `./data/logs/app.log` | Log file storage path               |
 
 ### Dynamic Configuration (Hot-Reload)
 
@@ -195,7 +195,7 @@ Dynamic configuration is stored in the database and supports real-time modificat
 | ------------------ | ------------------------------------ | ----------------------- | -------------- | -------------------------------------------- |
 | Project URL        | `app_url`                            | `http://localhost:3001` | ❌             | Project base URL                             |
 | Log Retention Days | `request_log_retention_days`         | 7                       | ❌             | Request log retention days, 0 for no cleanup |
-| Log Write Interval | `request_log_write_interval_minutes` | 5                       | ❌             | Log write to database cycle (minutes)        |
+| Log Write Interval | `request_log_write_interval_minutes` | 1                       | ❌             | Log write to database cycle (minutes)        |
 
 #### Request Settings
 

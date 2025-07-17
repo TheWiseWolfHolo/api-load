@@ -74,7 +74,7 @@ type APIKey struct {
 // RequestLog 对应 request_logs 表
 type RequestLog struct {
 	ID           string    `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Timestamp    time.Time `gorm:"type:datetime(3);not null;index" json:"timestamp"`
+	Timestamp    time.Time `gorm:"not null;index" json:"timestamp"`
 	GroupID      uint      `gorm:"not null;index" json:"group_id"`
 	GroupName    string    `gorm:"type:varchar(255);index" json:"group_name"`
 	KeyValue     string    `gorm:"type:varchar(512)" json:"key_value"`
@@ -123,7 +123,7 @@ type ChartData struct {
 // GroupHourlyStat 对应 group_hourly_stats 表，用于存储每个分组每小时的请求统计
 type GroupHourlyStat struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Time         time.Time `gorm:"type:datetime;not null;uniqueIndex:idx_group_time" json:"time"` // 整点时间
+	Time         time.Time `gorm:"not null;uniqueIndex:idx_group_time" json:"time"` // 整点时间
 	GroupID      uint      `gorm:"not null;uniqueIndex:idx_group_time" json:"group_id"`
 	SuccessCount int64     `gorm:"not null;default:0" json:"success_count"`
 	FailureCount int64     `gorm:"not null;default:0" json:"failure_count"`
