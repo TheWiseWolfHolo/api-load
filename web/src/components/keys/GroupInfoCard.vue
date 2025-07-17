@@ -2,6 +2,7 @@
 import { keysApi } from "@/api/keys";
 import type { Group, GroupStatsResponse } from "@/types/models";
 import { getGroupDisplayName } from "@/utils/display";
+import { copy } from "@/utils/clipboard";
 import { Pencil, Trash } from "@vicons/ionicons5";
 import {
   NButton,
@@ -124,15 +125,16 @@ function formatPercentage(num: number): string {
   return `${(num * 100).toFixed(1)}%`;
 }
 
-function copyUrl(url: string) {
-  navigator.clipboard
-    .writeText(url)
-    .then(() => {
-      window.$message.success("地址已复制到剪贴板");
-    })
-    .catch(() => {
-      window.$message.error("复制失败");
-    });
+async function copyUrl(url: string) {
+  if (!url) {
+    return;
+  }
+  const success = await copy(url);
+  if (success) {
+    window.$message.success("地址已复制到剪贴板");
+  } else {
+    window.$message.error("复制失败");
+  }
 }
 
 function resetPage() {
