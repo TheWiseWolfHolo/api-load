@@ -3,6 +3,7 @@ import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
 import { appState } from "@/utils/app-state";
 import { getGroupDisplayName, maskKey } from "@/utils/display";
+import { copy } from "@/utils/clipboard";
 import {
   AddCircleOutline,
   AlertCircleOutline,
@@ -149,15 +150,13 @@ async function loadKeys() {
   }
 }
 
-function copyKey(key: KeyRow) {
-  navigator.clipboard
-    .writeText(key.key_value)
-    .then(() => {
-      window.$message.success("密钥已复制到剪贴板");
-    })
-    .catch(() => {
-      window.$message.error("复制失败");
-    });
+async function copyKey(key: KeyRow) {
+  const success = await copy(key.key_value);
+  if (success) {
+    window.$message.success("密钥已复制到剪贴板");
+  } else {
+    window.$message.error("复制失败");
+  }
 }
 
 async function testKey(_key: KeyRow) {
