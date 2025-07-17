@@ -45,6 +45,12 @@ class VersionService {
         return null;
       }
 
+      // 检查缓存中的版本号是否与当前应用版本号一致
+      if (versionInfo.currentVersion !== this.currentVersion) {
+        this.clearCache();
+        return null;
+      }
+
       return versionInfo;
     } catch (error) {
       console.warn("Failed to parse cached version info:", error);
@@ -144,6 +150,9 @@ class VersionService {
         versionInfo.isLatest = comparison >= 0;
         versionInfo.hasUpdate = comparison < 0;
         versionInfo.status = comparison < 0 ? "update-available" : "latest";
+
+        // 只在成功时缓存结果
+        this.setCachedVersionInfo(versionInfo);
       } else {
         versionInfo.status = "error";
       }
@@ -151,9 +160,6 @@ class VersionService {
       console.warn("Version check failed:", error);
       versionInfo.status = "error";
     }
-
-    // 缓存结果
-    this.setCachedVersionInfo(versionInfo);
 
     return versionInfo;
   }
