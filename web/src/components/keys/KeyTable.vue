@@ -172,7 +172,6 @@ async function testKey(_key: KeyRow) {
   try {
     const res = await keysApi.testKeys(props.selectedGroup.id, _key.key_value);
     const curValid = res?.[0] || {};
-    _key.status = curValid.is_valid ? "active" : "invalid";
     if (curValid.is_valid) {
       window.$message.success("密钥测试成功");
     } else {
