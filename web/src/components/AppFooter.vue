@@ -41,9 +41,9 @@ const statusConfig = {
     text: "有更新",
   },
   error: {
-    color: "#909399",
-    icon: undefined,
-    text: "",
+    color: "#d03050",
+    icon: WarningOutline,
+    text: "检查失败",
   },
 };
 
@@ -68,7 +68,10 @@ const checkVersion = async () => {
 };
 
 const handleVersionClick = () => {
-  if (versionInfo.value.status === "update-available" && versionInfo.value.releaseUrl) {
+  if (
+    (versionInfo.value.status === "update-available" || versionInfo.value.status === "latest") &&
+    versionInfo.value.releaseUrl
+  ) {
     window.open(versionInfo.value.releaseUrl, "_blank", "noopener,noreferrer");
   }
 };
@@ -95,7 +98,8 @@ onMounted(() => {
         <div
           class="version-container"
           :class="{
-            'version-clickable': versionInfo.status === 'update-available',
+            'version-clickable':
+              versionInfo.status === 'update-available' || versionInfo.status === 'latest',
             'version-checking': isChecking,
           }"
           @click="handleVersionClick"
@@ -110,22 +114,12 @@ onMounted(() => {
           <span class="version-text">
             {{ formatVersion(versionInfo.currentVersion) }}
             -
-            <template v-if="versionInfo.status === 'latest'">
-              <span :style="{ color: statusConfig[versionInfo.status].color }">
-                {{ statusConfig[versionInfo.status].text }}
-              </span>
-            </template>
-            <template v-else-if="versionInfo.status === 'update-available'">
-              <span :style="{ color: statusConfig[versionInfo.status].color }">
-                {{ statusConfig[versionInfo.status].text }}
+            <span :style="{ color: statusConfig[versionInfo.status].color }">
+              {{ statusConfig[versionInfo.status].text }}
+              <template v-if="versionInfo.status === 'update-available'">
                 [{{ formatVersion(versionInfo.latestVersion || "") }}]
-              </span>
-            </template>
-            <template v-else-if="versionInfo.status === 'checking'">
-              <span :style="{ color: statusConfig[versionInfo.status].color }">
-                {{ statusConfig[versionInfo.status].text }}
-              </span>
-            </template>
+              </template>
+            </span>
           </span>
         </div>
 
