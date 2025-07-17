@@ -83,8 +83,8 @@ func isValidGroupName(name string) bool {
 	if name == "" {
 		return false
 	}
-	// 允许使用小写字母、数字和下划线，长度在 3 到 30 个字符之间
-	match, _ := regexp.MatchString("^[a-z0-9_]{3,30}$", name)
+	// 允许使用小写字母、数字、下划线和中划线，长度在 3 到 30 个字符之间
+	match, _ := regexp.MatchString("^[a-z0-9_-]{3,30}$", name)
 	return match
 }
 
@@ -151,7 +151,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 	// Data Cleaning and Validation
 	name := strings.TrimSpace(req.Name)
 	if !isValidGroupName(name) {
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format. Use 3-30 lowercase letters, numbers, and underscores."))
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "无效的分组名称。只能包含小写字母、数字、中划线或下划线，长度3-30位"))
 		return
 	}
 
@@ -265,7 +265,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	if req.Name != nil {
 		cleanedName := strings.TrimSpace(*req.Name)
 		if !isValidGroupName(cleanedName) {
-			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid group name format. Name is required and must be 3-30 lowercase letters, numbers, or underscores."))
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "无效的分组名称格式。只能包含小写字母、数字、中划线或下划线，长度3-30位"))
 			return
 		}
 		group.Name = cleanedName

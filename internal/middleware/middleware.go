@@ -136,11 +136,6 @@ func Auth(
 		if strings.HasPrefix(path, "/api") {
 			// Handle backend API authentication
 			key = extractBearerKey(c)
-			if key == "" || key != authConfig.Key {
-				response.Error(c, app_errors.ErrUnauthorized)
-				c.Abort()
-				return
-			}
 		} else if strings.HasPrefix(path, "/proxy/") {
 			// Handle proxy authentication
 			key, err = extractProxyKey(c, groupManager, channelFactory)
@@ -161,7 +156,7 @@ func Auth(
 			return
 		}
 
-		if key == "" {
+		if key == "" || key != authConfig.Key {
 			response.Error(c, app_errors.ErrUnauthorized)
 			c.Abort()
 			return

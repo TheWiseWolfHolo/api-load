@@ -188,7 +188,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		var parsedError string
 
 		if err != nil {
-			statusCode = 0
+			statusCode = 500
 			errorMessage = err.Error()
 			logrus.Debugf("Request failed (attempt %d/%d) for key %s: %v", retryCount+1, cfg.MaxRetries, utils.MaskAPIKey(apiKey.KeyValue), err)
 		} else {

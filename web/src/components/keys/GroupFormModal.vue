@@ -92,8 +92,8 @@ const rules: FormRules = {
       trigger: ["blur", "input"],
     },
     {
-      pattern: /^[a-z]+$/,
-      message: "只能输入小写字母",
+      pattern: /^[a-z0-9_-]{3,30}$/,
+      message: "只能包含小写字母、数字、中划线或下划线，长度3-30位",
       trigger: ["blur", "input"],
     },
   ],
@@ -330,7 +330,10 @@ async function handleSubmit() {
           <h4 class="section-title">基础信息</h4>
 
           <n-form-item label="分组名称" path="name">
-            <n-input v-model:value="formData.name" placeholder="请输入分组名称，如：gemini" />
+            <n-input
+              v-model:value="formData.name"
+              placeholder="作为路由的一部分，如：gemini-pro-group"
+            />
           </n-form-item>
 
           <n-form-item label="显示名称" path="display_name">
