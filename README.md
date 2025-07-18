@@ -40,7 +40,19 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 - MySQL, PostgreSQL, 或 SQLite (数据库存储)
 - Redis (缓存和分布式协调，可选)
 
-### 方式一：使用 Docker Compose（推荐）
+## 方式一：Docker 快速开始
+
+```bash
+docker run -d --name gpt-load \
+    -p 3001:3001 \
+    -e AUTH_KEY=sk-123456 \
+    -v "$(pwd)/data":/app/data \
+    ghcr.io/tbphp/gpt-load:latest
+```
+
+> 使用 `sk-123456` 登录管理界面：<http://localhost:3001>
+
+### 方式二：使用 Docker Compose（推荐）
 
 **安装命令：**
 
@@ -83,7 +95,7 @@ docker compose pull && docker compose down && docker compose up -d
 
 > 使用默认的认证 Key `sk-123456` 登录管理端，认证 Key 可以在 .env 中修改 AUTH_KEY。
 
-### 方式二：源码构建
+### 方式三：源码构建
 
 源码构建需要本地已安装数据库（SQLite、MySQL 或 PostgreSQL）和 Redis（可选）。
 
@@ -110,7 +122,7 @@ make run
 
 > 使用默认的认证 Key `sk-123456` 登录管理端，认证 Key 可以在 .env 中修改 AUTH_KEY。
 
-### 方式三：集群部署
+### 方式四：集群部署
 
 集群部署需要所有节点都连接同一个 MySQL（或者 PostgreSQL） 和 Redis，并且 Redis 是必须要求。建议使用统一的分布式 MySQL 和 Redis 集群。
 

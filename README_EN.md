@@ -40,7 +40,19 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 - MySQL, PostgreSQL, or SQLite (for database storage)
 - Redis (for caching and distributed coordination, optional)
 
-### Method 1: Using Docker Compose (Recommended)
+### Method 1: Docker Quick Start
+
+```bash
+docker run -d --name gpt-load \
+    -p 3001:3001 \
+    -e AUTH_KEY=sk-123456 \
+    -v "$(pwd)/data":/app/data \
+    ghcr.io/tbphp/gpt-load:latest
+```
+
+> Login to the management interface with `sk-123456`: <http://localhost:3001>
+
+### Method 2: Using Docker Compose (Recommended)
 
 **Installation Commands:**
 
@@ -83,7 +95,7 @@ After deployment:
 
 > Use the default authentication key `sk-123456` to login to the management interface. The authentication key can be modified via AUTH_KEY in the .env file.
 
-### Method 2: Source Build
+### Method 3: Source Build
 
 Source build requires a locally installed database (SQLite, MySQL, or PostgreSQL) and Redis (optional).
 
@@ -110,7 +122,7 @@ After deployment:
 
 > Use the default authentication key `sk-123456` to login to the management interface. The authentication key can be modified via AUTH_KEY in the .env file.
 
-### Method 3: Cluster Deployment
+### Method 4: Cluster Deployment
 
 Cluster deployment requires all nodes to connect to the same MySQL (or PostgreSQL) and Redis, with Redis being mandatory. It's recommended to use unified distributed MySQL and Redis clusters.
 
