@@ -135,7 +135,7 @@ func Auth(
 
 		if strings.HasPrefix(path, "/api") {
 			// Handle backend API authentication
-			key = extractBearerKey(c)
+			key = extractApiKey(c)
 		} else if strings.HasPrefix(path, "/proxy/") {
 			// Handle proxy authentication
 			key, err = extractProxyKey(c, groupManager, channelFactory)
@@ -228,7 +228,7 @@ func isMonitoringEndpoint(path string) bool {
 }
 
 // extractBearerKey extracts a key from the "Authorization: Bearer <key>" header.
-func extractBearerKey(c *gin.Context) string {
+func extractApiKey(c *gin.Context) string {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		const bearerPrefix = "Bearer "
@@ -236,6 +236,12 @@ func extractBearerKey(c *gin.Context) string {
 			return authHeader[len(bearerPrefix):]
 		}
 	}
+
+	authKey := c.Query("auth_key")
+	if authKey != "" {
+		return authKey
+	}
+
 	return ""
 }
 

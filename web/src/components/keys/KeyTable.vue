@@ -59,9 +59,9 @@ const statusOptions = [
 
 // 更多操作下拉菜单选项
 const moreOptions = [
-  // { label: "导出所有密钥", key: "copyAll" },
-  // { label: "导出有效密钥", key: "copyValid" },
-  // { label: "导出无效密钥", key: "copyInvalid" },
+  { label: "导出所有密钥", key: "copyAll" },
+  { label: "导出有效密钥", key: "copyValid" },
+  { label: "导出无效密钥", key: "copyInvalid" },
   { type: "divider" },
   { label: "恢复所有无效密钥", key: "restoreAll" },
   { label: "清空所有无效密钥", key: "clearInvalid", props: { style: { color: "#d03050" } } },

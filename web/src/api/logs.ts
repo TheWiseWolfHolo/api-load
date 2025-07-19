@@ -11,4 +11,35 @@ export const logApi = {
   getGroups: (): Promise<ApiResponse<Group[]>> => {
     return http.get("/groups");
   },
+
+  // 导出日志
+  exportLogs: (params: Omit<LogFilter, "page" | "page_size">) => {
+    const authKey = localStorage.getItem("authKey");
+    if (!authKey) {
+      window.$message.error("未找到认证信息，无法导出");
+      return;
+    }
+
+    const queryParams = new URLSearchParams(
+      Object.entries(params).reduce(
+        (acc, [key, value]) => {
+          if (value !== undefined && value !== null && value !== "") {
+            acc[key] = String(value);
+          }
+          return acc;
+        },
+        {} as Record<string, string>
+      )
+    );
+    queryParams.append("auth_key", authKey);
+
+    const url = `${http.defaults.baseURL}/logs/export?${queryParams.toString()}`;
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `logs-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
 };

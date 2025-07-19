@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"strconv"
-	"time"
-
-	"gpt-load/internal/db"
+	"fmt"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
+	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,43 +16,9 @@ type LogResponse struct {
 	models.RequestLog
 }
 
-// GetLogs Get request logs
-func GetLogs(c *gin.Context) {
-	query := db.DB.Model(&models.RequestLog{})
-
-	if groupName := c.Query("group_name"); groupName != "" {
-		query = query.Where("group_name LIKE ?", "%"+groupName+"%")
-	}
-	if keyValue := c.Query("key_value"); keyValue != "" {
-		likePattern := "%" + keyValue[1:len(keyValue)-1] + "%"
-		query = query.Where("key_value LIKE ?", likePattern)
-	}
-	if isSuccessStr := c.Query("is_success"); isSuccessStr != "" {
-		if isSuccess, err := strconv.ParseBool(isSuccessStr); err == nil {
-			query = query.Where("is_success = ?", isSuccess)
-		}
-	}
-	if statusCodeStr := c.Query("status_code"); statusCodeStr != "" {
-		if statusCode, err := strconv.Atoi(statusCodeStr); err == nil {
-			query = query.Where("status_code = ?", statusCode)
-		}
-	}
-	if sourceIP := c.Query("source_ip"); sourceIP != "" {
-		query = query.Where("source_ip = ?", sourceIP)
-	}
-	if errorContains := c.Query("error_contains"); errorContains != "" {
-		query = query.Where("error_message LIKE ?", "%"+errorContains+"%")
-	}
-	if startTimeStr := c.Query("start_time"); startTimeStr != "" {
-		if startTime, err := time.Parse(time.RFC3339, startTimeStr); err == nil {
-			query = query.Where("timestamp >= ?", startTime)
-		}
-	}
-	if endTimeStr := c.Query("end_time"); endTimeStr != "" {
-		if endTime, err := time.Parse(time.RFC3339, endTimeStr); err == nil {
-			query = query.Where("timestamp <= ?", endTime)
-		}
-	}
+// GetLogs handles fetching request logs with filtering and pagination.
+func (s *Server) GetLogs(c *gin.Context) {
+	query := s.LogService.GetLogsQuery(c)
 
 	var logs []models.RequestLog
 	query = query.Order("timestamp desc")
@@ -65,4 +30,19 @@ func GetLogs(c *gin.Context) {
 
 	pagination.Items = logs
 	response.Success(c, pagination)
+}
+
+// ExportLogs handles exporting filtered log keys to a CSV file.
+func (s *Server) ExportLogs(c *gin.Context) {
+	filename := fmt.Sprintf("log_keys_export_%s.csv", time.Now().Format("20060102150405"))
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+
+	// Stream the response
+	err := s.LogService.StreamLogKeysToCSV(c, c.Writer)
+	if err != nil {
+		log.Printf("Failed to stream log keys to CSV: %v", err)
+		c.JSON(500, gin.H{"error": "Failed to export logs"})
+		return
+	}
 }

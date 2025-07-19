@@ -5,6 +5,7 @@ import (
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
+	"log"
 	"strconv"
 	"strings"
 
@@ -300,4 +301,39 @@ func (s *Server) ClearAllInvalidKeys(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": fmt.Sprintf("%d invalid keys cleared.", rowsAffected)})
+}
+
+// ExportKeys handles exporting keys to a text file.
+func (s *Server) ExportKeys(c *gin.Context) {
+	groupID, err := validateGroupIDFromQuery(c)
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
+		return
+	}
+
+	statusFilter := c.Query("status")
+	if statusFilter == "" {
+		statusFilter = "all"
+	}
+
+	switch statusFilter {
+	case "all", models.KeyStatusActive, models.KeyStatusInvalid:
+	default:
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "Invalid status filter"))
+		return
+	}
+
+	group, ok := s.findGroupByID(c, groupID)
+	if !ok {
+		return
+	}
+
+	filename := fmt.Sprintf("keys-%s-%s.txt", group.Name, statusFilter)
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+
+	err = s.KeyService.StreamKeysToWriter(groupID, statusFilter, c.Writer)
+	if err != nil {
+		log.Printf("Failed to stream keys: %v", err)
+	}
 }
