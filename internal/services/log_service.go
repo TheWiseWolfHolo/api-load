@@ -92,14 +92,27 @@ func (s *LogService) StreamLogKeysToCSV(c *gin.Context, writer io.Writer) error 
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 
-	// 直接查询所有结果，不使用分批，避免复杂的SQL问题
 	var results []ExportableLogKey
-	err := s.DB.Model(&models.RequestLog{}).
-		Scopes(logFiltersScope(c)).
-		Select("key_value, group_name, status_code").
-		Group("key_value, group_name, status_code").
-		Order("key_value").
-		Find(&results).Error
+
+	baseQuery := s.DB.Model(&models.RequestLog{}).Scopes(logFiltersScope(c))
+
+	// 使用窗口函数获取每个key_value的最新记录
+	err := s.DB.Raw(`
+		SELECT
+			key_value,
+			group_name,
+			status_code
+		FROM (
+			SELECT
+				key_value,
+				group_name,
+				status_code,
+				ROW_NUMBER() OVER (PARTITION BY key_value ORDER BY timestamp DESC) as rn
+			FROM (?) as filtered_logs
+		) ranked
+		WHERE rn = 1
+		ORDER BY key_value
+	`, baseQuery).Scan(&results).Error
 
 	if err != nil {
 		return fmt.Errorf("failed to fetch log keys: %w", err)
