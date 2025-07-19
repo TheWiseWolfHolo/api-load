@@ -40,7 +40,7 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 - MySQL, PostgreSQL, 或 SQLite (数据库存储)
 - Redis (缓存和分布式协调，可选)
 
-## 方式一：Docker 快速开始
+### 方式一：Docker 快速开始
 
 ```bash
 docker run -d --name gpt-load \
