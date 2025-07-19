@@ -166,7 +166,7 @@ const createColumns = () => [
     render: (row: LogRow) =>
       h(NEllipsis, { style: "max-width: 200px" }, { default: () => row.upstream_addr }),
   },
-  { title: "源IP", key: "source_ip", width: 130 },
+  { title: "源IP", key: "source_ip", width: 140 },
   {
     title: "错误信息",
     width: 270,

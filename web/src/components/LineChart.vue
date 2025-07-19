@@ -103,6 +103,9 @@ const getXPosition = (index: number) => {
     return 0;
   }
   const totalPoints = chartData.value.labels.length;
+  if (totalPoints <= 1) {
+    return padding.left + plotWidth / 2;
+  }
   return padding.left + (index / (totalPoints - 1)) * plotWidth;
 };
 
@@ -112,67 +115,72 @@ const getYPosition = (value: number) => {
   return padding.top + (1 - ratio) * plotHeight;
 };
 
-// 生成线条路径（处理零值点）
-const generateLinePath = (data: number[]) => {
-  if (!data.length) {
-    return "";
-  }
-
-  const points: string[] = [];
-  let hasValidPath = false;
+// Helper to find segments of non-zero data
+const getSegments = (data: number[]) => {
+  const segments: Array<Array<{ value: number; index: number }>> = [];
+  let currentSegment: Array<{ value: number; index: number }> = [];
 
   data.forEach((value, index) => {
-    const x = getXPosition(index);
-    const y = getYPosition(value);
-
     if (value > 0) {
-      if (!hasValidPath) {
-        points.push(`M ${x},${y}`);
-        hasValidPath = true;
-      } else {
-        points.push(`L ${x},${y}`);
-      }
-    } else if (hasValidPath && index < data.length - 1) {
-      // 如果当前是零值但前面有有效路径，检查后面是否还有非零值
-      const nextNonZeroIndex = data.findIndex((v, i) => i > index && v > 0);
-      if (nextNonZeroIndex !== -1) {
-        // 如果后面还有非零值，结束当前路径
-        hasValidPath = false;
+      currentSegment.push({ value, index });
+    } else {
+      if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+        currentSegment = [];
       }
     }
   });
 
-  return points.join(" ");
+  if (currentSegment.length > 0) {
+    segments.push(currentSegment);
+  }
+
+  return segments;
+};
+
+// 生成线条路径（处理零值点）
+const generateLinePath = (data: number[]) => {
+  const segments = getSegments(data);
+  const pathParts: string[] = [];
+
+  segments.forEach(segment => {
+    if (segment.length > 1) {
+      const segmentPath = segment
+        .map((point, pointIndex) => {
+          const x = getXPosition(point.index);
+          const y = getYPosition(point.value);
+          return `${pointIndex === 0 ? "M" : "L"} ${x},${y}`;
+        })
+        .join(" ");
+      pathParts.push(segmentPath);
+    }
+  });
+
+  return pathParts.join(" ");
 };
 
 // 生成填充区域路径（只为有数据的区域填充）
 const generateAreaPath = (data: number[]) => {
-  if (!data.length) {
-    return "";
-  }
+  const segments = getSegments(data);
+  const pathParts: string[] = [];
+  const baseY = getYPosition(dataRange.value.min);
 
-  const validPoints: Array<{ x: number; y: number; index: number }> = [];
+  segments.forEach(segment => {
+    if (segment.length > 0) {
+      const points = segment.map(p => ({
+        x: getXPosition(p.index),
+        y: getYPosition(p.value),
+      }));
+      const firstPoint = points[0];
+      const lastPoint = points[points.length - 1];
 
-  data.forEach((value, index) => {
-    if (value > 0) {
-      const x = getXPosition(index);
-      const y = getYPosition(value);
-      validPoints.push({ x, y, index });
+      const lineCommands = points.map(p => `L ${p.x},${p.y}`).join(" ");
+
+      pathParts.push(`M ${firstPoint.x},${baseY} ${lineCommands} L ${lastPoint.x},${baseY} Z`);
     }
   });
 
-  if (validPoints.length === 0) {
-    return "";
-  }
-
-  const baseY = getYPosition(dataRange.value.min);
-  const pathPoints = validPoints.map(p => `${p.x},${p.y}`);
-
-  // 从底部开始，绘制到各个点，然后回到底部
-  const firstPoint = validPoints[0];
-  const lastPoint = validPoints[validPoints.length - 1];
-
-  return `M ${firstPoint.x},${baseY} L ${pathPoints.join(" L ")} L ${lastPoint.x},${baseY} Z`;
+  return pathParts.join(" ");
 };
 
 // 数字格式化
@@ -184,6 +192,10 @@ const formatNumber = (value: number) => {
     return `${(value / 1000).toFixed(1)}K`;
   }
   return Math.round(value).toString();
+};
+
+const isErrorDataset = (label: string) => {
+  return label.includes("失败");
 };
 
 // 动画相关
@@ -343,7 +355,6 @@ onMounted(() => {
     <div class="chart-header">
       <div class="chart-title-section">
         <h3 class="chart-title">24小时请求趋势</h3>
-        <p class="chart-subtitle">实时监控系统请求状态</p>
       </div>
       <n-select
         v-model:value="selectedGroup"
@@ -356,14 +367,13 @@ onMounted(() => {
     </div>
 
     <div v-if="chartData" class="chart-content">
-      <div class="chart-legend">
-        <div v-for="dataset in chartData.datasets" :key="dataset.label" class="legend-item">
-          <div class="legend-indicator" :style="{ backgroundColor: dataset.color }" />
-          <span class="legend-label">{{ dataset.label }}</span>
-        </div>
-      </div>
-
       <div class="chart-wrapper">
+        <div class="chart-legend">
+          <div v-for="dataset in chartData.datasets" :key="dataset.label" class="legend-item">
+            <div class="legend-indicator" :style="{ backgroundColor: dataset.color }" />
+            <span class="legend-label">{{ dataset.label }}</span>
+          </div>
+        </div>
         <svg
           ref="chartSvg"
           viewBox="0 0 800 260"
@@ -460,18 +470,18 @@ onMounted(() => {
               :d="generateAreaPath(dataset.data)"
               :fill="`url(#gradient-${datasetIndex})`"
               class="area-path"
+              :style="{ opacity: isErrorDataset(dataset.label) ? 0.3 : 0.6 }"
             />
 
             <!-- 主线条 -->
             <path
               :d="generateLinePath(dataset.data)"
               :stroke="dataset.color"
-              stroke-width="2"
+              :stroke-width="isErrorDataset(dataset.label) ? 1 : 2"
               fill="none"
               class="line-path"
               :style="{
-                strokeDasharray: animatedStroke,
-                strokeDashoffset: animatedOffset,
+                opacity: isErrorDataset(dataset.label) ? 0.75 : 1,
                 filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.1))',
               }"
             />
@@ -482,7 +492,7 @@ onMounted(() => {
                 v-if="value > 0"
                 :cx="getXPosition(pointIndex)"
                 :cy="getYPosition(value)"
-                r="3"
+                :r="isErrorDataset(dataset.label) ? 2 : 3"
                 :fill="dataset.color"
                 :stroke="dataset.color"
                 stroke-width="1"
@@ -490,6 +500,7 @@ onMounted(() => {
                 :class="{
                   'point-hover': hoveredPoint?.pointIndex === pointIndex,
                 }"
+                :style="{ opacity: isErrorDataset(dataset.label) ? 0.8 : 1 }"
               />
               <!-- 零值点用灰色小点表示 -->
               <circle
@@ -559,7 +570,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   gap: 16px;
 }
 
@@ -568,8 +579,9 @@ onMounted(() => {
 }
 
 .chart-title {
-  margin: 0 0 4px 0;
+  /* margin: 0 0 4px 0; */
   font-size: 24px;
+  line-height: 28px;
   font-weight: 600;
   background: linear-gradient(45deg, #fff, #f0f0f0);
   -webkit-background-clip: text;
@@ -584,18 +596,27 @@ onMounted(() => {
   font-weight: 400;
 }
 
-.chart-content {
+/* .chart-content {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   padding: 12px;
   color: #333;
-}
+} */
 
 .chart-legend {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin-bottom: 12px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
 }
 
 .legend-item {

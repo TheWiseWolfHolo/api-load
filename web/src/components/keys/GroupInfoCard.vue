@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group, GroupStatsResponse } from "@/types/models";
-import { getGroupDisplayName } from "@/utils/display";
 import { copy } from "@/utils/clipboard";
+import { getGroupDisplayName } from "@/utils/display";
 import { Pencil, Trash } from "@vicons/ionicons5";
 import {
   NButton,
@@ -151,9 +151,14 @@ function resetPage() {
           <div class="header-left">
             <h3 class="group-title">
               {{ group ? getGroupDisplayName(group) : "请选择分组" }}
-              <code v-if="group" class="group-url" @click="copyUrl(group?.endpoint || '')">
-                {{ group.endpoint }}
-              </code>
+              <n-tooltip trigger="hover" v-if="group">
+                <template #trigger>
+                  <code class="group-url" @click="copyUrl(group?.endpoint || '')">
+                    {{ group.endpoint }}
+                  </code>
+                </template>
+                点击复制
+              </n-tooltip>
             </h3>
           </div>
           <div class="header-actions">
