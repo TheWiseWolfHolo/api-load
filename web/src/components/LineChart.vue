@@ -94,7 +94,7 @@ const visibleLabels = computed(() => {
 
   return labels
     .map((label, index) => ({ text: formatTimeLabel(label), index }))
-    .filter((_, i) => i % step === 0);
+    .filter((_, i) => i % step === 1);
 });
 
 // 位置计算函数
@@ -115,7 +115,7 @@ const getYPosition = (value: number) => {
   return padding.top + (1 - ratio) * plotHeight;
 };
 
-// Helper to find segments of non-zero data
+// Helper to find segments of non-zero data (用于填充区域)
 const getSegments = (data: number[]) => {
   const segments: Array<Array<{ value: number; index: number }>> = [];
   let currentSegment: Array<{ value: number; index: number }> = [];
@@ -138,25 +138,41 @@ const getSegments = (data: number[]) => {
   return segments;
 };
 
-// 生成线条路径（处理零值点）
+// 生成线条路径（连续线条，包括0值点）
 const generateLinePath = (data: number[]) => {
-  const segments = getSegments(data);
-  const pathParts: string[] = [];
+  if (data.length === 0) {
+    return "";
+  }
 
-  segments.forEach(segment => {
-    if (segment.length > 1) {
-      const segmentPath = segment
-        .map((point, pointIndex) => {
-          const x = getXPosition(point.index);
-          const y = getYPosition(point.value);
-          return `${pointIndex === 0 ? "M" : "L"} ${x},${y}`;
-        })
-        .join(" ");
-      pathParts.push(segmentPath);
+  // 找到第一个和最后一个非0值的位置
+  let firstNonZeroIndex = -1;
+  let lastNonZeroIndex = -1;
+
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] > 0) {
+      if (firstNonZeroIndex === -1) {
+        firstNonZeroIndex = i;
+      }
+      lastNonZeroIndex = i;
     }
-  });
+  }
 
-  return pathParts.join(" ");
+  // 如果没有非0值，返回空路径
+  if (firstNonZeroIndex === -1) {
+    return "";
+  }
+
+  // 生成连续的路径，从第一个非0值到最后一个非0值
+  const pathCommands: string[] = [];
+
+  for (let i = firstNonZeroIndex; i <= lastNonZeroIndex; i++) {
+    const x = getXPosition(i);
+    const y = getYPosition(data[i]);
+    const command = i === firstNonZeroIndex ? "M" : "L";
+    pathCommands.push(`${command} ${x},${y}`);
+  }
+
+  return pathCommands.join(" ");
 };
 
 // 生成填充区域路径（只为有数据的区域填充）
@@ -501,18 +517,6 @@ onMounted(() => {
                   'point-hover': hoveredPoint?.pointIndex === pointIndex,
                 }"
                 :style="{ opacity: isErrorDataset(dataset.label) ? 0.8 : 1 }"
-              />
-              <!-- 零值点用灰色小点表示 -->
-              <circle
-                v-else
-                :cx="getXPosition(pointIndex)"
-                :cy="getYPosition(value)"
-                r="1.5"
-                fill="#d1d5db"
-                stroke="#d1d5db"
-                stroke-width="1"
-                class="data-point-zero"
-                opacity="0.6"
               />
             </g>
           </g>
