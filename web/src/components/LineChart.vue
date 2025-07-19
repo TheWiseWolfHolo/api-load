@@ -94,7 +94,7 @@ const visibleLabels = computed(() => {
 
   return labels
     .map((label, index) => ({ text: formatTimeLabel(label), index }))
-    .filter((_, i) => i % step === 0);
+    .filter((_, i) => i % step === 1);
 });
 
 // 位置计算函数
@@ -501,18 +501,6 @@ onMounted(() => {
                   'point-hover': hoveredPoint?.pointIndex === pointIndex,
                 }"
                 :style="{ opacity: isErrorDataset(dataset.label) ? 0.8 : 1 }"
-              />
-              <!-- 零值点用灰色小点表示 -->
-              <circle
-                v-else
-                :cx="getXPosition(pointIndex)"
-                :cy="getYPosition(value)"
-                r="1.5"
-                fill="#d1d5db"
-                stroke="#d1d5db"
-                stroke-width="1"
-                class="data-point-zero"
-                opacity="0.6"
               />
             </g>
           </g>
