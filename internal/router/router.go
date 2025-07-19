@@ -121,6 +121,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	keys := api.Group("/keys")
 	{
 		keys.GET("", serverHandler.ListKeysInGroup)
+		keys.GET("/export", serverHandler.ExportKeys)
 		keys.POST("/add-multiple", serverHandler.AddMultipleKeys)
 		keys.POST("/delete-multiple", serverHandler.DeleteMultipleKeys)
 		keys.POST("/restore-multiple", serverHandler.RestoreMultipleKeys)
@@ -141,7 +142,11 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	}
 
 	// 日志
-	api.GET("/logs", handler.GetLogs)
+	logs := api.Group("/logs")
+	{
+		logs.GET("", serverHandler.GetLogs)
+		logs.GET("/export", serverHandler.ExportLogs)
+	}
 
 	// 设置
 	settings := api.Group("/settings")

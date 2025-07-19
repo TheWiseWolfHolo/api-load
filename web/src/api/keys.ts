@@ -140,17 +140,26 @@ export const keysApi = {
 
   // 导出密钥
   exportKeys(groupId: number, status: "all" | "active" | "invalid" = "all") {
-    let url = `${http.defaults.baseURL}/groups/${groupId}/keys/export`;
-    if (status !== "all") {
-      url += `?status=${status}`;
+    const authKey = localStorage.getItem("authKey");
+    if (!authKey) {
+      window.$message.error("未找到认证信息，无法导出");
+      return;
     }
 
-    // 创建隐藏的 a 标签实现下载
+    const params = new URLSearchParams({
+      group_id: groupId.toString(),
+      auth_key: authKey,
+    });
+
+    if (status !== "all") {
+      params.append("status", status);
+    }
+
+    const url = `${http.defaults.baseURL}/keys/export?${params.toString()}`;
+
     const link = document.createElement("a");
     link.href = url;
-    link.download = `group-${groupId}-keys-${status}.txt`;
-    link.style.display = "none";
-
+    link.setAttribute("download", `keys-group_${groupId}-${status}-${Date.now()}.txt`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

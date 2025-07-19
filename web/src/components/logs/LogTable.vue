@@ -2,7 +2,7 @@
 import { logApi } from "@/api/logs";
 import type { LogFilter, RequestLog } from "@/types/models";
 import { maskKey } from "@/utils/display";
-import { EyeOffOutline, EyeOutline, Search } from "@vicons/ionicons5";
+import { DownloadOutline, EyeOffOutline, EyeOutline, Search } from "@vicons/ionicons5";
 import {
   NButton,
   NDataTable,
@@ -10,7 +10,6 @@ import {
   NEllipsis,
   NIcon,
   NInput,
-  NInputGroup,
   NSelect,
   NSpace,
   NSpin,
@@ -206,6 +205,20 @@ const resetFilters = () => {
   handleSearch();
 };
 
+const exportLogs = () => {
+  const params: Omit<LogFilter, "page" | "page_size"> = {
+    group_name: filters.group_name || undefined,
+    key_value: filters.key_value || undefined,
+    is_success: filters.is_success === "" ? undefined : filters.is_success === "true",
+    status_code: filters.status_code ? parseInt(filters.status_code, 10) : undefined,
+    source_ip: filters.source_ip || undefined,
+    error_contains: filters.error_contains || undefined,
+    start_time: filters.start_time ? new Date(filters.start_time).toISOString() : undefined,
+    end_time: filters.end_time ? new Date(filters.end_time).toISOString() : undefined,
+  };
+  logApi.exportLogs(params);
+};
+
 function changePage(page: number) {
   currentPage.value = page;
 }
@@ -221,70 +234,98 @@ function changePageSize(size: number) {
     <n-space vertical>
       <!-- 工具栏 -->
       <div class="toolbar">
-        <div class="toolbar-left">
-          <n-space>
-            <n-select
-              v-model:value="filters.is_success"
-              :options="successOptions"
-              size="small"
-              style="width: 80px"
-              @update:value="handleSearch"
-            />
-            <n-date-picker
-              v-model:value="filters.start_time"
-              type="datetime"
-              clearable
-              size="small"
-              placeholder="开始时间"
-              style="width: 180px"
-            />
-            <n-date-picker
-              v-model:value="filters.end_time"
-              type="datetime"
-              clearable
-              size="small"
-              placeholder="结束时间"
-              style="width: 180px"
-            />
-            <n-input
-              v-model:value="filters.status_code"
-              placeholder="状态码"
-              size="small"
-              clearable
-              style="width: 90px"
-              @keyup.enter="handleSearch"
-            />
-            <n-input
-              v-model:value="filters.group_name"
-              placeholder="分组名"
-              size="small"
-              clearable
-              style="width: 120px"
-              @keyup.enter="handleSearch"
-            />
-            <n-input
-              v-model:value="filters.key_value"
-              placeholder="密钥"
-              size="small"
-              clearable
-              style="width: 180px"
-              @keyup.enter="handleSearch"
-            />
-            <n-input-group>
+        <div class="filter-section">
+          <!-- 第一行：基础筛选 -->
+          <div class="filter-row">
+            <div class="filter-group">
+              <n-date-picker
+                v-model:value="filters.start_time"
+                type="datetime"
+                clearable
+                size="small"
+                placeholder="开始时间"
+                style="width: 180px"
+              />
+            </div>
+            <div class="filter-group">
+              <n-date-picker
+                v-model:value="filters.end_time"
+                type="datetime"
+                clearable
+                size="small"
+                placeholder="结束时间"
+                style="width: 180px"
+              />
+            </div>
+            <div class="filter-group">
+              <n-select
+                v-model:value="filters.is_success"
+                :options="successOptions"
+                size="small"
+                style="width: 166px"
+                @update:value="handleSearch"
+              />
+            </div>
+            <div class="filter-group">
+              <n-input
+                v-model:value="filters.status_code"
+                placeholder="状态码"
+                size="small"
+                clearable
+                style="width: 166px"
+                @keyup.enter="handleSearch"
+              />
+            </div>
+            <div class="filter-group">
+              <n-input
+                v-model:value="filters.group_name"
+                placeholder="分组名"
+                size="small"
+                clearable
+                style="width: 166px"
+                @keyup.enter="handleSearch"
+              />
+            </div>
+            <div class="filter-group">
+              <n-input
+                v-model:value="filters.key_value"
+                placeholder="密钥"
+                size="small"
+                clearable
+                style="width: 166px"
+                @keyup.enter="handleSearch"
+              />
+            </div>
+          </div>
+
+          <!-- 第二行：详细筛选和操作 -->
+          <div class="filter-row">
+            <div class="filter-group">
               <n-input
                 v-model:value="filters.error_contains"
                 placeholder="错误信息"
                 size="small"
                 clearable
-                style="width: 150px"
+                style="width: 384px"
                 @keyup.enter="handleSearch"
               />
+            </div>
+            <div class="filter-actions">
               <n-button ghost size="small" :disabled="loading" @click="handleSearch">
-                <n-icon :component="Search" />
+                <template #icon>
+                  <n-icon :component="Search" />
+                </template>
+                搜索
               </n-button>
-            </n-input-group>
-            <n-button size="small" @click="resetFilters">重置</n-button>
-          </n-space>
+              <n-button size="small" @click="resetFilters">重置</n-button>
+              <n-button size="small" type="primary" ghost @click="exportLogs">
+                <template #icon>
+                  <n-icon :component="DownloadOutline" />
+                </template>
+                导出密钥
+              </n-button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="table-main">
@@ -347,11 +388,61 @@ function changePageSize(size: number) {
 .toolbar {
   background: white;
   border-radius: 8px;
-  display: flex;
-  justify-content: left;
-  align-items: center;
-  padding: 12px;
+  padding: 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+.filter-separator {
+  font-size: 12px;
+  color: #999;
+  margin: 0 4px;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 1200px) {
+  .filter-row {
+    gap: 16px;
+  }
+
+  .filter-group {
+    min-width: auto;
+  }
+
+  .filter-actions {
+    margin-left: 0;
+  }
 }
 .table-main {
   background: white;

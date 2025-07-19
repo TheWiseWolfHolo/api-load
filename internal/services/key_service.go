@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
+	"io"
 	"regexp"
 	"strings"
 
@@ -305,4 +306,29 @@ func (s *KeyService) TestMultipleKeys(group *models.Group, keysText string) ([]k
 	}
 
 	return allResults, nil
+}
+
+// StreamKeysToWriter fetches keys from the database in batches and writes them to the provided writer.
+func (s *KeyService) StreamKeysToWriter(groupID uint, statusFilter string, writer io.Writer) error {
+	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Select("id, key_value")
+
+	switch statusFilter {
+	case models.KeyStatusActive, models.KeyStatusInvalid:
+		query = query.Where("status = ?", statusFilter)
+	case "all":
+	default:
+		return fmt.Errorf("invalid status filter: %s", statusFilter)
+	}
+
+	var keys []models.APIKey
+	err := query.FindInBatches(&keys, chunkSize, func(tx *gorm.DB, batch int) error {
+		for _, key := range keys {
+			if _, err := writer.Write([]byte(key.KeyValue + "\n")); err != nil {
+				return err
+			}
+		}
+		return nil
+	}).Error
+
+	return err
 }
