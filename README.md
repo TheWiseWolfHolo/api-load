@@ -346,6 +346,7 @@ curl -X POST https://api.anthropic.com/v1/messages \
 ```bash
 curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
   -H "x-api-key: sk-123456" \
+  -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-20250514", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
@@ -354,7 +355,6 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 
 - 将 `https://api.anthropic.com` 替换为 `http://localhost:3001/proxy/anthropic`
 - 将 `x-api-key` 头部中的原始 API Key 替换为统一认证密钥 `sk-123456`（默认值）
-- 无需手动设置 `anthropic-version` 头部，代理会自动添加
 
 #### 6. 支持的接口
 

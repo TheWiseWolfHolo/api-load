@@ -346,6 +346,7 @@ curl -X POST https://api.anthropic.com/v1/messages \
 ```bash
 curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
   -H "x-api-key: sk-123456" \
+  -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-20250514", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
@@ -354,7 +355,6 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 
 - Replace `https://api.anthropic.com` with `http://localhost:3001/proxy/anthropic`
 - Replace the original API Key in `x-api-key` header with unified authentication key `sk-123456` (default value)
-- No need to manually set `anthropic-version` header, the proxy will add it automatically
 
 #### 6. Supported Interfaces
 
