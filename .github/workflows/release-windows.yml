@@ -24,7 +24,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: "web/package-lock.json"
       - name: Build Frontend
-        run: VITE_VERSION=${{ github.ref_name }} npm install && npm run build
+        run: npm install && VITE_VERSION=${{ github.ref_name }} npm run build
         working-directory: ./web
       - name: Setup Go
         uses: actions/setup-go@v5
