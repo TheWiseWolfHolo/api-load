@@ -36,7 +36,7 @@ export interface Group {
   description: string;
   sort: number;
   test_model: string;
-  channel_type: "openai" | "gemini";
+  channel_type: "openai" | "gemini" | "anthropic";
   upstreams: UpstreamInfo[];
   config: Record<string, unknown>;
   api_keys?: APIKey[];
