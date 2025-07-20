@@ -1,4 +1,4 @@
-name: Release Linux Build
+name: Release Windows Build
 permissions:
   contents: write
 
