@@ -1,4 +1,6 @@
 name: Release Linux Build
+permissions:
+  contents: write
 
 on:
   push:
