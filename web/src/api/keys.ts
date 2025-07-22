@@ -157,7 +157,7 @@ export const keysApi = {
 
     const params = new URLSearchParams({
       group_id: groupId.toString(),
-      auth_key: authKey,
+      key: authKey,
     });
 
     if (status !== "all") {
