@@ -196,6 +196,22 @@ GPT-Load 采用双层配置架构：
 | 启用文件日志 | `LOG_ENABLE_FILE` | false                 | 是否启用文件日志输出               |
 | 日志文件路径 | `LOG_FILE_PATH`   | `./data/logs/app.log` | 日志文件存储路径                   |
 
+#### 代理配置
+
+GPT-Load 会自动从环境变量中读取代理设置，用于向上游 AI 服务商发起请求。
+
+| 配置项 | 环境变量 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| HTTP 代理 | `HTTP_PROXY` | - | 用于 HTTP 请求的代理服务器地址 |
+| HTTPS 代理 | `HTTPS_PROXY` | - | 用于 HTTPS 请求的代理服务器地址 |
+| 无代理 | `NO_PROXY` | - | 不需要通过代理访问的主机或域名，逗号分隔 |
+
+**支持的代理协议格式：**
+
+- **HTTP**: `http://user:pass@host:port`
+- **HTTPS**: `https://user:pass@host:port`
+- **SOCKS5**: `socks5://user:pass@host:port`
+
 ### 动态配置（热重载）
 
 动态配置存储在数据库中，支持通过 Web 管理界面进行实时修改，修改后立即生效无需重启。

@@ -196,6 +196,22 @@ GPT-Load adopts a dual-layer configuration architecture:
 | Enable File Logging | `LOG_ENABLE_FILE`    | false                 | Whether to enable file log output   |
 | Log File Path       | `LOG_FILE_PATH`      | `./data/logs/app.log` | Log file storage path               |
 
+#### Proxy Configuration
+
+GPT-Load automatically reads proxy settings from environment variables to make requests to upstream AI providers.
+
+| Setting | Environment Variable | Default | Description |
+| --- | --- | --- | --- |
+| HTTP Proxy | `HTTP_PROXY` | - | Proxy server address for HTTP requests |
+| HTTPS Proxy | `HTTPS_PROXY` | - | Proxy server address for HTTPS requests |
+| No Proxy | `NO_PROXY` | - | Comma-separated list of hosts or domains to bypass the proxy |
+
+**Supported Proxy Protocol Formats:**
+
+- **HTTP**: `http://user:pass@host:port`
+- **HTTPS**: `https://user:pass@host:port`
+- **SOCKS5**: `socks5://user:pass@host:port`
+
 ### Dynamic Configuration (Hot-Reload)
 
 Dynamic configuration is stored in the database and supports real-time modification through the web management interface, taking effect immediately without restart.
