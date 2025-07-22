@@ -31,7 +31,7 @@ export const logApi = {
         {} as Record<string, string>
       )
     );
-    queryParams.append("auth_key", authKey);
+    queryParams.append("key", authKey);
 
     const url = `${http.defaults.baseURL}/logs/export?${queryParams.toString()}`;
 

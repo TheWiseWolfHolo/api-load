@@ -59,18 +59,6 @@ func (ch *OpenAIChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool 
 	return false
 }
 
-// ExtractKey extracts the API key from the Authorization header.
-func (ch *OpenAIChannel) ExtractKey(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader != "" {
-		const bearerPrefix = "Bearer "
-		if strings.HasPrefix(authHeader, bearerPrefix) {
-			return authHeader[len(bearerPrefix):]
-		}
-	}
-	return ""
-}
-
 // ValidateKey checks if the given API key is valid by making a chat completion request.
 func (ch *OpenAIChannel) ValidateKey(ctx context.Context, key string) (bool, error) {
 	upstreamURL := ch.getUpstreamURL()

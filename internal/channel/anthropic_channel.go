@@ -60,25 +60,6 @@ func (ch *AnthropicChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bo
 	return false
 }
 
-// ExtractKey extracts the API key from the x-api-key header.
-func (ch *AnthropicChannel) ExtractKey(c *gin.Context) string {
-	// Check x-api-key header (Anthropic's standard)
-	if key := c.GetHeader("x-api-key"); key != "" {
-		return key
-	}
-
-	// Fallback to Authorization header for compatibility
-	authHeader := c.GetHeader("Authorization")
-	if authHeader != "" {
-		const bearerPrefix = "Bearer "
-		if strings.HasPrefix(authHeader, bearerPrefix) {
-			return authHeader[len(bearerPrefix):]
-		}
-	}
-
-	return ""
-}
-
 // ValidateKey checks if the given API key is valid by making a messages request.
 func (ch *AnthropicChannel) ValidateKey(ctx context.Context, key string) (bool, error) {
 	upstreamURL := ch.getUpstreamURL()

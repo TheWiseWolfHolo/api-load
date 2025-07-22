@@ -40,7 +40,6 @@ func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey,
 	req.URL.RawQuery = q.Encode()
 }
 
-
 // IsStreamRequest checks if the request is for a streaming response.
 func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
 	path := c.Request.URL.Path
@@ -57,21 +56,6 @@ func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool 
 	}
 
 	return false
-}
-
-// ExtractKey extracts the API key from the X-Goog-Api-Key header or the "key" query parameter.
-func (ch *GeminiChannel) ExtractKey(c *gin.Context) string {
-	// 1. Check X-Goog-Api-Key header
-	if key := c.GetHeader("X-Goog-Api-Key"); key != "" {
-		return key
-	}
-
-	// 2. Check "key" query parameter
-	if key := c.Query("key"); key != "" {
-		return key
-	}
-
-	return ""
 }
 
 // ValidateKey checks if the given API key is valid by making a generateContent request.

@@ -156,6 +156,15 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	req.ContentLength = int64(len(bodyBytes))
 
 	req.Header = c.Request.Header.Clone()
+
+	// Clean up client auth key
+	req.Header.Del("Authorization")
+	req.Header.Del("X-Api-Key")
+	req.Header.Del("X-Goog-Api-Key")
+	q := req.URL.Query()
+	q.Del("key")
+	req.URL.RawQuery = q.Encode()
+
 	channelHandler.ModifyRequest(req, apiKey, group)
 
 	var client *http.Client
