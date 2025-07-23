@@ -2,18 +2,18 @@
 import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
 import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
-import { Add, Close, Remove } from "@vicons/ionicons5";
+import { Add, Close, HelpCircleOutline, Remove } from "@vicons/ionicons5";
 import {
   NButton,
   NCard,
-  NCollapse,
-  NCollapseItem,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NInputNumber,
   NModal,
   NSelect,
+  NTooltip,
   useMessage,
   type FormRules,
 } from "naive-ui";
@@ -27,6 +27,7 @@ interface Props {
 interface Emits {
   (e: "update:show", value: boolean): void;
   (e: "success", value: Group): void;
+  (e: "switchToGroup", groupId: number): void;
 }
 
 // 配置项类型
@@ -51,7 +52,7 @@ interface GroupFormData {
   display_name: string;
   description: string;
   upstreams: UpstreamInfo[];
-  channel_type: "openai" | "gemini" | "anthropic";
+  channel_type: "anthropic" | "gemini" | "openai";
   sort: number;
   test_model: string;
   validation_endpoint: string;
@@ -85,15 +86,21 @@ const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
 
+// 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
+const userModifiedFields = ref({
+  test_model: false,
+  upstream: false,
+});
+
 // 根据渠道类型动态生成占位符提示
 const testModelPlaceholder = computed(() => {
   switch (formData.channel_type) {
     case "openai":
-      return "如：gpt-4.1-nano";
+      return "gpt-4.1-nano";
     case "gemini":
-      return "如：gemini-2.0-flash-lite";
+      return "gemini-2.0-flash-lite";
     case "anthropic":
-      return "如：claude-3-haiku-20240307";
+      return "claude-3-haiku-20240307";
     default:
       return "请输入模型名称";
   }
@@ -109,6 +116,19 @@ const upstreamPlaceholder = computed(() => {
       return "https://api.anthropic.com";
     default:
       return "请输入上游地址";
+  }
+});
+
+const validationEndpointPlaceholder = computed(() => {
+  switch (formData.channel_type) {
+    case "openai":
+      return "/v1/chat/completions";
+    case "anthropic":
+      return "/v1/messages";
+    case "gemini":
+      return ""; // Gemini 不显示此字段
+    default:
+      return "请输入验证端点路径";
   }
 });
 
@@ -169,21 +189,95 @@ watch(
   }
 );
 
+// 监听渠道类型变化，在新增模式下智能更新默认值
+watch(
+  () => formData.channel_type,
+  (_newChannelType, oldChannelType) => {
+    if (!props.group && oldChannelType) {
+      // 仅在新增模式且不是初始设置时处理
+      // 检查测试模型是否应该更新（为空或是旧渠道类型的默认值）
+      if (
+        !userModifiedFields.value.test_model ||
+        formData.test_model === getOldDefaultTestModel(oldChannelType)
+      ) {
+        formData.test_model = testModelPlaceholder.value;
+        userModifiedFields.value.test_model = false;
+      }
+
+      // 检查第一个上游地址是否应该更新
+      if (
+        formData.upstreams.length > 0 &&
+        (!userModifiedFields.value.upstream ||
+          formData.upstreams[0].url === getOldDefaultUpstream(oldChannelType))
+      ) {
+        formData.upstreams[0].url = upstreamPlaceholder.value;
+        userModifiedFields.value.upstream = false;
+      }
+    }
+  }
+);
+
+// 获取旧渠道类型的默认值（用于比较）
+function getOldDefaultTestModel(channelType: string): string {
+  switch (channelType) {
+    case "openai":
+      return "gpt-4.1-nano";
+    case "gemini":
+      return "gemini-2.0-flash-lite";
+    case "anthropic":
+      return "claude-3-haiku-20240307";
+    default:
+      return "";
+  }
+}
+
+function getOldDefaultUpstream(channelType: string): string {
+  switch (channelType) {
+    case "openai":
+      return "https://api.openai.com";
+    case "gemini":
+      return "https://generativelanguage.googleapis.com";
+    case "anthropic":
+      return "https://api.anthropic.com";
+    default:
+      return "";
+  }
+}
+
 // 重置表单
 function resetForm() {
+  const isCreateMode = !props.group;
+  const defaultChannelType = "openai";
+
+  // 先设置渠道类型，这样 computed 属性能正确计算默认值
+  formData.channel_type = defaultChannelType;
+
   Object.assign(formData, {
     name: "",
     display_name: "",
     description: "",
-    upstreams: [{ url: "", weight: 1 }],
-    channel_type: "openai",
+    upstreams: [
+      {
+        url: isCreateMode ? upstreamPlaceholder.value : "",
+        weight: 1,
+      },
+    ],
+    channel_type: defaultChannelType,
     sort: 1,
-    test_model: "",
+    test_model: isCreateMode ? testModelPlaceholder.value : "",
     validation_endpoint: "",
     param_overrides: "",
     config: {},
     configItems: [],
   });
+
+  // 重置用户修改状态追踪
+  if (isCreateMode) {
+    userModifiedFields.value = {
+      test_model: false,
+      upstream: false,
+    };
+  }
 }
 
 // 加载分组数据（编辑模式）
@@ -326,6 +420,10 @@ async function handleSubmit() {
     }
 
     emit("success", res);
+    // 如果是新建模式，发出切换到新分组的事件
+    if (!props.group?.id && res.id) {
+      emit("switchToGroup", res.id);
+    }
     handleClose();
   } finally {
     loading.value = false;
@@ -363,52 +461,156 @@ async function handleSubmit() {
         <div class="form-section">
           <h4 class="section-title">基础信息</h4>
 
-          <n-form-item label="分组名称" path="name">
-            <n-input v-model:value="formData.name" placeholder="作为路由的一部分，如：gemini" />
-          </n-form-item>
+          <!-- 分组名称和显示名称在同一行 -->
+          <div class="form-row">
+            <n-form-item label="分组名称" path="name" class="form-item-half">
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  分组名称
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    作为API路由的一部分，只能包含小写字母、数字、中划线或下划线，长度3-30位。例如：gemini、openai-2
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-input v-model:value="formData.name" placeholder="gemini" />
+            </n-form-item>
 
-          <n-form-item label="显示名称" path="display_name">
-            <n-input v-model:value="formData.display_name" placeholder="可选，用于显示的友好名称" />
-          </n-form-item>
+            <n-form-item label="显示名称" path="display_name" class="form-item-half">
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  显示名称
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    用于在界面上显示的友好名称，可以包含中文和特殊字符。如果不填写，将使用分组名称作为显示名称
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-input v-model:value="formData.display_name" placeholder="Google Gemini" />
+            </n-form-item>
+          </div>
 
-          <n-form-item label="渠道类型" path="channel_type">
-            <n-select
-              v-model:value="formData.channel_type"
-              :options="channelTypeOptions"
-              placeholder="请选择渠道类型"
-            />
-          </n-form-item>
+          <!-- 渠道类型和排序在同一行 -->
+          <div class="form-row">
+            <n-form-item label="渠道类型" path="channel_type" class="form-item-half">
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  渠道类型
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    选择API提供商类型，决定了请求格式和认证方式。支持OpenAI、Gemini、Anthropic等主流AI服务商
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-select
+                v-model:value="formData.channel_type"
+                :options="channelTypeOptions"
+                placeholder="请选择渠道类型"
+              />
+            </n-form-item>
 
-          <n-form-item label="测试模型" path="test_model">
-            <n-input v-model:value="formData.test_model" :placeholder="testModelPlaceholder" />
-          </n-form-item>
+            <n-form-item label="排序" path="sort" class="form-item-half">
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  排序
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    决定分组在列表中的显示顺序，数字越小越靠前。建议使用10、20、30这样的间隔数字，便于后续调整
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-input-number
+                v-model:value="formData.sort"
+                :min="0"
+                placeholder="排序值"
+                style="width: 100%"
+              />
+            </n-form-item>
+          </div>
 
-          <n-form-item
-            label="测试路径"
-            path="validation_endpoint"
-            v-if="formData.channel_type !== 'gemini'"
-          >
-            <n-input
-              v-model:value="formData.validation_endpoint"
-              placeholder="可选，自定义用于验证key的API路径"
-            />
-          </n-form-item>
+          <!-- 测试模型和测试路径在同一行 -->
+          <div class="form-row">
+            <n-form-item label="测试模型" path="test_model" class="form-item-half">
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  测试模型
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    用于验证API密钥有效性的模型名称。系统会使用这个模型发送测试请求来检查密钥是否可用，请尽量使用轻量快速的模型
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-input
+                v-model:value="formData.test_model"
+                :placeholder="testModelPlaceholder"
+                @input="() => !props.group && (userModifiedFields.test_model = true)"
+              />
+            </n-form-item>
 
-          <n-form-item label="排序" path="sort">
-            <n-input-number
-              v-model:value="formData.sort"
-              :min="0"
-              placeholder="排序值，数字越小越靠前"
-            />
-          </n-form-item>
+            <n-form-item
+              label="测试路径"
+              path="validation_endpoint"
+              class="form-item-half"
+              v-if="formData.channel_type !== 'gemini'"
+            >
+              <template #label>
+                <div class="form-label-with-tooltip">
+                  测试路径
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon" />
+                    </template>
+                    <div>
+                      自定义用于验证密钥的API端点路径。如果不填写，将使用默认路径：
+                      <br />
+                      • OpenAI: /v1/chat/completions
+                      <br />
+                      • Anthropic: /v1/messages
+                      <br />
+                      如需使用非标准路径，请在此填写完整的API路径
+                    </div>
+                  </n-tooltip>
+                </div>
+              </template>
+              <n-input
+                v-model:value="formData.validation_endpoint"
+                :placeholder="validationEndpointPlaceholder || '可选，自定义用于验证key的API路径'"
+              />
+            </n-form-item>
 
+            <!-- 当gemini渠道时，测试路径不显示，需要一个占位div保持布局 -->
+            <div v-else class="form-item-half" />
+          </div>
+
+          <!-- 描述独占一行 -->
           <n-form-item label="描述" path="description">
+            <template #label>
+              <div class="form-label-with-tooltip">
+                描述
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-icon :component="HelpCircleOutline" class="help-icon" />
+                  </template>
+                  分组的详细说明，帮助团队成员了解该分组的用途和特点。支持多行文本
+                </n-tooltip>
+              </div>
+            </template>
             <n-input
               v-model:value="formData.description"
               type="textarea"
-              placeholder="可选，分组描述信息"
-              :rows="2"
-              :autosize="{ minRows: 2, maxRows: 2 }"
+              placeholder=""
+              :rows="1"
+              :autosize="{ minRows: 1, maxRows: 5 }"
               style="resize: none"
             />
           </n-form-item>
@@ -417,7 +619,6 @@ async function handleSubmit() {
         <!-- 上游地址 -->
         <div class="form-section" style="margin-top: 10px">
           <h4 class="section-title">上游地址</h4>
-
           <n-form-item
             v-for="(upstream, index) in formData.upstreams"
             :key="index"
@@ -429,27 +630,42 @@ async function handleSubmit() {
               trigger: ['blur', 'input'],
             }"
           >
-            <div class="flex items-center gap-2" style="width: 100%">
-              <n-input
-                v-model:value="upstream.url"
-                :placeholder="upstreamPlaceholder"
-                style="flex: 1"
-              />
-              <span class="form-label">权重</span>
-              <n-input-number
-                v-model:value="upstream.weight"
-                :min="1"
-                placeholder="权重"
-                style="width: 100px"
-              />
-              <div style="width: 40px">
+            <template #label>
+              <div class="form-label-with-tooltip">
+                上游 {{ index + 1 }}
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-icon :component="HelpCircleOutline" class="help-icon" />
+                  </template>
+                  API服务器的完整URL地址。多个上游可以实现负载均衡和故障转移，提高服务可用性
+                </n-tooltip>
+              </div>
+            </template>
+            <div class="upstream-row">
+              <div class="upstream-url">
+                <n-input
+                  v-model:value="upstream.url"
+                  :placeholder="upstreamPlaceholder"
+                  @input="() => !props.group && index === 0 && (userModifiedFields.upstream = true)"
+                />
+              </div>
+              <div class="upstream-weight">
+                <span class="weight-label">权重</span>
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-input-number v-model:value="upstream.weight" :min="1" placeholder="权重" />
+                  </template>
+                  负载均衡权重，数值越大被选中的概率越高。例如：权重为2的上游被选中的概率是权重为1的两倍
+                </n-tooltip>
+              </div>
+              <div class="upstream-actions">
                 <n-button
                   v-if="formData.upstreams.length > 1"
                   @click="removeUpstream(index)"
                   type="error"
                   quaternary
                   circle
-                  style="margin-left: 10px"
+                  size="small"
                 >
                   <template #icon>
                     <n-icon :component="Remove" />
@@ -472,15 +688,24 @@ async function handleSubmit() {
         <!-- 高级配置 -->
         <div class="form-section" style="margin-top: 10px">
           <n-collapse>
-            <n-collapse-item title="高级配置" name="advanced">
+            <n-collapse-item name="advanced">
+              <template #header>高级配置</template>
               <div class="config-section">
-                <h5 class="config-title">分组配置</h5>
+                <h5 class="config-title-with-tooltip">
+                  分组配置
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon config-help" />
+                    </template>
+                    针对此分组的专用配置参数，如超时时间、重试次数等。这些配置会覆盖全局默认设置
+                  </n-tooltip>
+                </h5>
 
                 <div class="config-items">
                   <n-form-item
                     v-for="(configItem, index) in formData.configItems"
                     :key="index"
-                    class="flex config-item"
+                    class="config-item-row"
                     :label="`配置 ${index + 1}`"
                     :path="`configItems[${index}].key`"
                     :rule="{
@@ -489,42 +714,56 @@ async function handleSubmit() {
                       trigger: ['blur', 'change'],
                     }"
                   >
-                    <div class="flex items-center" style="width: 100%">
-                      <n-select
-                        v-model:value="configItem.key"
-                        :options="
-                          configOptions.map(opt => ({
-                            label: opt.name,
-                            value: opt.key,
-                            disabled:
-                              formData.configItems
-                                .map((item: ConfigItem) => item.key)
-                                ?.includes(opt.key) && opt.key !== configItem.key,
-                          }))
-                        "
-                        placeholder="请选择配置参数"
-                        style="min-width: 200px"
-                        @update:value="value => handleConfigKeyChange(index, value)"
-                        clearable
-                      />
-                      <n-input-number
-                        v-model:value="configItem.value"
-                        placeholder="参数值"
-                        style="width: 180px; margin-left: 15px"
-                        :precision="0"
-                      />
-                      <n-button
-                        @click="removeConfigItem(index)"
-                        type="error"
-                        quaternary
-                        circle
-                        size="small"
-                        style="margin-left: 10px"
-                      >
-                        <template #icon>
-                          <n-icon :component="Remove" />
-                        </template>
-                      </n-button>
+                    <template #label>
+                      <div class="form-label-with-tooltip">
+                        配置 {{ index + 1 }}
+                        <n-tooltip trigger="hover" placement="top">
+                          <template #trigger>
+                            <n-icon :component="HelpCircleOutline" class="help-icon" />
+                          </template>
+                          选择要配置的参数类型，然后设置对应的数值。不同参数有不同的作用和取值范围
+                        </n-tooltip>
+                      </div>
+                    </template>
+                    <div class="config-item-content">
+                      <div class="config-select">
+                        <n-select
+                          v-model:value="configItem.key"
+                          :options="
+                            configOptions.map(opt => ({
+                              label: opt.name,
+                              value: opt.key,
+                              disabled:
+                                formData.configItems
+                                  .map((item: ConfigItem) => item.key)
+                                  ?.includes(opt.key) && opt.key !== configItem.key,
+                            }))
+                          "
+                          placeholder="请选择配置参数"
+                          @update:value="value => handleConfigKeyChange(index, value)"
+                          clearable
+                        />
+                      </div>
+                      <div class="config-value">
+                        <n-input-number
+                          v-model:value="configItem.value"
+                          placeholder="参数值"
+                          :precision="0"
+                        />
+                      </div>
+                      <div class="config-actions">
+                        <n-button
+                          @click="removeConfigItem(index)"
+                          type="error"
+                          quaternary
+                          circle
+                          size="small"
+                        >
+                          <template #icon>
+                            <n-icon :component="Remove" />
+                          </template>
+                        </n-button>
+                      </div>
                     </div>
                   </n-form-item>
                 </div>
@@ -544,17 +783,26 @@ async function handleSubmit() {
                 </div>
               </div>
               <div class="config-section">
-                <h5 class="config-title">参数覆盖</h5>
-                <div class="config-items">
-                  <n-form-item path="param_overrides">
-                    <n-input
-                      v-model:value="formData.param_overrides"
-                      type="textarea"
-                      placeholder="JSON 格式的参数覆盖配置"
-                      :rows="4"
-                    />
-                  </n-form-item>
-                </div>
+                <n-form-item path="param_overrides">
+                  <template #label>
+                    <div class="form-label-with-tooltip">
+                      参数覆盖
+                      <n-tooltip trigger="hover" placement="top">
+                        <template #trigger>
+                          <n-icon :component="HelpCircleOutline" class="help-icon config-help" />
+                        </template>
+                        使用JSON格式定义要覆盖的API请求参数。例如： {&quot;temperature&quot;: 0.7,
+                        &quot;max_tokens&quot;: 2000}。这些参数会在发送请求时合并到原始参数中
+                      </n-tooltip>
+                    </div>
+                  </template>
+                  <n-input
+                    v-model:value="formData.param_overrides"
+                    type="textarea"
+                    placeholder='{"temperature": 0.7, "max_tokens": 2000}'
+                    :rows="4"
+                  />
+                </n-form-item>
               </div>
             </n-collapse-item>
           </n-collapse>
@@ -649,10 +897,187 @@ async function handleSubmit() {
   font-weight: 500;
 }
 
-.config-item {
-  margin-bottom: 12px;
+/* Tooltip相关样式 */
+.form-label-with-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.help-icon {
+  color: #9ca3af;
+  font-size: 14px;
+  cursor: help;
+  transition: color 0.2s ease;
+}
+
+.help-icon:hover {
+  color: #667eea;
+}
+
+.section-title-with-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.section-help {
+  font-size: 16px;
+}
+
+.collapse-header-with-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.collapse-help {
+  font-size: 14px;
+}
+
+.config-title-with-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.config-help {
+  font-size: 13px;
+}
+
+/* 增强表单样式 */
+:deep(.n-form-item-label) {
+  font-weight: 500;
+  color: #374151;
+}
+
+:deep(.n-input) {
+  --n-border-radius: 8px;
+  --n-border: 1px solid #e5e7eb;
+  --n-border-hover: 1px solid #667eea;
+  --n-border-focus: 1px solid #667eea;
+  --n-box-shadow-focus: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+:deep(.n-select) {
+  --n-border-radius: 8px;
+}
+
+:deep(.n-input-number) {
+  --n-border-radius: 8px;
+}
+
+:deep(.n-button) {
+  --n-border-radius: 8px;
+}
+
+/* 美化tooltip */
+:deep(.n-tooltip__trigger) {
+  display: inline-flex;
+  align-items: center;
+}
+
+:deep(.n-tooltip) {
+  --n-font-size: 13px;
+  --n-border-radius: 8px;
+}
+
+:deep(.n-tooltip .n-tooltip__content) {
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+:deep(.n-tooltip .n-tooltip__content div) {
+  white-space: pre-line;
+}
+
+/* 折叠面板样式优化 */
+:deep(.n-collapse-item__header) {
+  font-weight: 500;
+  color: #374151;
+}
+
+:deep(.n-collapse-item) {
+  --n-title-padding: 16px 0;
+}
+
 :deep(.n-base-selection-label) {
   height: 40px;
+}
+
+/* 表单行布局 */
+.form-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.form-item-half {
+  flex: 1;
+  width: 50%;
+}
+
+/* 上游地址行布局 */
+.upstream-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.upstream-url {
+  flex: 1;
+}
+
+.upstream-weight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 140px;
+}
+
+.weight-label {
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.upstream-actions {
+  flex: 0 0 32px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 配置项行布局 */
+.config-item-row {
+  margin-bottom: 12px;
+}
+
+.config-item-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.config-select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.config-value {
+  flex: 0 0 140px;
+}
+
+.config-actions {
+  flex: 0 0 32px;
+  display: flex;
+  justify-content: center;
 }
 </style>

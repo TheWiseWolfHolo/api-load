@@ -62,6 +62,16 @@ async function pollOnce() {
               localStorage.setItem("last_closed_task", task.finished_at || "");
             },
           });
+
+          // 触发分组数据刷新
+          if (task.group_name && task.finished_at) {
+            appState.lastCompletedTask = {
+              groupName: task.group_name,
+              taskType: task.task_type,
+              finishedAt: task.finished_at,
+            };
+            appState.groupDataRefreshTrigger++;
+          }
         }
       }
       return;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
-import type { Group, GroupStatsResponse } from "@/types/models";
+import type { Group, GroupConfigOption, GroupStatsResponse } from "@/types/models";
+import { appState } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
 import { getGroupDisplayName } from "@/utils/display";
 import { Pencil, Trash } from "@vicons/ionicons5";
@@ -13,8 +14,10 @@ import {
   NFormItem,
   NGrid,
   NGridItem,
+  NIcon,
   NSpin,
   NTag,
+  NTooltip,
   useDialog,
 } from "naive-ui";
 import { onMounted, ref, watch } from "vue";
@@ -39,9 +42,11 @@ const dialog = useDialog();
 const showEditModal = ref(false);
 const delLoading = ref(false);
 const expandedName = ref<string[]>([]);
+const configOptions = ref<GroupConfigOption[]>([]);
 
 onMounted(() => {
   loadStats();
+  loadConfigOptions();
 });
 
 watch(
@@ -49,6 +54,44 @@ watch(
   () => {
     resetPage();
     loadStats();
+  }
+);
+
+// 监听任务完成事件，自动刷新当前分组数据
+watch(
+  () => appState.groupDataRefreshTrigger,
+  () => {
+    // 检查是否需要刷新当前分组的数据
+    if (appState.lastCompletedTask && props.group) {
+      // 通过分组名称匹配
+      const isCurrentGroup = appState.lastCompletedTask.groupName === props.group.name;
+
+      const shouldRefresh =
+        appState.lastCompletedTask.taskType === "KEY_VALIDATION" ||
+        appState.lastCompletedTask.taskType === "KEY_IMPORT";
+
+      if (isCurrentGroup && shouldRefresh) {
+        // 刷新当前分组的统计数据
+        loadStats();
+      }
+    }
+  }
+);
+
+// 监听同步操作完成事件，自动刷新当前分组数据
+watch(
+  () => appState.syncOperationTrigger,
+  () => {
+    // 检查是否需要刷新当前分组的数据
+    if (appState.lastSyncOperation && props.group) {
+      // 通过分组名称匹配
+      const isCurrentGroup = appState.lastSyncOperation.groupName === props.group.name;
+
+      if (isCurrentGroup) {
+        // 刷新当前分组的统计数据
+        loadStats();
+      }
+    }
   }
 );
 
@@ -66,6 +109,25 @@ async function loadStats() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadConfigOptions() {
+  try {
+    const options = await keysApi.getGroupConfigOptions();
+    configOptions.value = options || [];
+  } catch (error) {
+    console.error("获取配置选项失败:", error);
+  }
+}
+
+function getConfigDisplayName(key: string): string {
+  const option = configOptions.value.find(opt => opt.key === key);
+  return option?.name || key;
+}
+
+function getConfigDescription(key: string): string {
+  const option = configOptions.value.find(opt => opt.key === key);
+  return option?.description || "暂无说明";
 }
 
 function handleEdit() {
@@ -295,27 +357,27 @@ function resetPage() {
                   <n-grid :cols="2">
                     <n-grid-item>
                       <n-form-item label="分组名称：">
-                        {{ group?.name || "-" }}
+                        {{ group?.name }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="显示名称：">
-                        {{ group?.display_name || "-" }}
+                        {{ group?.display_name }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="渠道类型：">
-                        {{ group?.channel_type || "-" }}
-                      </n-form-item>
-                    </n-grid-item>
-                    <n-grid-item>
-                      <n-form-item label="测试模型：">
-                        {{ group?.test_model || "-" }}
+                        {{ group?.channel_type }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="排序：">
-                        {{ group?.sort || 0 }}
+                        {{ group?.sort }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="测试模型：">
+                        {{ group?.test_model }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item v-if="group?.channel_type !== 'gemini'">
@@ -325,7 +387,9 @@ function resetPage() {
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="描述：">
-                        {{ group?.description || "-" }}
+                        <div class="description-content">
+                          {{ group?.description }}
+                        </div>
                       </n-form-item>
                     </n-grid-item>
                   </n-grid>
@@ -357,11 +421,29 @@ function resetPage() {
               >
                 <h4 class="section-title">高级配置</h4>
                 <n-form label-placement="left">
-                  <n-form-item
-                    v-for="(value, key) in group?.config || {}"
-                    :key="key"
-                    :label="`${key}:`"
-                  >
+                  <n-form-item v-for="(value, key) in group?.config || {}" :key="key">
+                    <template #label>
+                      <n-tooltip trigger="hover" :delay="300" placement="top">
+                        <template #trigger>
+                          <span class="config-label">
+                            {{ getConfigDisplayName(key) }}:
+                            <n-icon size="14" class="config-help-icon">
+                              <svg viewBox="0 0 24 24">
+                                <path
+                                  fill="currentColor"
+                                  d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M12,10.5C10.07,10.5 8.5,8.93 8.5,7A3.5,3.5 0 0,1 12,3.5A3.5,3.5 0 0,1 15.5,7C15.5,8.93 13.93,10.5 12,10.5Z"
+                                />
+                              </svg>
+                            </n-icon>
+                          </span>
+                        </template>
+                        <div class="config-tooltip">
+                          <div class="tooltip-title">{{ getConfigDisplayName(key) }}</div>
+                          <div class="tooltip-description">{{ getConfigDescription(key) }}</div>
+                          <div class="tooltip-key">配置键: {{ key }}</div>
+                        </div>
+                      </n-tooltip>
+                    </template>
                     {{ value || "-" }}
                   </n-form-item>
                   <n-form-item v-if="group?.param_overrides" label="参数覆盖:" :span="2">
@@ -520,5 +602,60 @@ function resetPage() {
 
 :deep(.n-form-item-feedback-wrapper) {
   min-height: 0;
+}
+
+/* 描述内容样式 */
+.description-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+  min-height: 20px;
+  color: #374151;
+}
+
+/* 配置项tooltip样式 */
+.config-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
+
+.config-help-icon {
+  color: #9ca3af;
+  transition: color 0.2s ease;
+}
+
+.config-label:hover .config-help-icon {
+  color: #6366f1;
+}
+
+.config-tooltip {
+  max-width: 300px;
+  padding: 8px 0;
+}
+
+.tooltip-title {
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.tooltip-description {
+  color: #e5e7eb;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  font-size: 0.85rem;
+}
+
+.tooltip-key {
+  color: #d1d5db;
+  font-size: 0.75rem;
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
 }
 </style>
