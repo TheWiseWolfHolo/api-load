@@ -78,6 +78,23 @@ watch(
   }
 );
 
+// 监听同步操作完成事件，自动刷新当前分组数据
+watch(
+  () => appState.syncOperationTrigger,
+  () => {
+    // 检查是否需要刷新当前分组的数据
+    if (appState.lastSyncOperation && props.group) {
+      // 通过分组名称匹配
+      const isCurrentGroup = appState.lastSyncOperation.groupName === props.group.name;
+
+      if (isCurrentGroup) {
+        // 刷新当前分组的统计数据
+        loadStats();
+      }
+    }
+  }
+);
+
 async function loadStats() {
   if (!props.group?.id) {
     stats.value = null;

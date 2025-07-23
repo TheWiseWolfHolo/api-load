@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
-import { appState } from "@/utils/app-state";
+import { appState, triggerSyncOperationRefresh } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
 import { getGroupDisplayName, maskKey } from "@/utils/display";
 import {
@@ -171,6 +171,15 @@ async function loadKeys() {
   }
 }
 
+// 处理批量删除成功后的刷新
+async function handleBatchDeleteSuccess() {
+  await loadKeys();
+  // 触发同步操作刷新
+  if (props.selectedGroup) {
+    triggerSyncOperationRefresh(props.selectedGroup.name, "BATCH_DELETE");
+  }
+}
+
 async function copyKey(key: KeyRow) {
   const success = await copy(key.key_value);
   if (success) {
@@ -201,6 +210,9 @@ async function testKey(_key: KeyRow) {
         closable: true,
       });
     }
+    await loadKeys();
+    // 触发同步操作刷新
+    triggerSyncOperationRefresh(props.selectedGroup.name, "TEST_SINGLE");
   } catch (_error) {
     console.error("测试失败");
   } finally {
@@ -234,6 +246,8 @@ async function restoreKey(key: KeyRow) {
       try {
         await keysApi.restoreKeys(props.selectedGroup.id, key.key_value);
         await loadKeys();
+        // 触发同步操作刷新
+        triggerSyncOperationRefresh(props.selectedGroup.name, "RESTORE_SINGLE");
       } catch (_error) {
         console.error("恢复失败");
       } finally {
@@ -265,6 +279,8 @@ async function deleteKey(key: KeyRow) {
       try {
         await keysApi.deleteKeys(props.selectedGroup.id, key.key_value);
         await loadKeys();
+        // 触发同步操作刷新
+        triggerSyncOperationRefresh(props.selectedGroup.name, "DELETE_SINGLE");
       } catch (_error) {
         console.error("删除失败");
       } finally {
@@ -356,6 +372,8 @@ async function restoreAllInvalid() {
       try {
         await keysApi.restoreAllInvalidKeys(props.selectedGroup.id);
         await loadKeys();
+        // 触发同步操作刷新
+        triggerSyncOperationRefresh(props.selectedGroup.name, "RESTORE_ALL_INVALID");
       } catch (_error) {
         console.error("恢复失败");
       } finally {
@@ -408,6 +426,8 @@ async function clearAllInvalid() {
         const { data } = await keysApi.clearAllInvalidKeys(props.selectedGroup.id);
         window.$message.success(data?.message || "清除成功");
         await loadKeys();
+        // 触发同步操作刷新
+        triggerSyncOperationRefresh(props.selectedGroup.name, "CLEAR_ALL_INVALID");
       } catch (_error) {
         console.error("删除失败");
       } finally {
@@ -631,7 +651,7 @@ function resetPage() {
       v-model:show="deleteDialogShow"
       :group-id="selectedGroup.id"
       :group-name="getGroupDisplayName(selectedGroup!)"
-      @success="loadKeys"
+      @success="handleBatchDeleteSuccess"
     />
   </div>
 </template>
