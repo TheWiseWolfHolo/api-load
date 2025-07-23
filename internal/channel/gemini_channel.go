@@ -9,6 +9,7 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,6 @@ func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey,
 	req.URL.RawQuery = q.Encode()
 }
 
-
 // IsStreamRequest checks if the request is for a streaming response.
 func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool {
 	path := c.Request.URL.Path
@@ -59,21 +59,6 @@ func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool 
 	return false
 }
 
-// ExtractKey extracts the API key from the X-Goog-Api-Key header or the "key" query parameter.
-func (ch *GeminiChannel) ExtractKey(c *gin.Context) string {
-	// 1. Check X-Goog-Api-Key header
-	if key := c.GetHeader("X-Goog-Api-Key"); key != "" {
-		return key
-	}
-
-	// 2. Check "key" query parameter
-	if key := c.Query("key"); key != "" {
-		return key
-	}
-
-	return ""
-}
-
 // ValidateKey checks if the given API key is valid by making a generateContent request.
 func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, error) {
 	upstreamURL := ch.getUpstreamURL()
@@ -81,7 +66,12 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, err
 		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
-	reqURL := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s", upstreamURL.String(), ch.TestModel, key)
+	// Safely join the path segments
+	reqURL, err := url.JoinPath(upstreamURL.String(), "v1beta", "models", ch.TestModel+":generateContent")
+	if err != nil {
+		return false, fmt.Errorf("failed to create gemini validation path: %w", err)
+	}
+	reqURL += "?key=" + key
 
 	payload := gin.H{
 		"contents": []gin.H{

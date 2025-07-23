@@ -6,10 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"gpt-load/internal/channel"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/response"
-	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
@@ -116,45 +114,16 @@ func CORS(config types.CORSConfig) gin.HandlerFunc {
 }
 
 // Auth creates an authentication middleware
-func Auth(
-	authConfig types.AuthConfig,
-	groupManager *services.GroupManager,
-	channelFactory *channel.Factory,
-) gin.HandlerFunc {
+func Auth(authConfig types.AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// Skip authentication for health endpoints
 		if isMonitoringEndpoint(path) {
 			c.Next()
 			return
 		}
 
-		var key string
-		var err error
-
-		if strings.HasPrefix(path, "/api") {
-			// Handle backend API authentication
-			key = extractApiKey(c)
-		} else if strings.HasPrefix(path, "/proxy/") {
-			// Handle proxy authentication
-			key, err = extractProxyKey(c, groupManager, channelFactory)
-			if err != nil {
-				// The error from extractProxyKey is already an APIError
-				if apiErr, ok := err.(*app_errors.APIError); ok {
-					response.Error(c, apiErr)
-				} else {
-					response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error()))
-				}
-				c.Abort()
-				return
-			}
-		} else {
-			// For any other paths, deny access by default
-			response.Error(c, app_errors.ErrResourceNotFound)
-			c.Abort()
-			return
-		}
+		key := extractAuthKey(c)
 
 		if key == "" || key != authConfig.Key {
 			response.Error(c, app_errors.ErrUnauthorized)
@@ -162,8 +131,6 @@ func Auth(
 			return
 		}
 
-		// Key is extracted, but validation is handled by the proxy logic itself.
-		// For the backend API, we've already validated it.
 		c.Next()
 	}
 }
@@ -227,8 +194,10 @@ func isMonitoringEndpoint(path string) bool {
 	return false
 }
 
-// extractBearerKey extracts a key from the "Authorization: Bearer <key>" header.
-func extractApiKey(c *gin.Context) string {
+// extractAuthKey extracts a auth key.
+func extractAuthKey(c *gin.Context) string {
+
+	// Bearer token
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		const bearerPrefix = "Bearer "
@@ -237,39 +206,20 @@ func extractApiKey(c *gin.Context) string {
 		}
 	}
 
-	authKey := c.Query("auth_key")
-	if authKey != "" {
-		return authKey
+	// X-Api-Key
+	if key := c.GetHeader("X-Api-Key"); key != "" {
+		return key
+	}
+
+	// X-Goog-Api-Key
+	if key := c.GetHeader("X-Goog-Api-Key"); key != "" {
+		return key
+	}
+
+	// Query key
+	if key := c.Query("key"); key != "" {
+		return key
 	}
 
 	return ""
-}
-
-// extractProxyKey handles key extraction for proxy routes.
-func extractProxyKey(
-	c *gin.Context,
-	groupManager *services.GroupManager,
-	channelFactory *channel.Factory,
-) (string, error) {
-	groupName := c.Param("group_name")
-	if groupName == "" {
-		return "", app_errors.NewAPIError(app_errors.ErrBadRequest, "Group name is missing in the URL path")
-	}
-
-	group, err := groupManager.GetGroupByName(groupName)
-	if err != nil {
-		return "", app_errors.NewAPIError(app_errors.ErrResourceNotFound, fmt.Sprintf("Group '%s' not found", groupName))
-	}
-
-	channel, err := channelFactory.GetChannel(group)
-	if err != nil {
-		return "", app_errors.NewAPIError(app_errors.ErrInternalServer, fmt.Sprintf("Failed to get channel for group '%s'", groupName))
-	}
-
-	key := channel.ExtractKey(c)
-	if key == "" {
-		return "", app_errors.ErrUnauthorized
-	}
-
-	return key, nil
 }

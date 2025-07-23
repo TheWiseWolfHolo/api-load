@@ -65,8 +65,8 @@ func NewRouter(
 
 	// 注册路由
 	registerSystemRoutes(router, serverHandler)
-	registerAPIRoutes(router, serverHandler, configManager, groupManager, channelFactory)
-	registerProxyRoutes(router, proxyServer, configManager, groupManager, channelFactory)
+	registerAPIRoutes(router, serverHandler, configManager)
+	registerProxyRoutes(router, proxyServer, configManager)
 	registerFrontendRoutes(router, buildFS, indexPage)
 
 	return router
@@ -82,8 +82,6 @@ func registerAPIRoutes(
 	router *gin.Engine,
 	serverHandler *handler.Server,
 	configManager types.ConfigManager,
-	groupManager *services.GroupManager,
-	channelFactory *channel.Factory,
 ) {
 	api := router.Group("/api")
 	authConfig := configManager.GetAuthConfig()
@@ -93,7 +91,7 @@ func registerAPIRoutes(
 
 	// 认证
 	protectedAPI := api.Group("")
-	protectedAPI.Use(middleware.Auth(authConfig, groupManager, channelFactory))
+	protectedAPI.Use(middleware.Auth(authConfig))
 	registerProtectedAPIRoutes(protectedAPI, serverHandler)
 }
 
@@ -162,13 +160,11 @@ func registerProxyRoutes(
 	router *gin.Engine,
 	proxyServer *proxy.ProxyServer,
 	configManager types.ConfigManager,
-	groupManager *services.GroupManager,
-	channelFactory *channel.Factory,
 ) {
 	proxyGroup := router.Group("/proxy")
 	authConfig := configManager.GetAuthConfig()
 
-	proxyGroup.Use(middleware.Auth(authConfig, groupManager, channelFactory))
+	proxyGroup.Use(middleware.Auth(authConfig))
 
 	proxyGroup.Any("/:group_name/*path", proxyServer.HandleProxy)
 }

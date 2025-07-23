@@ -23,12 +23,13 @@ type UpstreamInfo struct {
 
 // BaseChannel provides common functionality for channel proxies.
 type BaseChannel struct {
-	Name         string
-	Upstreams    []UpstreamInfo
-	HTTPClient   *http.Client
-	StreamClient *http.Client
-	TestModel    string
-	upstreamLock sync.Mutex
+	Name               string
+	Upstreams          []UpstreamInfo
+	HTTPClient         *http.Client
+	StreamClient       *http.Client
+	TestModel          string
+	ValidationEndpoint string
+	upstreamLock       sync.Mutex
 
 	// Cached fields from the group for stale check
 	channelType     string
@@ -94,6 +95,9 @@ func (b *BaseChannel) IsConfigStale(group *models.Group) bool {
 		return true
 	}
 	if b.TestModel != group.TestModel {
+		return true
+	}
+	if b.ValidationEndpoint != group.ValidationEndpoint {
 		return true
 	}
 	if !bytes.Equal(b.groupUpstreams, group.Upstreams) {
