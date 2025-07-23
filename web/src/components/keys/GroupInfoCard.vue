@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import type { Group, GroupConfigOption, GroupStatsResponse } from "@/types/models";
+import { appState } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
 import { getGroupDisplayName } from "@/utils/display";
 import { Pencil, Trash } from "@vicons/ionicons5";
@@ -53,6 +54,27 @@ watch(
   () => {
     resetPage();
     loadStats();
+  }
+);
+
+// 监听任务完成事件，自动刷新当前分组数据
+watch(
+  () => appState.groupDataRefreshTrigger,
+  () => {
+    // 检查是否需要刷新当前分组的数据
+    if (appState.lastCompletedTask && props.group) {
+      // 通过分组名称匹配
+      const isCurrentGroup = appState.lastCompletedTask.groupName === props.group.name;
+
+      const shouldRefresh =
+        appState.lastCompletedTask.taskType === "KEY_VALIDATION" ||
+        appState.lastCompletedTask.taskType === "KEY_IMPORT";
+
+      if (isCurrentGroup && shouldRefresh) {
+        // 刷新当前分组的统计数据
+        loadStats();
+      }
+    }
   }
 );
 

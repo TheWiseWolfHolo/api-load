@@ -2,8 +2,8 @@
 import { keysApi } from "@/api/keys";
 import type { APIKey, Group, KeyStatus } from "@/types/models";
 import { appState } from "@/utils/app-state";
-import { getGroupDisplayName, maskKey } from "@/utils/display";
 import { copy } from "@/utils/clipboard";
+import { getGroupDisplayName, maskKey } from "@/utils/display";
 import {
   AddCircleOutline,
   AlertCircleOutline,
@@ -95,6 +95,27 @@ watch(
 watch([currentPage, pageSize, statusFilter], async () => {
   await loadKeys();
 });
+
+// 监听任务完成事件，自动刷新密钥列表
+watch(
+  () => appState.groupDataRefreshTrigger,
+  () => {
+    // 检查是否需要刷新当前分组的密钥列表
+    if (appState.lastCompletedTask && props.selectedGroup) {
+      // 通过分组名称匹配
+      const isCurrentGroup = appState.lastCompletedTask.groupName === props.selectedGroup.name;
+
+      const shouldRefresh =
+        appState.lastCompletedTask.taskType === "KEY_VALIDATION" ||
+        appState.lastCompletedTask.taskType === "KEY_IMPORT";
+
+      if (isCurrentGroup && shouldRefresh) {
+        // 刷新当前分组的密钥列表
+        loadKeys();
+      }
+    }
+  }
+);
 
 // 处理搜索输入的防抖
 function handleSearchInput() {
