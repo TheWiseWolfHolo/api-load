@@ -223,3 +223,43 @@ func extractAuthKey(c *gin.Context) string {
 
 	return ""
 }
+
+// StaticCache creates a middleware for caching static resources
+func StaticCache() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		if isStaticResource(path) {
+			c.Header("Cache-Control", "public, max-age=2592000, immutable")
+			c.Header("Expires", time.Now().AddDate(1, 0, 0).UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
+		}
+
+		c.Next()
+	}
+}
+
+// isStaticResource 判断是否为静态资源
+func isStaticResource(path string) bool {
+	staticPrefixes := []string{"/assets/"}
+	staticSuffixes := []string{
+		".js", ".css", ".ico", ".png", ".jpg", ".jpeg",
+		".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot",
+		".webp", ".avif", ".map",
+	}
+
+	// 检查路径前缀
+	for _, prefix := range staticPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	// 检查文件扩展名
+	for _, suffix := range staticSuffixes {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+
+	return false
+}
