@@ -51,6 +51,15 @@ async function handleGroupRefresh() {
   }
 }
 
+async function handleGroupRefreshAndSelect(targetGroupId: number) {
+  await loadGroups();
+  // 刷新完成后，切换到指定的分组
+  const targetGroup = groups.value.find(g => g.id === targetGroupId);
+  if (targetGroup) {
+    handleGroupSelect(targetGroup);
+  }
+}
+
 function handleGroupDelete(deletedGroup: Group) {
   // 从分组列表中移除已删除的分组
   groups.value = groups.value.filter(g => g.id !== deletedGroup.id);
@@ -71,6 +80,7 @@ function handleGroupDelete(deletedGroup: Group) {
         :loading="loading"
         @group-select="handleGroupSelect"
         @refresh="handleGroupRefresh"
+        @refresh-and-select="handleGroupRefreshAndSelect"
       />
     </div>
 

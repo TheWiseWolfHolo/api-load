@@ -86,6 +86,12 @@ const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
 
+// 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
+const userModifiedFields = ref({
+  test_model: false,
+  upstream: false,
+});
+
 // 根据渠道类型动态生成占位符提示
 const testModelPlaceholder = computed(() => {
   switch (formData.channel_type) {
@@ -183,21 +189,95 @@ watch(
   }
 );
 
+// 监听渠道类型变化，在新增模式下智能更新默认值
+watch(
+  () => formData.channel_type,
+  (_newChannelType, oldChannelType) => {
+    if (!props.group && oldChannelType) {
+      // 仅在新增模式且不是初始设置时处理
+      // 检查测试模型是否应该更新（为空或是旧渠道类型的默认值）
+      if (
+        !userModifiedFields.value.test_model ||
+        formData.test_model === getOldDefaultTestModel(oldChannelType)
+      ) {
+        formData.test_model = testModelPlaceholder.value;
+        userModifiedFields.value.test_model = false;
+      }
+
+      // 检查第一个上游地址是否应该更新
+      if (
+        formData.upstreams.length > 0 &&
+        (!userModifiedFields.value.upstream ||
+          formData.upstreams[0].url === getOldDefaultUpstream(oldChannelType))
+      ) {
+        formData.upstreams[0].url = upstreamPlaceholder.value;
+        userModifiedFields.value.upstream = false;
+      }
+    }
+  }
+);
+
+// 获取旧渠道类型的默认值（用于比较）
+function getOldDefaultTestModel(channelType: string): string {
+  switch (channelType) {
+    case "openai":
+      return "gpt-4.1-nano";
+    case "gemini":
+      return "gemini-2.0-flash-lite";
+    case "anthropic":
+      return "claude-3-haiku-20240307";
+    default:
+      return "";
+  }
+}
+
+function getOldDefaultUpstream(channelType: string): string {
+  switch (channelType) {
+    case "openai":
+      return "https://api.openai.com";
+    case "gemini":
+      return "https://generativelanguage.googleapis.com";
+    case "anthropic":
+      return "https://api.anthropic.com";
+    default:
+      return "";
+  }
+}
+
 // 重置表单
 function resetForm() {
+  const isCreateMode = !props.group;
+  const defaultChannelType = "openai";
+
+  // 先设置渠道类型，这样 computed 属性能正确计算默认值
+  formData.channel_type = defaultChannelType;
+
   Object.assign(formData, {
     name: "",
     display_name: "",
     description: "",
-    upstreams: [{ url: "", weight: 1 }],
-    channel_type: "openai",
+    upstreams: [
+      {
+        url: isCreateMode ? upstreamPlaceholder.value : "",
+        weight: 1,
+      },
+    ],
+    channel_type: defaultChannelType,
     sort: 1,
-    test_model: "",
+    test_model: isCreateMode ? testModelPlaceholder.value : "",
     validation_endpoint: "",
     param_overrides: "",
     config: {},
     configItems: [],
   });
+
+  // 重置用户修改状态追踪
+  if (isCreateMode) {
+    userModifiedFields.value = {
+      test_model: false,
+      upstream: false,
+    };
+  }
 }
 
 // 加载分组数据（编辑模式）
@@ -466,11 +546,15 @@ async function handleSubmit() {
                     <template #trigger>
                       <n-icon :component="HelpCircleOutline" class="help-icon" />
                     </template>
-                    用于验证API密钥有效性的模型名称。系统会使用这个模型发送测试请求来检查密钥是否可用
+                    用于验证API密钥有效性的模型名称。系统会使用这个模型发送测试请求来检查密钥是否可用，请尽量使用轻量快速的模型
                   </n-tooltip>
                 </div>
               </template>
-              <n-input v-model:value="formData.test_model" :placeholder="testModelPlaceholder" />
+              <n-input
+                v-model:value="formData.test_model"
+                :placeholder="testModelPlaceholder"
+                @input="() => !props.group && (userModifiedFields.test_model = true)"
+              />
             </n-form-item>
 
             <n-form-item
@@ -559,7 +643,11 @@ async function handleSubmit() {
             </template>
             <div class="upstream-row">
               <div class="upstream-url">
-                <n-input v-model:value="upstream.url" :placeholder="upstreamPlaceholder" />
+                <n-input
+                  v-model:value="upstream.url"
+                  :placeholder="upstreamPlaceholder"
+                  @input="() => !props.group && index === 0 && (userModifiedFields.upstream = true)"
+                />
               </div>
               <div class="upstream-weight">
                 <span class="weight-label">权重</span>
