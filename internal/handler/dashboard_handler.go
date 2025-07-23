@@ -83,7 +83,7 @@ func (s *Server) Stats(c *gin.Context) {
 		KeyCount: models.StatCard{
 			Value:       float64(activeKeys),
 			SubValue:    invalidKeys,
-			SubValueTip: "无效秘钥数量",
+			SubValueTip: "无效密钥数量",
 		},
 		GroupCount: models.StatCard{
 			Value: float64(groupCount),
