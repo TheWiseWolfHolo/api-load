@@ -9,6 +9,7 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -65,7 +66,12 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, key string) (bool, err
 		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
-	reqURL := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s", upstreamURL.String(), ch.TestModel, key)
+	// Safely join the path segments
+	reqURL, err := url.JoinPath(upstreamURL.String(), "v1beta", "models", ch.TestModel+":generateContent")
+	if err != nil {
+		return false, fmt.Errorf("failed to create gemini validation path: %w", err)
+	}
+	reqURL += "?key=" + key
 
 	payload := gin.H{
 		"contents": []gin.H{

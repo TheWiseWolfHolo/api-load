@@ -9,6 +9,7 @@ import (
 	"gpt-load/internal/models"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -66,7 +67,14 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, key string) (bool, err
 		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
-	reqURL := upstreamURL.String() + "/v1/chat/completions"
+	validationEndpoint := ch.ValidationEndpoint
+	if validationEndpoint == "" {
+		validationEndpoint = "/v1/chat/completions"
+	}
+	reqURL, err := url.JoinPath(upstreamURL.String(), validationEndpoint)
+	if err != nil {
+		return false, fmt.Errorf("failed to join upstream URL and validation endpoint: %w", err)
+	}
 
 	// Use a minimal, low-cost payload for validation
 	payload := gin.H{
