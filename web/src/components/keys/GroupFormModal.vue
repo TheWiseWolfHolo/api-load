@@ -406,7 +406,7 @@ async function handleSubmit() {
       sort: formData.sort,
       test_model: formData.test_model,
       validation_endpoint: formData.validation_endpoint,
-      param_overrides: formData.param_overrides ? paramOverrides : undefined,
+      param_overrides: paramOverrides,
       config,
     };
 
