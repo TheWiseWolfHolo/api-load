@@ -176,13 +176,19 @@ func registerFrontendRoutes(router *gin.Engine, buildFS embed.FS, indexPage []by
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "Method not allowed"})
 	})
 
+	// 使用静态资源缓存中间件
+	router.Use(middleware.StaticCache())
+
 	router.Use(static.Serve("/", EmbedFolder(buildFS, "web/dist")))
 	router.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/proxy") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not Found"})
 			return
 		}
-		c.Header("Cache-Control", "no-cache")
+		// HTML页面不缓存，确保更新能及时生效
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
 	})
 }
