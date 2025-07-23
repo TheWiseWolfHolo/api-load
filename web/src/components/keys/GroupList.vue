@@ -61,9 +61,21 @@ function openCreateGroupModal() {
   showGroupModal.value = true;
 }
 
-function handleGroupCreated() {
+function handleGroupCreated(_group: Group) {
   showGroupModal.value = false;
   emit("refresh");
+}
+
+function handleSwitchToGroup(groupId: number) {
+  // 创建成功后，等待列表刷新完成，然后切换到新创建的分组
+  emit("refresh");
+  // 延迟选择新分组，确保列表已更新
+  setTimeout(() => {
+    const newGroup = props.groups.find(g => g.id === groupId);
+    if (newGroup) {
+      emit("group-select", newGroup);
+    }
+  }, 100);
 }
 </script>
 
@@ -123,7 +135,11 @@ function handleGroupCreated() {
         </n-button>
       </div>
     </n-card>
-    <group-form-modal v-model:show="showGroupModal" @success="handleGroupCreated" />
+    <group-form-modal
+      v-model:show="showGroupModal"
+      @success="handleGroupCreated"
+      @switch-to-group="handleSwitchToGroup"
+    />
   </div>
 </template>
 

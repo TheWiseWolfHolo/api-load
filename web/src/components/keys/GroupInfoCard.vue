@@ -295,27 +295,27 @@ function resetPage() {
                   <n-grid :cols="2">
                     <n-grid-item>
                       <n-form-item label="分组名称：">
-                        {{ group?.name || "-" }}
+                        {{ group?.name }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="显示名称：">
-                        {{ group?.display_name || "-" }}
+                        {{ group?.display_name }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="渠道类型：">
-                        {{ group?.channel_type || "-" }}
-                      </n-form-item>
-                    </n-grid-item>
-                    <n-grid-item>
-                      <n-form-item label="测试模型：">
-                        {{ group?.test_model || "-" }}
+                        {{ group?.channel_type }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="排序：">
-                        {{ group?.sort || 0 }}
+                        {{ group?.sort }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="测试模型：">
+                        {{ group?.test_model }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item v-if="group?.channel_type !== 'gemini'">
@@ -325,7 +325,9 @@ function resetPage() {
                     </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="描述：">
-                        {{ group?.description || "-" }}
+                        <div class="description-content">
+                          {{ group?.description }}
+                        </div>
                       </n-form-item>
                     </n-grid-item>
                   </n-grid>
@@ -520,5 +522,14 @@ function resetPage() {
 
 :deep(.n-form-item-feedback-wrapper) {
   min-height: 0;
+}
+
+/* 描述内容样式 */
+.description-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+  min-height: 20px;
+  color: #374151;
 }
 </style>
