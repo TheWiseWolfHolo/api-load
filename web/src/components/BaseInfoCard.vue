@@ -60,7 +60,7 @@ onMounted(() => {
   <div class="stats-container">
     <n-space vertical size="medium">
       <n-grid :cols="4" :x-gap="20" :y-gap="20" responsive="screen">
-        <!-- 秘钥数量 -->
+        <!-- 密钥数量 -->
         <n-grid-item span="1">
           <n-card :bordered="false" class="stat-card" style="animation-delay: 0s">
             <div class="stat-header">
@@ -79,7 +79,7 @@ onMounted(() => {
               <div class="stat-value">
                 {{ stats?.key_count?.value ?? 0 }}
               </div>
-              <div class="stat-title">秘钥数量</div>
+              <div class="stat-title">密钥数量</div>
             </div>
 
             <div class="stat-bar">
