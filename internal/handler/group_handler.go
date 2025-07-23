@@ -88,6 +88,20 @@ func isValidGroupName(name string) bool {
 	return match
 }
 
+// isValidValidationEndpoint checks if the validation endpoint is a valid path.
+func isValidValidationEndpoint(endpoint string) bool {
+	if endpoint == "" {
+		return true
+	}
+	if !strings.HasPrefix(endpoint, "/") {
+		return false
+	}
+	if strings.Contains(endpoint, "://") {
+		return false
+	}
+	return true
+}
+
 // validateAndCleanConfig validates the group config against the GroupConfig struct and system-defined rules.
 func (s *Server) validateAndCleanConfig(configMap map[string]any) (map[string]any, error) {
 	if configMap == nil {
@@ -180,16 +194,23 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
+	validationEndpoint := strings.TrimSpace(req.ValidationEndpoint)
+	if !isValidValidationEndpoint(validationEndpoint) {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "无效的测试路径。如果提供，必须是以 / 开头的有效路径，且不能是完整的URL。"))
+		return
+	}
+
 	group := models.Group{
-		Name:           name,
-		DisplayName:    strings.TrimSpace(req.DisplayName),
-		Description:    strings.TrimSpace(req.Description),
-		Upstreams:      cleanedUpstreams,
-		ChannelType:    channelType,
-		Sort:           req.Sort,
-		TestModel:      testModel,
-		ParamOverrides: req.ParamOverrides,
-		Config:         cleanedConfig,
+		Name:               name,
+		DisplayName:        strings.TrimSpace(req.DisplayName),
+		Description:        strings.TrimSpace(req.Description),
+		Upstreams:          cleanedUpstreams,
+		ChannelType:        channelType,
+		Sort:               req.Sort,
+		TestModel:          testModel,
+		ValidationEndpoint: validationEndpoint,
+		ParamOverrides:     req.ParamOverrides,
+		Config:             cleanedConfig,
 	}
 
 	if err := s.DB.Create(&group).Error; err != nil {
@@ -222,15 +243,16 @@ func (s *Server) ListGroups(c *gin.Context) {
 // GroupUpdateRequest defines the payload for updating a group.
 // Using a dedicated struct avoids issues with zero values being ignored by GORM's Update.
 type GroupUpdateRequest struct {
-	Name           *string         `json:"name,omitempty"`
-	DisplayName    *string         `json:"display_name,omitempty"`
-	Description    *string         `json:"description,omitempty"`
-	Upstreams      json.RawMessage `json:"upstreams"`
-	ChannelType    *string         `json:"channel_type,omitempty"`
-	Sort           *int            `json:"sort"`
-	TestModel      string          `json:"test_model"`
-	ParamOverrides map[string]any  `json:"param_overrides"`
-	Config         map[string]any  `json:"config"`
+	Name               *string         `json:"name,omitempty"`
+	DisplayName        *string         `json:"display_name,omitempty"`
+	Description        *string         `json:"description,omitempty"`
+	Upstreams          json.RawMessage `json:"upstreams"`
+	ChannelType        *string         `json:"channel_type,omitempty"`
+	Sort               *int            `json:"sort"`
+	TestModel          string          `json:"test_model"`
+	ValidationEndpoint *string         `json:"validation_endpoint,omitempty"`
+	ParamOverrides     map[string]any  `json:"param_overrides"`
+	Config             map[string]any  `json:"config"`
 }
 
 // UpdateGroup handles updating an existing group.
@@ -311,6 +333,15 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	if req.ParamOverrides != nil {
 		group.ParamOverrides = req.ParamOverrides
 	}
+	if req.ValidationEndpoint != nil {
+		validationEndpoint := strings.TrimSpace(*req.ValidationEndpoint)
+		if !isValidValidationEndpoint(validationEndpoint) {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "无效的测试路径。如果提供，必须是以 / 开头的有效路径，且不能是完整的URL。"))
+			return
+		}
+		group.ValidationEndpoint = validationEndpoint
+	}
+
 	if req.Config != nil {
 		cleanedConfig, err := s.validateAndCleanConfig(req.Config)
 		if err != nil {
@@ -339,20 +370,21 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 
 // GroupResponse defines the structure for a group response, excluding sensitive or large fields.
 type GroupResponse struct {
-	ID              uint              `json:"id"`
-	Name            string            `json:"name"`
-	Endpoint        string            `json:"endpoint"`
-	DisplayName     string            `json:"display_name"`
-	Description     string            `json:"description"`
-	Upstreams       datatypes.JSON    `json:"upstreams"`
-	ChannelType     string            `json:"channel_type"`
-	Sort            int               `json:"sort"`
-	TestModel       string            `json:"test_model"`
-	ParamOverrides  datatypes.JSONMap `json:"param_overrides"`
-	Config          datatypes.JSONMap `json:"config"`
-	LastValidatedAt *time.Time        `json:"last_validated_at"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
+	ID                 uint              `json:"id"`
+	Name               string            `json:"name"`
+	Endpoint           string            `json:"endpoint"`
+	DisplayName        string            `json:"display_name"`
+	Description        string            `json:"description"`
+	Upstreams          datatypes.JSON    `json:"upstreams"`
+	ChannelType        string            `json:"channel_type"`
+	Sort               int               `json:"sort"`
+	TestModel          string            `json:"test_model"`
+	ValidationEndpoint string            `json:"validation_endpoint"`
+	ParamOverrides     datatypes.JSONMap `json:"param_overrides"`
+	Config             datatypes.JSONMap `json:"config"`
+	LastValidatedAt    *time.Time        `json:"last_validated_at"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
 }
 
 // newGroupResponse creates a new GroupResponse from a models.Group.
@@ -368,20 +400,21 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 	}
 
 	return &GroupResponse{
-		ID:              group.ID,
-		Name:            group.Name,
-		Endpoint:        endpoint,
-		DisplayName:     group.DisplayName,
-		Description:     group.Description,
-		Upstreams:       group.Upstreams,
-		ChannelType:     group.ChannelType,
-		Sort:            group.Sort,
-		TestModel:       group.TestModel,
-		ParamOverrides:  group.ParamOverrides,
-		Config:          group.Config,
-		LastValidatedAt: group.LastValidatedAt,
-		CreatedAt:       group.CreatedAt,
-		UpdatedAt:       group.UpdatedAt,
+		ID:                 group.ID,
+		Name:               group.Name,
+		Endpoint:           endpoint,
+		DisplayName:        group.DisplayName,
+		Description:        group.Description,
+		Upstreams:          group.Upstreams,
+		ChannelType:        group.ChannelType,
+		Sort:               group.Sort,
+		TestModel:          group.TestModel,
+		ValidationEndpoint: group.ValidationEndpoint,
+		ParamOverrides:     group.ParamOverrides,
+		Config:             group.Config,
+		LastValidatedAt:    group.LastValidatedAt,
+		CreatedAt:          group.CreatedAt,
+		UpdatedAt:          group.UpdatedAt,
 	}
 }
 

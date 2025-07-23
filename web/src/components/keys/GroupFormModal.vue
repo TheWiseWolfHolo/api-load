@@ -54,6 +54,7 @@ interface GroupFormData {
   channel_type: "openai" | "gemini" | "anthropic";
   sort: number;
   test_model: string;
+  validation_endpoint: string;
   param_overrides: string;
   config: Record<string, number>;
   configItems: ConfigItem[];
@@ -73,6 +74,7 @@ const formData = reactive<GroupFormData>({
   channel_type: "openai",
   sort: 1,
   test_model: "",
+  validation_endpoint: "",
   param_overrides: "",
   config: {},
   configItems: [] as ConfigItem[],
@@ -177,6 +179,7 @@ function resetForm() {
     channel_type: "openai",
     sort: 1,
     test_model: "",
+    validation_endpoint: "",
     param_overrides: "",
     config: {},
     configItems: [],
@@ -203,6 +206,7 @@ function loadGroupData() {
     channel_type: props.group.channel_type || "openai",
     sort: props.group.sort || 1,
     test_model: props.group.test_model || "",
+    validation_endpoint: props.group.validation_endpoint || "",
     param_overrides: JSON.stringify(props.group.param_overrides || {}, null, 2),
     config: {},
     configItems,
@@ -231,6 +235,8 @@ function addUpstream() {
 function removeUpstream(index: number) {
   if (formData.upstreams.length > 1) {
     formData.upstreams.splice(index, 1);
+  } else {
+    message.warning("至少需要保留一个上游地址");
   }
 }
 
@@ -305,6 +311,7 @@ async function handleSubmit() {
       channel_type: formData.channel_type,
       sort: formData.sort,
       test_model: formData.test_model,
+      validation_endpoint: formData.validation_endpoint,
       param_overrides: formData.param_overrides ? paramOverrides : undefined,
       config,
     };
@@ -374,6 +381,17 @@ async function handleSubmit() {
 
           <n-form-item label="测试模型" path="test_model">
             <n-input v-model:value="formData.test_model" :placeholder="testModelPlaceholder" />
+          </n-form-item>
+
+          <n-form-item
+            label="测试路径"
+            path="validation_endpoint"
+            v-if="formData.channel_type !== 'gemini'"
+          >
+            <n-input
+              v-model:value="formData.validation_endpoint"
+              placeholder="可选，自定义用于验证key的API路径"
+            />
           </n-form-item>
 
           <n-form-item label="排序" path="sort">

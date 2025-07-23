@@ -38,6 +38,7 @@ export interface Group {
   test_model: string;
   channel_type: "openai" | "gemini" | "anthropic";
   upstreams: UpstreamInfo[];
+  validation_endpoint: string;
   config: Record<string, unknown>;
   api_keys?: APIKey[];
   endpoint?: string;

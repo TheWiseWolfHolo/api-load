@@ -318,6 +318,11 @@ function resetPage() {
                         {{ group?.sort || 0 }}
                       </n-form-item>
                     </n-grid-item>
+                    <n-grid-item v-if="group?.channel_type !== 'gemini'">
+                      <n-form-item label="测试路径：">
+                        {{ group?.validation_endpoint }}
+                      </n-form-item>
+                    </n-grid-item>
                     <n-grid-item>
                       <n-form-item label="描述：">
                         {{ group?.description || "-" }}
