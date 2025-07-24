@@ -3,12 +3,15 @@ package middleware
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/response"
+	"gpt-load/internal/services"
 	"gpt-load/internal/types"
+	"gpt-load/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -132,6 +135,43 @@ func Auth(authConfig types.AuthConfig) gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// ProxyAuth
+func ProxyAuth(gm *services.GroupManager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check key
+		key := extractAuthKey(c)
+		if key == "" {
+			response.Error(c, app_errors.ErrUnauthorized)
+			c.Abort()
+			return
+		}
+
+		group, err := gm.GetGroupByName(c.Param("group_name"))
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Failed to retrieve proxy group"))
+			c.Abort()
+			return
+		}
+
+		// Check Group keys first
+		groupKeys := utils.SplitAndTrim(group.ProxyKeys, ",")
+		if slices.Contains(groupKeys, key) {
+			c.Next()
+			return
+		}
+
+		// Then check System-wide keys
+		systemKeys := utils.SplitAndTrim(group.EffectiveConfig.ProxyKeys, ",")
+		if slices.Contains(systemKeys, key) {
+			c.Next()
+			return
+		}
+
+		response.Error(c, app_errors.ErrUnauthorized)
+		c.Abort()
 	}
 }
 
