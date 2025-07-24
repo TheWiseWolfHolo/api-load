@@ -108,7 +108,7 @@ func (sm *SystemSettingsManager) Stop(ctx context.Context) {
 }
 
 // EnsureSettingsInitialized 确保数据库中存在所有系统设置的记录。
-func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
+func (sm *SystemSettingsManager) EnsureSettingsInitialized(authConfig types.AuthConfig) error {
 	defaultSettings := utils.DefaultSystemSettings()
 	metadata := utils.GenerateSettingsMetadata(&defaultSettings)
 
@@ -128,6 +128,11 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized() error {
 				}
 				value = fmt.Sprintf("http://%s:%s", host, port)
 			}
+
+			if meta.Key == "proxy_keys" {
+				value = authConfig.Key
+			}
+
 			setting := models.SystemSetting{
 				SettingKey:   meta.Key,
 				SettingValue: value,
