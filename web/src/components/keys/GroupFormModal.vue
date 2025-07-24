@@ -59,6 +59,7 @@ interface GroupFormData {
   param_overrides: string;
   config: Record<string, number>;
   configItems: ConfigItem[];
+  proxy_keys: string;
 }
 
 // 表单数据
@@ -79,6 +80,7 @@ const formData = reactive<GroupFormData>({
   param_overrides: "",
   config: {},
   configItems: [] as ConfigItem[],
+  proxy_keys: "",
 });
 
 const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
@@ -269,6 +271,7 @@ function resetForm() {
     param_overrides: "",
     config: {},
     configItems: [],
+    proxy_keys: "",
   });
 
   // 重置用户修改状态追踪
@@ -304,6 +307,7 @@ function loadGroupData() {
     param_overrides: JSON.stringify(props.group.param_overrides || {}, null, 2),
     config: {},
     configItems,
+    proxy_keys: props.group.proxy_keys || "",
   });
 }
 
@@ -408,6 +412,7 @@ async function handleSubmit() {
       validation_endpoint: formData.validation_endpoint,
       param_overrides: paramOverrides,
       config,
+      proxy_keys: formData.proxy_keys,
     };
 
     let res: Group;
@@ -591,6 +596,25 @@ async function handleSubmit() {
             <!-- 当gemini渠道时，测试路径不显示，需要一个占位div保持布局 -->
             <div v-else class="form-item-half" />
           </div>
+
+          <!-- 代理密钥 -->
+          <n-form-item label="代理密钥" path="proxy_keys">
+            <template #label>
+              <div class="form-label-with-tooltip">
+                代理密钥
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-icon :component="HelpCircleOutline" class="help-icon" />
+                  </template>
+                  分组专用代理密钥，用于访问此分组的代理端点。多个密钥请用逗号分隔。
+                </n-tooltip>
+              </div>
+            </template>
+            <n-input
+              v-model:value="formData.proxy_keys"
+              placeholder="多个密钥请用英文逗号 , 分隔"
+            />
+          </n-form-item>
 
           <!-- 描述独占一行 -->
           <n-form-item label="描述" path="description">
