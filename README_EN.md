@@ -12,7 +12,7 @@ For detailed documentation, please visit [Official Documentation](https://www.gp
 
 ## Features
 
-- **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats (continuously expanding)
+- **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats
 - **Intelligent Key Management**: High-performance key pool with group-based management, automatic rotation, and failure recovery
 - **Load Balancing**: Weighted load balancing across multiple upstream endpoints to enhance service availability
 - **Smart Failure Handling**: Automatic key blacklist management and recovery mechanisms to ensure service continuity
@@ -31,7 +31,6 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 - **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
 - **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
 - **Anthropic Claude Format**: Claude series models, supporting high-quality conversations and text generation
-- **Extensibility**: Plugin-based architecture design for rapid integration of new AI service providers and their native formats
 
 ## Quick Start
 

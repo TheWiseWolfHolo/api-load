@@ -12,7 +12,7 @@
 
 ## 功能特性
 
-- **透明代理**: 完全保留原生 API 格式，支持 OpenAI、Google Gemini 和 Anthropic Claude 等多种格式（持续扩展中）
+- **透明代理**: 完全保留原生 API 格式，支持 OpenAI、Google Gemini 和 Anthropic Claude 等多种格式
 - **智能密钥管理**: 高性能密钥池，支持分组管理、自动轮换和故障恢复
 - **负载均衡**: 支持多上游端点的加权负载均衡，提升服务可用性
 - **智能故障处理**: 自动密钥黑名单管理和恢复机制，确保服务连续性
@@ -31,7 +31,6 @@ GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API �
 - **OpenAI 格式**: 官方 OpenAI API、Azure OpenAI、以及其他 OpenAI 兼容服务
 - **Google Gemini 格式**: Gemini Pro、Gemini Pro Vision 等模型的原生 API
 - **Anthropic Claude 格式**: Claude 系列模型，支持高质量的对话和文本生成
-- **扩展性**: 插件化架构设计，可快速集成新的 AI 服务提供商及其原生格式
 
 ## 快速开始
 
