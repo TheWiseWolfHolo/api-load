@@ -73,6 +73,8 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, 
 			}
 		}
 
+		settings.ProxyKeysMap = utils.StringToSet(settings.ProxyKeys, ",")
+
 		sm.DisplaySystemConfig(settings)
 
 		return settings, nil

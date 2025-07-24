@@ -3,7 +3,6 @@ package middleware
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"gpt-load/internal/response"
 	"gpt-load/internal/services"
 	"gpt-load/internal/types"
-	"gpt-load/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -156,16 +154,14 @@ func ProxyAuth(gm *services.GroupManager) gin.HandlerFunc {
 			return
 		}
 
-		// Check Group keys first
-		groupKeys := utils.SplitAndTrim(group.ProxyKeys, ",")
-		if slices.Contains(groupKeys, key) {
+		// Then check System-wide keys (O(1) lookup)
+		if _, ok := group.EffectiveConfig.ProxyKeysMap[key]; ok {
 			c.Next()
 			return
 		}
 
-		// Then check System-wide keys
-		systemKeys := utils.SplitAndTrim(group.EffectiveConfig.ProxyKeys, ",")
-		if slices.Contains(systemKeys, key) {
+		// Check Group keys first (O(1) lookup)
+		if _, ok := group.ProxyKeysMap[key]; ok {
 			c.Next()
 			return
 		}

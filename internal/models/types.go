@@ -58,6 +58,9 @@ type Group struct {
 	LastValidatedAt    *time.Time           `json:"last_validated_at"`
 	CreatedAt          time.Time            `json:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at"`
+
+	// For cache
+	ProxyKeysMap map[string]struct{} `gorm:"-" json:"-"`
 }
 
 // APIKey 对应 api_keys 表

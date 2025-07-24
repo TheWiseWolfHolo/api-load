@@ -40,3 +40,17 @@ func SplitAndTrim(s string, sep string) []string {
 
 	return result
 }
+
+// StringToSet converts a separator-delimited string into a set
+func StringToSet(s string, sep string) map[string]struct{} {
+	parts := SplitAndTrim(s, sep)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	set := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		set[part] = struct{}{}
+	}
+	return set
+}
