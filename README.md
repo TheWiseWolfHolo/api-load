@@ -22,6 +22,7 @@
 - **全面监控**: 实时统计、健康检查、详细请求日志
 - **高性能设计**: 零拷贝流式传输、连接池复用、原子操作
 - **生产就绪**: 优雅关闭、错误恢复、完善的安全机制
+- **双重认证体系**: 管理端与代理端认证分离，代理认证支持全局和分组级别密钥
 
 ## 支持的 AI 服务
 
@@ -153,9 +154,10 @@ GPT-Load 采用双层配置架构：
 - **配置优先级**：分组配置 > 系统设置
 - **特点**：支持热重载，修改后立即生效，无需重启应用
 
-### 静态配置（环境变量）
+<details>
+<summary>静态配置（环境变量）</summary>
 
-#### 服务器配置
+**服务器配置：**
 
 | 配置项       | 环境变量                           | 默认值          | 说明                       |
 | ------------ | ---------------------------------- | --------------- | -------------------------- |
@@ -168,15 +170,15 @@ GPT-Load 采用双层配置架构：
 | 从节点模式   | `IS_SLAVE`                         | false           | 集群部署时从节点标识       |
 | 时区         | `TZ`                               | `Asia/Shanghai` | 指定时区                   |
 
-#### 认证与数据库配置
+**认证与数据库配置：**
 
 | 配置项     | 环境变量       | 默认值             | 说明                                 |
 | ---------- | -------------- | ------------------ | ------------------------------------ |
-| 认证密钥   | `AUTH_KEY`     | `sk-123456`        | 访问管理端以及请求代理的唯一认证密钥 |
+| 管理密钥   | `AUTH_KEY`     | `sk-123456`        | **管理端**的访问认证密钥             |
 | 数据库连接 | `DATABASE_DSN` | ./data/gpt-load.db | 数据库连接字符串 (DSN) 或文件路径    |
 | Redis 连接 | `REDIS_DSN`    | -                  | Redis 连接字符串，为空时使用内存存储 |
 
-#### 性能与跨域配置
+**性能与跨域配置：**
 
 | 配置项       | 环境变量                  | 默认值                        | 说明                     |
 | ------------ | ------------------------- | ----------------------------- | ------------------------ |
@@ -187,7 +189,7 @@ GPT-Load 采用双层配置架构：
 | 允许的头部   | `ALLOWED_HEADERS`         | `*`                           | 允许的请求头，逗号分隔   |
 | 允许凭据     | `ALLOW_CREDENTIALS`       | false                         | 是否允许发送凭据         |
 
-#### 日志配置
+**日志配置：**
 
 | 配置项       | 环境变量          | 默认值                | 说明                               |
 | ------------ | ----------------- | --------------------- | ---------------------------------- |
@@ -196,37 +198,36 @@ GPT-Load 采用双层配置架构：
 | 启用文件日志 | `LOG_ENABLE_FILE` | false                 | 是否启用文件日志输出               |
 | 日志文件路径 | `LOG_FILE_PATH`   | `./data/logs/app.log` | 日志文件存储路径                   |
 
-#### 代理配置
+**代理配置：**
 
 GPT-Load 会自动从环境变量中读取代理设置，用于向上游 AI 服务商发起请求。
 
-| 配置项 | 环境变量 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| HTTP 代理 | `HTTP_PROXY` | - | 用于 HTTP 请求的代理服务器地址 |
-| HTTPS 代理 | `HTTPS_PROXY` | - | 用于 HTTPS 请求的代理服务器地址 |
-| 无代理 | `NO_PROXY` | - | 不需要通过代理访问的主机或域名，逗号分隔 |
+| 配置项     | 环境变量      | 默认值 | 说明                                     |
+| ---------- | ------------- | ------ | ---------------------------------------- |
+| HTTP 代理  | `HTTP_PROXY`  | -      | 用于 HTTP 请求的代理服务器地址           |
+| HTTPS 代理 | `HTTPS_PROXY` | -      | 用于 HTTPS 请求的代理服务器地址          |
+| 无代理     | `NO_PROXY`    | -      | 不需要通过代理访问的主机或域名，逗号分隔 |
 
-**支持的代理协议格式：**
+支持的代理协议格式：
 
 - **HTTP**: `http://user:pass@host:port`
 - **HTTPS**: `https://user:pass@host:port`
 - **SOCKS5**: `socks5://user:pass@host:port`
+</details>
 
-### 动态配置（热重载）
+<details>
+<summary>动态配置（热重载）</summary>
 
-动态配置存储在数据库中，支持通过 Web 管理界面进行实时修改，修改后立即生效无需重启。
+**基础设置：**
 
-**配置优先级**：分组配置 > 系统设置
+| 配置项       | 字段名                               | 默认值                      | 分组可覆盖 | 说明                                   |
+| ------------ | ------------------------------------ | --------------------------- | ---------- | -------------------------------------- |
+| 项目地址     | `app_url`                            | `http://localhost:3001`     | ❌         | 项目基础 URL                           |
+| 日志保留天数 | `request_log_retention_days`         | 7                           | ❌         | 请求日志保留天数，0 为不清理           |
+| 日志写入间隔 | `request_log_write_interval_minutes` | 1                           | ❌         | 日志写入数据库周期（分钟）             |
+| 全局代理密钥 | `proxy_keys`                         | 初始值为环境配置的 AUTH_KEY | ❌         | 全局生效的代理认证密钥，多个用逗号分隔 |
 
-#### 基础设置
-
-| 配置项       | 字段名                               | 默认值                  | 分组可覆盖 | 说明                         |
-| ------------ | ------------------------------------ | ----------------------- | ---------- | ---------------------------- |
-| 项目地址     | `app_url`                            | `http://localhost:3001` | ❌         | 项目基础 URL                 |
-| 日志保留天数 | `request_log_retention_days`         | 7                       | ❌         | 请求日志保留天数，0 为不清理 |
-| 日志写入间隔 | `request_log_write_interval_minutes` | 1                       | ❌         | 日志写入数据库周期（分钟）   |
-
-#### 请求设置
+**请求设置：**
 
 | 配置项               | 字段名                    | 默认值 | 分组可覆盖 | 说明                           |
 | -------------------- | ------------------------- | ------ | ---------- | ------------------------------ |
@@ -237,7 +238,7 @@ GPT-Load 会自动从环境变量中读取代理设置，用于向上游 AI 服�
 | 最大空闲连接数       | `max_idle_conns`          | 100    | ✅         | 连接池最大空闲连接总数         |
 | 每主机最大空闲连接数 | `max_idle_conns_per_host` | 50     | ✅         | 每个上游主机最大空闲连接数     |
 
-#### 密钥配置
+**密钥配置：**
 
 | 配置项         | 字段名                            | 默认值 | 分组可覆盖 | 说明                                             |
 | -------------- | --------------------------------- | ------ | ---------- | ------------------------------------------------ |
@@ -246,6 +247,8 @@ GPT-Load 会自动从环境变量中读取代理设置，用于向上游 AI 服�
 | 密钥验证间隔   | `key_validation_interval_minutes` | 60     | ✅         | 后台定时验证密钥周期（分钟）                     |
 | 密钥验证并发数 | `key_validation_concurrency`      | 10     | ✅         | 后台定时验证无效 Key 时的并发数                  |
 | 密钥验证超时   | `key_validation_timeout_seconds`  | 20     | ✅         | 后台定时验证单个 Key 时的 API 请求超时时间（秒） |
+
+</details>
 
 ## Web 管理界面
 
@@ -270,7 +273,8 @@ Web 管理界面提供以下功能：
 
 ## API 使用说明
 
-### 代理接口调用方式
+<details>
+<summary>代理接口调用方式</summary>
 
 GPT-Load 通过分组名称路由请求到不同的 AI 服务。使用方式如下：
 
@@ -285,11 +289,11 @@ http://localhost:3001/proxy/{group_name}/{原始API路径}
 
 #### 2. 认证方式
 
-作为透明代理服务，GPT-Load 完全保留各 AI 服务的原生认证格式：
+在 Web 管理界面中配置**代理密钥** (`Proxy Keys`)，可设置系统级别和分组级别的代理密钥。
 
-- **OpenAI 格式**: 使用 `Authorization: Bearer {AUTH_KEY}` 头部认证
-- **Gemini 格式**: 使用 URL 参数 `key={AUTH_KEY}` 认证
-- **统一密钥**: 所有服务都使用环境变量 `AUTH_KEY` 中配置的统一密钥值
+- **认证方式**: 与原生 API 一致，但需将原始密钥替换为配置的代理密钥。
+- **密钥作用域**: 在系统设置配置的 **全局代理密钥** 可以在所有分组使用，在分组配置的 **分组代理密钥** 仅在当前分组有效。
+- **格式**: 多个密钥使用半角英文逗号分隔。
 
 #### 3. OpenAI 接口调用示例
 
@@ -308,7 +312,7 @@ curl -X POST https://api.openai.com/v1/chat/completions \
 
 ```bash
 curl -X POST http://localhost:3001/proxy/openai/v1/chat/completions \
-  -H "Authorization: Bearer sk-123456" \
+  -H "Authorization: Bearer your-proxy-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
@@ -316,7 +320,7 @@ curl -X POST http://localhost:3001/proxy/openai/v1/chat/completions \
 **变更说明：**
 
 - 将 `https://api.openai.com` 替换为 `http://localhost:3001/proxy/openai`
-- 将原始 API Key 替换为统一认证密钥 `sk-123456`（默认值）
+- 将原始 API Key 替换为**代理密钥**
 
 #### 4. Gemini 接口调用示例
 
@@ -333,7 +337,7 @@ curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-
 **代理调用方式：**
 
 ```bash
-curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:generateContent?key=sk-123456 \
+curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:generateContent?key=your-proxy-key \
   -H "Content-Type: application/json" \
   -d '{"contents": [{"parts": [{"text": "Hello"}]}]}'
 ```
@@ -341,7 +345,7 @@ curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:gen
 **变更说明：**
 
 - 将 `https://generativelanguage.googleapis.com` 替换为 `http://localhost:3001/proxy/gemini`
-- 将 URL 参数中的 `key=your-gemini-key` 替换为统一认证密钥 `sk-123456`（默认值）
+- 将 URL 参数中的 `key=your-gemini-key` 替换为**代理密钥**
 
 #### 5. Anthropic 接口调用示例
 
@@ -361,7 +365,7 @@ curl -X POST https://api.anthropic.com/v1/messages \
 
 ```bash
 curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
-  -H "x-api-key: sk-123456" \
+  -H "x-api-key: your-proxy-key" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-20250514", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -370,7 +374,7 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 **变更说明：**
 
 - 将 `https://api.anthropic.com` 替换为 `http://localhost:3001/proxy/anthropic`
-- 将 `x-api-key` 头部中的原始 API Key 替换为统一认证密钥 `sk-123456`（默认值）
+- 将 `x-api-key` 头部中的原始 API Key 替换为**代理密钥**
 
 #### 6. 支持的接口
 
@@ -402,7 +406,7 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-123456",  # 使用统一认证密钥
+    api_key="your-proxy-key",  # 使用密钥
     base_url="http://localhost:3001/proxy/openai"  # 使用代理端点
 )
 
@@ -419,7 +423,7 @@ import google.generativeai as genai
 
 # 配置 API 密钥和基础 URL
 genai.configure(
-    api_key="sk-123456",  # 使用统一认证密钥
+    api_key="your-proxy-key",  # 使用代理密钥
     client_options={"api_endpoint": "http://localhost:3001/proxy/gemini"}
 )
 
@@ -433,7 +437,7 @@ response = model.generate_content("Hello")
 from anthropic import Anthropic
 
 client = Anthropic(
-    api_key="sk-123456",  # 使用统一认证密钥
+    api_key="your-proxy-key",  # 使用代理密钥
     base_url="http://localhost:3001/proxy/anthropic"  # 使用代理端点
 )
 
@@ -443,7 +447,9 @@ response = client.messages.create(
 )
 ```
 
-> **重要提示**：作为透明代理服务，GPT-Load 完全保留各 AI 服务的原生 API 格式和认证方式，仅需要替换端点地址并使用统一密钥值即可无缝迁移。
+> **重要提示**：作为透明代理服务，GPT-Load 完全保留各 AI 服务的原生 API 格式和认证方式，仅需要替换端点地址并使用在管理端配置的**代理密钥**即可无缝迁移。
+
+</details>
 
 ## 许可证
 
