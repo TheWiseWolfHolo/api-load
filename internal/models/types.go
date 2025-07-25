@@ -80,7 +80,7 @@ type RequestLog struct {
 	GroupName    string    `gorm:"type:varchar(255);index" json:"group_name"`
 	KeyValue     string    `gorm:"type:varchar(1024)" json:"key_value"`
 	IsSuccess    bool      `gorm:"not null" json:"is_success"`
-	SourceIP     string    `gorm:"type:varchar(45)" json:"source_ip"`
+	SourceIP     string    `gorm:"type:varchar(64)" json:"source_ip"`
 	StatusCode   int       `gorm:"not null" json:"status_code"`
 	RequestPath  string    `gorm:"type:varchar(500)" json:"request_path"`
 	Duration     int64     `gorm:"not null" json:"duration_ms"`
