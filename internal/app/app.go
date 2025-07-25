@@ -94,7 +94,7 @@ func (a *App) Start() error {
 		logrus.Info("Database auto-migration completed.")
 
 		// 初始化系统设置
-		if err := a.settingsManager.EnsureSettingsInitialized(); err != nil {
+		if err := a.settingsManager.EnsureSettingsInitialized(a.configManager.GetAuthConfig()); err != nil {
 			return fmt.Errorf("failed to initialize system settings: %w", err)
 		}
 		logrus.Info("System settings initialized in DB.")

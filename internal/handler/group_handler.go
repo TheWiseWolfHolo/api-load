@@ -211,6 +211,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		ValidationEndpoint: validationEndpoint,
 		ParamOverrides:     req.ParamOverrides,
 		Config:             cleanedConfig,
+		ProxyKeys:          strings.TrimSpace(req.ProxyKeys),
 	}
 
 	if err := s.DB.Create(&group).Error; err != nil {
@@ -253,6 +254,7 @@ type GroupUpdateRequest struct {
 	ValidationEndpoint *string         `json:"validation_endpoint,omitempty"`
 	ParamOverrides     map[string]any  `json:"param_overrides"`
 	Config             map[string]any  `json:"config"`
+	ProxyKeys          *string         `json:"proxy_keys,omitempty"`
 }
 
 // UpdateGroup handles updating an existing group.
@@ -351,6 +353,10 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		group.Config = cleanedConfig
 	}
 
+	if req.ProxyKeys != nil {
+		group.ProxyKeys = strings.TrimSpace(*req.ProxyKeys)
+	}
+
 	// Save the updated group object
 	if err := tx.Save(&group).Error; err != nil {
 		response.Error(c, app_errors.ParseDBError(err))
@@ -382,6 +388,7 @@ type GroupResponse struct {
 	ValidationEndpoint string            `json:"validation_endpoint"`
 	ParamOverrides     datatypes.JSONMap `json:"param_overrides"`
 	Config             datatypes.JSONMap `json:"config"`
+	ProxyKeys          string            `json:"proxy_keys"`
 	LastValidatedAt    *time.Time        `json:"last_validated_at"`
 	CreatedAt          time.Time         `json:"created_at"`
 	UpdatedAt          time.Time         `json:"updated_at"`
@@ -412,6 +419,7 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		ValidationEndpoint: group.ValidationEndpoint,
 		ParamOverrides:     group.ParamOverrides,
 		Config:             group.Config,
+		ProxyKeys:          group.ProxyKeys,
 		LastValidatedAt:    group.LastValidatedAt,
 		CreatedAt:          group.CreatedAt,
 		UpdatedAt:          group.UpdatedAt,

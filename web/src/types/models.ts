@@ -43,6 +43,7 @@ export interface Group {
   api_keys?: APIKey[];
   endpoint?: string;
   param_overrides: Record<string, unknown>;
+  proxy_keys: string;
   created_at?: string;
   updated_at?: string;
 }

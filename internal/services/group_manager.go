@@ -7,6 +7,7 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
 	"gpt-load/internal/syncer"
+	"gpt-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -47,6 +48,7 @@ func (gm *GroupManager) Initialize() error {
 		for _, group := range groups {
 			g := *group
 			g.EffectiveConfig = gm.settingsManager.GetEffectiveConfig(g.Config)
+			g.ProxyKeysMap = utils.StringToSet(g.ProxyKeys, ",")
 			groupMap[g.Name] = &g
 			logrus.WithFields(logrus.Fields{
 				"group_name":       g.Name,

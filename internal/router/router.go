@@ -2,7 +2,6 @@ package router
 
 import (
 	"embed"
-	"gpt-load/internal/channel"
 	"gpt-load/internal/handler"
 	"gpt-load/internal/middleware"
 	"gpt-load/internal/proxy"
@@ -43,7 +42,6 @@ func NewRouter(
 	proxyServer *proxy.ProxyServer,
 	configManager types.ConfigManager,
 	groupManager *services.GroupManager,
-	channelFactory *channel.Factory,
 	buildFS embed.FS,
 	indexPage []byte,
 ) *gin.Engine {
@@ -66,7 +64,7 @@ func NewRouter(
 	// 注册路由
 	registerSystemRoutes(router, serverHandler)
 	registerAPIRoutes(router, serverHandler, configManager)
-	registerProxyRoutes(router, proxyServer, configManager)
+	registerProxyRoutes(router, proxyServer, groupManager)
 	registerFrontendRoutes(router, buildFS, indexPage)
 
 	return router
@@ -159,12 +157,11 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 func registerProxyRoutes(
 	router *gin.Engine,
 	proxyServer *proxy.ProxyServer,
-	configManager types.ConfigManager,
+	groupManager *services.GroupManager,
 ) {
 	proxyGroup := router.Group("/proxy")
-	authConfig := configManager.GetAuthConfig()
 
-	proxyGroup.Use(middleware.Auth(authConfig))
+	proxyGroup.Use(middleware.ProxyAuth(groupManager))
 
 	proxyGroup.Any("/:group_name/*path", proxyServer.HandleProxy)
 }

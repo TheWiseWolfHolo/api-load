@@ -45,6 +45,7 @@ type Group struct {
 	Name               string               `gorm:"type:varchar(255);not null;unique" json:"name"`
 	Endpoint           string               `gorm:"-" json:"endpoint"`
 	DisplayName        string               `gorm:"type:varchar(255)" json:"display_name"`
+	ProxyKeys          string               `gorm:"type:text" json:"proxy_keys"`
 	Description        string               `gorm:"type:varchar(512)" json:"description"`
 	Upstreams          datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
 	ValidationEndpoint string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
@@ -57,6 +58,9 @@ type Group struct {
 	LastValidatedAt    *time.Time           `json:"last_validated_at"`
 	CreatedAt          time.Time            `json:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at"`
+
+	// For cache
+	ProxyKeysMap map[string]struct{} `gorm:"-" json:"-"`
 }
 
 // APIKey 对应 api_keys 表

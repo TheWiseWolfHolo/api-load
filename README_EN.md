@@ -12,7 +12,7 @@ For detailed documentation, please visit [Official Documentation](https://www.gp
 
 ## Features
 
-- **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats (continuously expanding)
+- **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats
 - **Intelligent Key Management**: High-performance key pool with group-based management, automatic rotation, and failure recovery
 - **Load Balancing**: Weighted load balancing across multiple upstream endpoints to enhance service availability
 - **Smart Failure Handling**: Automatic key blacklist management and recovery mechanisms to ensure service continuity
@@ -22,6 +22,7 @@ For detailed documentation, please visit [Official Documentation](https://www.gp
 - **Comprehensive Monitoring**: Real-time statistics, health checks, and detailed request logging
 - **High-Performance Design**: Zero-copy streaming, connection pool reuse, and atomic operations
 - **Production Ready**: Graceful shutdown, error recovery, and comprehensive security mechanisms
+- **Dual Authentication**: Separate authentication for management and proxy, with proxy authentication supporting global and group-level keys
 
 ## Supported AI Services
 
@@ -30,7 +31,6 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 - **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
 - **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
 - **Anthropic Claude Format**: Claude series models, supporting high-quality conversations and text generation
-- **Extensibility**: Plugin-based architecture design for rapid integration of new AI service providers and their native formats
 
 ## Quick Start
 
@@ -153,9 +153,10 @@ GPT-Load adopts a dual-layer configuration architecture:
 - **Configuration Priority**: Group Configuration > System Settings
 - **Characteristics**: Supports hot-reload, takes effect immediately after modification without application restart
 
-### Static Configuration (Environment Variables)
+<details>
+<summary>Static Configuration (Environment Variables)</summary>
 
-#### Server Configuration
+**Server Configuration:**
 
 | Setting                   | Environment Variable               | Default         | Description                                     |
 | ------------------------- | ---------------------------------- | --------------- | ----------------------------------------------- |
@@ -168,15 +169,15 @@ GPT-Load adopts a dual-layer configuration architecture:
 | Follower Mode             | `IS_SLAVE`                         | false           | Follower node identifier for cluster deployment |
 | Timezone                  | `TZ`                               | `Asia/Shanghai` | Specify timezone                                |
 
-#### Authentication & Database Configuration
+**Authentication & Database Configuration:**
 
-| Setting             | Environment Variable | Default              | Description                                                                     |
-| ------------------- | -------------------- | -------------------- | ------------------------------------------------------------------------------- |
-| Authentication Key  | `AUTH_KEY`           | `sk-123456`          | Unique authentication key for accessing management interface and proxy requests |
-| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path                                   |
-| Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty                         |
+| Setting             | Environment Variable | Default              | Description                                         |
+| ------------------- | -------------------- | -------------------- | --------------------------------------------------- |
+| Admin Key           | `AUTH_KEY`           | `sk-123456`          | Access authentication key for the **management end**|
+| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path       |
+| Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty |
 
-#### Performance & CORS Configuration
+**Performance & CORS Configuration:**
 
 | Setting                 | Environment Variable      | Default                       | Description                                     |
 | ----------------------- | ------------------------- | ----------------------------- | ----------------------------------------------- |
@@ -187,7 +188,7 @@ GPT-Load adopts a dual-layer configuration architecture:
 | Allowed Headers         | `ALLOWED_HEADERS`         | `*`                           | Allowed request headers, comma-separated        |
 | Allow Credentials       | `ALLOW_CREDENTIALS`       | false                         | Whether to allow sending credentials            |
 
-#### Logging Configuration
+**Logging Configuration:**
 
 | Setting             | Environment Variable | Default               | Description                         |
 | ------------------- | -------------------- | --------------------- | ----------------------------------- |
@@ -196,37 +197,36 @@ GPT-Load adopts a dual-layer configuration architecture:
 | Enable File Logging | `LOG_ENABLE_FILE`    | false                 | Whether to enable file log output   |
 | Log File Path       | `LOG_FILE_PATH`      | `./data/logs/app.log` | Log file storage path               |
 
-#### Proxy Configuration
+**Proxy Configuration:**
 
 GPT-Load automatically reads proxy settings from environment variables to make requests to upstream AI providers.
 
-| Setting | Environment Variable | Default | Description |
-| --- | --- | --- | --- |
-| HTTP Proxy | `HTTP_PROXY` | - | Proxy server address for HTTP requests |
-| HTTPS Proxy | `HTTPS_PROXY` | - | Proxy server address for HTTPS requests |
-| No Proxy | `NO_PROXY` | - | Comma-separated list of hosts or domains to bypass the proxy |
+| Setting     | Environment Variable | Default | Description                                     |
+| ----------- | -------------------- | ------- | ----------------------------------------------- |
+| HTTP Proxy  | `HTTP_PROXY`         | -       | Proxy server address for HTTP requests          |
+| HTTPS Proxy | `HTTPS_PROXY`        | -       | Proxy server address for HTTPS requests         |
+| No Proxy    | `NO_PROXY`           | -       | Comma-separated list of hosts or domains to bypass the proxy |
 
-**Supported Proxy Protocol Formats:**
+Supported Proxy Protocol Formats:
 
 - **HTTP**: `http://user:pass@host:port`
 - **HTTPS**: `https://user:pass@host:port`
 - **SOCKS5**: `socks5://user:pass@host:port`
+</details>
 
-### Dynamic Configuration (Hot-Reload)
+<details>
+<summary>Dynamic Configuration (Hot-Reload)</summary>
 
-Dynamic configuration is stored in the database and supports real-time modification through the web management interface, taking effect immediately without restart.
-
-**Configuration Priority**: Group Configuration > System Settings
-
-#### Basic Settings
+**Basic Settings:**
 
 | Setting            | Field Name                           | Default                 | Group Override | Description                                  |
 | ------------------ | ------------------------------------ | ----------------------- | -------------- | -------------------------------------------- |
 | Project URL        | `app_url`                            | `http://localhost:3001` | ❌             | Project base URL                             |
 | Log Retention Days | `request_log_retention_days`         | 7                       | ❌             | Request log retention days, 0 for no cleanup |
 | Log Write Interval | `request_log_write_interval_minutes` | 1                       | ❌             | Log write to database cycle (minutes)        |
+| Global Proxy Keys  | `proxy_keys`                         | Initial value from `AUTH_KEY` | ❌         | Globally effective proxy keys, comma-separated |
 
-#### Request Settings
+**Request Settings:**
 
 | Setting                       | Field Name                | Default | Group Override | Description                                                         |
 | ----------------------------- | ------------------------- | ------- | -------------- | ------------------------------------------------------------------- |
@@ -237,7 +237,7 @@ Dynamic configuration is stored in the database and supports real-time modificat
 | Max Idle Connections          | `max_idle_conns`          | 100     | ✅             | Connection pool maximum total idle connections                      |
 | Max Idle Connections Per Host | `max_idle_conns_per_host` | 50      | ✅             | Maximum idle connections per upstream host                          |
 
-#### Key Configuration
+**Key Configuration:**
 
 | Setting                    | Field Name                        | Default | Group Override | Description                                                                |
 | -------------------------- | --------------------------------- | ------- | -------------- | -------------------------------------------------------------------------- |
@@ -246,6 +246,8 @@ Dynamic configuration is stored in the database and supports real-time modificat
 | Key Validation Interval    | `key_validation_interval_minutes` | 60      | ✅             | Background scheduled key validation cycle (minutes)                        |
 | Key Validation Concurrency | `key_validation_concurrency`      | 10      | ✅             | Concurrency for background validation of invalid keys                      |
 | Key Validation Timeout     | `key_validation_timeout_seconds`  | 20      | ✅             | API request timeout for validating individual keys in background (seconds) |
+
+</details>
 
 ## Web Management Interface
 
@@ -270,7 +272,8 @@ The web management interface provides the following features:
 
 ## API Usage Guide
 
-### Proxy Interface Invocation
+<details>
+<summary>Proxy Interface Invocation</summary>
 
 GPT-Load routes requests to different AI services through group names. Usage is as follows:
 
@@ -285,11 +288,11 @@ http://localhost:3001/proxy/{group_name}/{original_api_path}
 
 #### 2. Authentication Methods
 
-As a transparent proxy service, GPT-Load completely preserves the native authentication formats of various AI services:
+Configure **Proxy Keys** in the web management interface, which supports system-level and group-level proxy keys.
 
-- **OpenAI Format**: Uses `Authorization: Bearer {AUTH_KEY}` header authentication
-- **Gemini Format**: Uses URL parameter `key={AUTH_KEY}` authentication
-- **Unified Key**: All services use the unified key value configured in the `AUTH_KEY` environment variable
+- **Authentication Method**: Consistent with the native API, but replace the original key with the configured proxy key.
+- **Key Scope**: **Global Proxy Keys** configured in system settings can be used in all groups. **Group Proxy Keys** configured in a group are only valid for the current group.
+- **Format**: Multiple keys are separated by commas.
 
 #### 3. OpenAI Interface Example
 
@@ -308,7 +311,7 @@ curl -X POST https://api.openai.com/v1/chat/completions \
 
 ```bash
 curl -X POST http://localhost:3001/proxy/openai/v1/chat/completions \
-  -H "Authorization: Bearer sk-123456" \
+  -H "Authorization: Bearer your-proxy-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
@@ -316,7 +319,7 @@ curl -X POST http://localhost:3001/proxy/openai/v1/chat/completions \
 **Changes required:**
 
 - Replace `https://api.openai.com` with `http://localhost:3001/proxy/openai`
-- Replace original API Key with unified authentication key `sk-123456` (default value)
+- Replace original API Key with the **Proxy Key**
 
 #### 4. Gemini Interface Example
 
@@ -333,7 +336,7 @@ curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-
 **Proxy invocation:**
 
 ```bash
-curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:generateContent?key=sk-123456 \
+curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:generateContent?key=your-proxy-key \
   -H "Content-Type: application/json" \
   -d '{"contents": [{"parts": [{"text": "Hello"}]}]}'
 ```
@@ -341,7 +344,7 @@ curl -X POST http://localhost:3001/proxy/gemini/v1beta/models/gemini-2.5-pro:gen
 **Changes required:**
 
 - Replace `https://generativelanguage.googleapis.com` with `http://localhost:3001/proxy/gemini`
-- Replace `key=your-gemini-key` in URL parameter with unified authentication key `sk-123456` (default value)
+- Replace `key=your-gemini-key` in URL parameter with the **Proxy Key**
 
 #### 5. Anthropic Interface Example
 
@@ -361,7 +364,7 @@ curl -X POST https://api.anthropic.com/v1/messages \
 
 ```bash
 curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
-  -H "x-api-key: sk-123456" \
+  -H "x-api-key: your-proxy-key" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-20250514", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -370,7 +373,7 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 **Changes required:**
 
 - Replace `https://api.anthropic.com` with `http://localhost:3001/proxy/anthropic`
-- Replace the original API Key in `x-api-key` header with unified authentication key `sk-123456` (default value)
+- Replace the original API Key in `x-api-key` header with the **Proxy Key**
 
 #### 6. Supported Interfaces
 
@@ -402,7 +405,7 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-123456",  # Use unified authentication key
+    api_key="your-proxy-key",  # Use the proxy key
     base_url="http://localhost:3001/proxy/openai"  # Use proxy endpoint
 )
 
@@ -419,7 +422,7 @@ import google.generativeai as genai
 
 # Configure API key and base URL
 genai.configure(
-    api_key="sk-123456",  # Use unified authentication key
+    api_key="your-proxy-key",  # Use the proxy key
     client_options={"api_endpoint": "http://localhost:3001/proxy/gemini"}
 )
 
@@ -433,7 +436,7 @@ response = model.generate_content("Hello")
 from anthropic import Anthropic
 
 client = Anthropic(
-    api_key="sk-123456",  # Use unified authentication key
+    api_key="your-proxy-key",  # Use the proxy key
     base_url="http://localhost:3001/proxy/anthropic"  # Use proxy endpoint
 )
 
@@ -443,7 +446,9 @@ response = client.messages.create(
 )
 ```
 
-> **Important Note**: As a transparent proxy service, GPT-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the unified key value for seamless migration.
+> **Important Note**: As a transparent proxy service, GPT-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the **Proxy Key** configured in the management interface for seamless migration.
+
+</details>
 
 ## License
 

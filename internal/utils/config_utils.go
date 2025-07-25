@@ -23,7 +23,7 @@ func GenerateSettingsMetadata(s *types.SystemSettings) []models.SystemSettingInf
 		fieldValue := v.Field(i)
 
 		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
+		if jsonTag == "" || jsonTag == "-" {
 			continue
 		}
 

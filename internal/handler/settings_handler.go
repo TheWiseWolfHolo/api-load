@@ -5,6 +5,7 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 	"gpt-load/internal/utils"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,14 @@ func (s *Server) UpdateSettings(c *gin.Context) {
 	if len(settingsMap) == 0 {
 		response.Success(c, nil)
 		return
+	}
+
+	// Sanitize proxy_keys input
+	if proxyKeys, ok := settingsMap["proxy_keys"]; ok {
+		if proxyKeysStr, ok := proxyKeys.(string); ok {
+			cleanedKeys := utils.SplitAndTrim(proxyKeysStr, ",")
+			settingsMap["proxy_keys"] = strings.Join(cleanedKeys, ",")
+		}
 	}
 
 	// 更新配置

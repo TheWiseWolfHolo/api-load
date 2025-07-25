@@ -8,6 +8,7 @@ import (
 
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/response"
+	"gpt-load/internal/services"
 	"gpt-load/internal/types"
 
 	"github.com/gin-gonic/gin"
@@ -132,6 +133,41 @@ func Auth(authConfig types.AuthConfig) gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// ProxyAuth
+func ProxyAuth(gm *services.GroupManager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check key
+		key := extractAuthKey(c)
+		if key == "" {
+			response.Error(c, app_errors.ErrUnauthorized)
+			c.Abort()
+			return
+		}
+
+		group, err := gm.GetGroupByName(c.Param("group_name"))
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "Failed to retrieve proxy group"))
+			c.Abort()
+			return
+		}
+
+		// Then check System-wide keys (O(1) lookup)
+		if _, ok := group.EffectiveConfig.ProxyKeysMap[key]; ok {
+			c.Next()
+			return
+		}
+
+		// Check Group keys first (O(1) lookup)
+		if _, ok := group.ProxyKeysMap[key]; ok {
+			c.Next()
+			return
+		}
+
+		response.Error(c, app_errors.ErrUnauthorized)
+		c.Abort()
 	}
 }
 
