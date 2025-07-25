@@ -66,7 +66,7 @@ type Group struct {
 // APIKey 对应 api_keys 表
 type APIKey struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement" json:"id"`
-	KeyValue     string     `gorm:"type:varchar(1024);not null;uniqueIndex:idx_group_key" json:"key_value"`
+	KeyValue     string     `gorm:"type:varchar(700);not null;uniqueIndex:idx_group_key" json:"key_value"`
 	GroupID      uint       `gorm:"not null;uniqueIndex:idx_group_key" json:"group_id"`
 	Status       string     `gorm:"type:varchar(50);not null;default:'active'" json:"status"`
 	RequestCount int64      `gorm:"not null;default:0" json:"request_count"`
@@ -82,7 +82,7 @@ type RequestLog struct {
 	Timestamp    time.Time `gorm:"not null;index" json:"timestamp"`
 	GroupID      uint      `gorm:"not null;index" json:"group_id"`
 	GroupName    string    `gorm:"type:varchar(255);index" json:"group_name"`
-	KeyValue     string    `gorm:"type:varchar(1024)" json:"key_value"`
+	KeyValue     string    `gorm:"type:varchar(700)" json:"key_value"`
 	IsSuccess    bool      `gorm:"not null" json:"is_success"`
 	SourceIP     string    `gorm:"type:varchar(64)" json:"source_ip"`
 	StatusCode   int       `gorm:"not null" json:"status_code"`
