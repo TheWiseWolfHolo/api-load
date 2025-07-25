@@ -62,14 +62,12 @@ function openCreateGroupModal() {
   showGroupModal.value = true;
 }
 
-function handleGroupCreated(_group: Group) {
+function handleGroupCreated(group: Group) {
   showGroupModal.value = false;
-  emit("refresh");
-}
-
-function handleSwitchToGroup(groupId: number) {
-  // 创建成功后，通知父组件刷新并切换到新创建的分组
-  emit("refresh-and-select", groupId);
+  if (group && group.id) {
+    // 创建成功后，通知父组件刷新并切换到新创建的分组
+    emit("refresh-and-select", group.id);
+  }
 }
 </script>
 
@@ -132,7 +130,6 @@ function handleSwitchToGroup(groupId: number) {
     <group-form-modal
       v-model:show="showGroupModal"
       @success="handleGroupCreated"
-      @switch-to-group="handleSwitchToGroup"
     />
   </div>
 </template>
