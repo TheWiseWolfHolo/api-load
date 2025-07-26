@@ -36,9 +36,13 @@ func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 
 // ModifyRequest adds the API key as a query parameter for Gemini requests.
 func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
-	q := req.URL.Query()
-	q.Set("key", apiKey.KeyValue)
-	req.URL.RawQuery = q.Encode()
+	if strings.Contains(req.URL.Path, "v1beta/openai") {
+		req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+	} else {
+		q := req.URL.Query()
+		q.Set("key", apiKey.KeyValue)
+		req.URL.RawQuery = q.Encode()
+	}
 }
 
 // IsStreamRequest checks if the request is for a streaming response.
@@ -54,6 +58,14 @@ func (ch *GeminiChannel) IsStreamRequest(c *gin.Context, bodyBytes []byte) bool 
 	}
 	if c.Query("stream") == "true" {
 		return true
+	}
+
+	type streamPayload struct {
+		Stream bool `json:"stream"`
+	}
+	var p streamPayload
+	if err := json.Unmarshal(bodyBytes, &p); err == nil {
+		return p.Stream
 	}
 
 	return false
