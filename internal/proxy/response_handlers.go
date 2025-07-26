@@ -1,10 +1,8 @@
 package proxy
 
 import (
-	"bufio"
-	"net/http"
-
 	"io"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -23,29 +21,23 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 		return
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		select {
-		case <-c.Request.Context().Done():
-			logrus.Debugf("Client disconnected, closing stream.")
-			return
-		default:
+	buf := make([]byte, 4*1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := c.Writer.Write(buf[:n]); writeErr != nil {
+				logUpstreamError("writing stream to client", writeErr)
+				return
+			}
+			flusher.Flush()
 		}
-
-		if _, err := c.Writer.Write(scanner.Bytes()); err != nil {
-			logUpstreamError("writing stream to client", err)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			logUpstreamError("reading from upstream", err)
 			return
 		}
-		if _, err := c.Writer.Write([]byte("\n")); err != nil {
-			logUpstreamError("writing stream newline to client", err)
-			return
-		}
-		flusher.Flush()
-	}
-
-	if err := scanner.Err(); err != nil {
-		logUpstreamError("reading from upstream scanner", err)
 	}
 }
 
