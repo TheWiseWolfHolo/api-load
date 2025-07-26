@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
+import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
 import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
 import { Add, Close, HelpCircleOutline, Remove } from "@vicons/ionicons5";
 import {
@@ -610,9 +611,10 @@ async function handleSubmit() {
                 </n-tooltip>
               </div>
             </template>
-            <n-input
-              v-model:value="formData.proxy_keys"
+            <proxy-keys-input
+              v-model="formData.proxy_keys"
               placeholder="多个密钥请用英文逗号 , 分隔"
+              size="medium"
             />
           </n-form-item>
 
