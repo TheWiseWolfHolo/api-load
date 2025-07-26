@@ -2,6 +2,7 @@
 import { versionService, type VersionInfo } from "@/services/version";
 import {
   BugOutline,
+  ChatbubbleOutline,
   CheckmarkCircleOutline,
   DocumentTextOutline,
   LogoGithub,
@@ -170,6 +171,21 @@ onMounted(() => {
               </a>
             </template>
             问题反馈
+          </n-tooltip>
+
+          <n-tooltip trigger="hover" placement="top">
+            <template #trigger>
+              <a
+                href="https://t.me/+GHpy5SwEllg3MTUx"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="footer-link"
+              >
+                <n-icon :component="ChatbubbleOutline" :size="14" class="link-icon" />
+                <span>Telegram</span>
+              </a>
+            </template>
+            加入群组
           </n-tooltip>
         </div>
 
