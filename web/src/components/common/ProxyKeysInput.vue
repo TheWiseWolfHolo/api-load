@@ -168,8 +168,7 @@ function handleInput(value: string) {
           />
         </div>
         <div style="color: #999; font-size: 12px; line-height: 1.4">
-          <p style="margin: 0">密钥格式：sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>
-          <p style="margin: 4px 0 0 0">生成的密钥将会插入到当前输入框内容的后面，以逗号分隔</p>
+          <p>生成的密钥将会插入到当前输入框内容的后面，以逗号分隔</p>
         </div>
       </n-space>
     </n-modal>
