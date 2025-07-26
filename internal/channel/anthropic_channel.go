@@ -96,6 +96,7 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, key string) (bool, 
 	}
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := ch.HTTPClient.Do(req)
 	if err != nil {
