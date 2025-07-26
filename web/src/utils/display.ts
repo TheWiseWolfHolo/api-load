@@ -49,3 +49,18 @@ export function maskKey(key: string): string {
   }
   return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
 }
+
+/**
+ * Masks a comma-separated string of keys.
+ * @param keys The comma-separated keys string.
+ * @returns The masked keys string.
+ */
+export function maskProxyKeys(keys: string): string {
+  if (!keys) {
+    return "";
+  }
+  return keys
+    .split(",")
+    .map(key => maskKey(key.trim()))
+    .join(", ");
+}

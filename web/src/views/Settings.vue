@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { settingsApi, type SettingCategory } from "@/api/settings";
+import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
 import { HelpCircle, Save } from "@vicons/ionicons5";
 import {
   NButton,
@@ -72,11 +73,11 @@ async function handleSubmit() {
           hoverable
           bordered
         >
-          <n-grid :x-gap="24" :y-gap="0" responsive="screen" cols="1 s:2 m:2 l:3 xl:4">
+          <n-grid :x-gap="36" :y-gap="0" responsive="screen" cols="1 s:2 m:2 l:3 xl:3">
             <n-grid-item
               v-for="item in category.settings"
               :key="item.key"
-              :span="item.key === 'proxy_keys' ? 4 : 1"
+              :span="item.key === 'proxy_keys' ? 3 : 1"
             >
               <n-form-item
                 :path="item.key"
@@ -107,6 +108,12 @@ async function handleSubmit() {
                   placeholder="请输入数值"
                   clearable
                   style="width: 100%"
+                  size="small"
+                />
+                <proxy-keys-input
+                  v-else-if="item.key === 'proxy_keys'"
+                  v-model="form[item.key] as string"
+                  placeholder="请输入内容"
                   size="small"
                 />
                 <n-input

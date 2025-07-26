@@ -3,10 +3,11 @@ import { keysApi } from "@/api/keys";
 import type { Group, GroupConfigOption, GroupStatsResponse } from "@/types/models";
 import { appState } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
-import { getGroupDisplayName } from "@/utils/display";
-import { Pencil, Trash } from "@vicons/ionicons5";
+import { getGroupDisplayName, maskProxyKeys } from "@/utils/display";
+import { CopyOutline, EyeOffOutline, EyeOutline, Pencil, Trash } from "@vicons/ionicons5";
 import {
   NButton,
+  NButtonGroup,
   NCard,
   NCollapse,
   NCollapseItem,
@@ -20,7 +21,7 @@ import {
   NTooltip,
   useDialog,
 } from "naive-ui";
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import GroupFormModal from "./GroupFormModal.vue";
 
 interface Props {
@@ -43,6 +44,30 @@ const showEditModal = ref(false);
 const delLoading = ref(false);
 const expandedName = ref<string[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
+const showProxyKeys = ref(false);
+
+const proxyKeysDisplay = computed(() => {
+  if (!props.group?.proxy_keys) {
+    return "-";
+  }
+  if (showProxyKeys.value) {
+    return props.group.proxy_keys.replace(/,/g, "\n");
+  }
+  return maskProxyKeys(props.group.proxy_keys);
+});
+
+async function copyProxyKeys() {
+  if (!props.group?.proxy_keys) {
+    return;
+  }
+  const keysToCopy = props.group.proxy_keys.replace(/,/g, "\n");
+  const success = await copy(keysToCopy);
+  if (success) {
+    window.$message.success("代理密钥已复制到剪贴板");
+  } else {
+    window.$message.error("复制失败");
+  }
+}
 
 onMounted(() => {
   loadStats();
@@ -385,10 +410,41 @@ function resetPage() {
                         {{ group?.validation_endpoint }}
                       </n-form-item>
                     </n-grid-item>
-                    <n-grid-item>
+                    <n-grid-item :span="2">
+                      <n-form-item label="代理密钥：">
+                        <div class="proxy-keys-content">
+                          <span class="key-text">{{ proxyKeysDisplay }}</span>
+                          <n-button-group size="small" class="key-actions" v-if="group?.proxy_keys">
+                            <n-tooltip trigger="hover">
+                              <template #trigger>
+                                <n-button quaternary circle @click="showProxyKeys = !showProxyKeys">
+                                  <template #icon>
+                                    <n-icon
+                                      :component="showProxyKeys ? EyeOffOutline : EyeOutline"
+                                    />
+                                  </template>
+                                </n-button>
+                              </template>
+                              {{ showProxyKeys ? "隐藏密钥" : "显示密钥" }}
+                            </n-tooltip>
+                            <n-tooltip trigger="hover">
+                              <template #trigger>
+                                <n-button quaternary circle @click="copyProxyKeys">
+                                  <template #icon>
+                                    <n-icon :component="CopyOutline" />
+                                  </template>
+                                </n-button>
+                              </template>
+                              复制密钥
+                            </n-tooltip>
+                          </n-button-group>
+                        </div>
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item :span="2">
                       <n-form-item label="描述：">
                         <div class="description-content">
-                          {{ group?.description }}
+                          {{ group?.description || "-" }}
                         </div>
                       </n-form-item>
                     </n-grid-item>
@@ -611,6 +667,28 @@ function resetPage() {
   line-height: 1.5;
   min-height: 20px;
   color: #374151;
+}
+
+.proxy-keys-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.key-text {
+  flex-grow: 1;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  padding-top: 4px; /* Align with buttons */
+  color: #374151;
+}
+
+.key-actions {
+  flex-shrink: 0;
 }
 
 /* 配置项tooltip样式 */
