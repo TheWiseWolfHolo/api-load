@@ -423,7 +423,7 @@ export default {
     enterNotes: "備考を入力してください...",
     uploadFile: "ファイルをアップロード",
     manualInput: "手動入力",
-    clickOrDragFile: "クリックまたはドラッグしてファイルをアップロード",
+    clickOrDragFile: "アップロードをクリック",
     onlyTxtFileSupported: ".txt ファイルのみサポート",
     fileImportedSuccessfully: "ファイルのインポートに成功しました",
     fileReadError: "ファイルの読み取りに失敗しました",

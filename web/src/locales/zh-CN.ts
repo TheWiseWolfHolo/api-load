@@ -407,7 +407,7 @@ export default {
     enterNotes: "请输入备注...",
     uploadFile: "上传文件",
     manualInput: "手动输入",
-    clickOrDragFile: "点击或拖拽文件到此处上传",
+    clickOrDragFile: "点击上传",
     onlyTxtFileSupported: "仅支持 .txt 文件",
     fileImportedSuccessfully: "文件导入成功",
     fileReadError: "文件读取失败",
