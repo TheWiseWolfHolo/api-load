@@ -2,16 +2,49 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
 // MaskAPIKey masks an API key for safe logging.
 func MaskAPIKey(key string) string {
 	length := len(key)
+	if length == 0 {
+		return ""
+	}
+	if length <= 2 {
+		return strings.Repeat("*", length)
+	}
 	if length <= 8 {
-		return key
+		return fmt.Sprintf("%s****%s", key[:1], key[length-1:])
 	}
 	return fmt.Sprintf("%s****%s", key[:4], key[length-4:])
+}
+
+// MaskURLCredentials removes username and password material from URLs before logging.
+func MaskURLCredentials(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return maskRawURLCredentials(rawURL)
+	}
+	if parsed.User == nil {
+		return rawURL
+	}
+	parsed.User = url.User("***")
+	return parsed.String()
+}
+
+func maskRawURLCredentials(rawURL string) string {
+	schemeIndex := strings.Index(rawURL, "://")
+	if schemeIndex < 0 {
+		return rawURL
+	}
+	authorityStart := schemeIndex + len("://")
+	atIndex := strings.Index(rawURL[authorityStart:], "@")
+	if atIndex < 0 {
+		return rawURL
+	}
+	return rawURL[:authorityStart] + "***@" + rawURL[authorityStart+atIndex+1:]
 }
 
 // TruncateString shortens a string to a maximum length.

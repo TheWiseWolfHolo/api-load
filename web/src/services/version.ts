@@ -1,3 +1,4 @@
+import { getConfiguredReleaseRepository } from "@/config/appLinks";
 import axios from "axios";
 
 export interface GitHubRelease {
@@ -15,6 +16,7 @@ export interface VersionInfo {
   releaseUrl: string | null;
   lastCheckTime: number;
   status: "checking" | "latest" | "update-available" | "error";
+  releaseRepository: string | null;
 }
 
 const CACHE_KEY = "gpt-load-version-info";
@@ -22,9 +24,11 @@ const CACHE_DURATION = 30 * 60 * 1000;
 
 class VersionService {
   private currentVersion: string;
+  private releaseRepository: string | null;
 
   constructor() {
     this.currentVersion = import.meta.env.VITE_VERSION || "1.0.0";
+    this.releaseRepository = getConfiguredReleaseRepository();
   }
 
   /**
@@ -47,6 +51,11 @@ class VersionService {
 
       // 检查缓存中的版本号是否与当前应用版本号一致
       if (versionInfo.currentVersion !== this.currentVersion) {
+        this.clearCache();
+        return null;
+      }
+
+      if (versionInfo.releaseRepository !== this.releaseRepository) {
         this.clearCache();
         return null;
       }
@@ -96,16 +105,17 @@ class VersionService {
    * 从 GitHub API 获取最新版本
    */
   private async fetchLatestVersion(): Promise<GitHubRelease | null> {
+    if (!this.releaseRepository) {
+      return null;
+    }
+
     try {
-      const response = await axios.get(
-        "https://api.github.com/repos/tbphp/gpt-load/releases/latest",
-        {
-          timeout: 10000,
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-          },
-        }
-      );
+      const response = await axios.get(`https://api.github.com/repos/${this.releaseRepository}/releases/latest`, {
+        timeout: 10000,
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
 
       if (response.status === 200 && response.data) {
         return response.data;
@@ -137,6 +147,7 @@ class VersionService {
       releaseUrl: null,
       lastCheckTime: Date.now(),
       status: "checking",
+      releaseRepository: this.releaseRepository,
     };
 
     try {
@@ -169,6 +180,10 @@ class VersionService {
    */
   getCurrentVersion(): string {
     return this.currentVersion;
+  }
+
+  canCheckForUpdates(): boolean {
+    return this.releaseRepository !== null;
   }
 
   /**

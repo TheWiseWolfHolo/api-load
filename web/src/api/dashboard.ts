@@ -1,4 +1,4 @@
-import type { ChartData, DashboardStatsResponse, Group } from "@/types/models";
+import type { ChartData, DashboardStatsResponse, Group, TokenStatsResponse } from "@/types/models";
 import http from "@/utils/http";
 
 /**
@@ -16,6 +16,14 @@ export const getDashboardChart = (groupId?: number) => {
   return http.get<ChartData>("/dashboard/chart", {
     params: groupId ? { groupId } : {},
   });
+};
+
+export const getTokenStats = (params?: {
+  group_by?: "model" | "group" | "hour";
+  start_time?: string;
+  end_time?: string;
+}) => {
+  return http.get<TokenStatsResponse>("/dashboard/token-stats", { params });
 };
 
 /**

@@ -117,6 +117,9 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		groups.PUT("/:id", serverHandler.UpdateGroup)
 		groups.DELETE("/:id", serverHandler.DeleteGroup)
 		groups.GET("/:id/stats", serverHandler.GetGroupStats)
+		groups.GET("/:id/models", serverHandler.GetGroupModels)
+		groups.PUT("/:id/models", serverHandler.SaveGroupModels)
+		groups.POST("/:id/models/discover", serverHandler.DiscoverGroupModels)
 		groups.POST("/:id/copy", serverHandler.CopyGroup)
 
 		groups.GET("/:id/sub-groups", serverHandler.GetSubGroups)
@@ -141,6 +144,8 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		keys.POST("/clear-all", serverHandler.ClearAllKeys)
 		keys.POST("/validate-group", serverHandler.ValidateGroupKeys)
 		keys.POST("/test-multiple", serverHandler.TestMultipleKeys)
+		keys.POST("/status", serverHandler.BatchUpdateKeyStatus)
+		keys.PUT("/:id/status", serverHandler.UpdateKeyStatus)
 		keys.PUT("/:id/notes", serverHandler.UpdateKeyNotes)
 	}
 
@@ -152,6 +157,7 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	{
 		dashboard.GET("/stats", serverHandler.Stats)
 		dashboard.GET("/chart", serverHandler.Chart)
+		dashboard.GET("/token-stats", serverHandler.TokenStats)
 		dashboard.GET("/encryption-status", serverHandler.EncryptionStatus)
 	}
 

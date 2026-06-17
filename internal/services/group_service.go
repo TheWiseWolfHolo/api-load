@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"gpt-load/internal/encryption"
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
+	"gpt-load/internal/types"
 	"gpt-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
@@ -133,9 +135,10 @@ type GroupReorderItem struct {
 
 // KeyStats captures aggregated API key statistics for a group.
 type KeyStats struct {
-	TotalKeys   int64 `json:"total_keys"`
-	ActiveKeys  int64 `json:"active_keys"`
-	InvalidKeys int64 `json:"invalid_keys"`
+	TotalKeys    int64 `json:"total_keys"`
+	ActiveKeys   int64 `json:"active_keys"`
+	InvalidKeys  int64 `json:"invalid_keys"`
+	DisabledKeys int64 `json:"disabled_keys"`
 }
 
 // RequestStats captures request success and failure ratios over a time window.
@@ -263,8 +266,10 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 		return nil, app_errors.ParseDBError(err)
 	}
 
-	if err := s.groupManager.Invalidate(); err != nil {
-		logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+	if s.groupManager != nil {
+		if err := s.groupManager.Invalidate(); err != nil {
+			logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+		}
 	}
 
 	return &group, nil
@@ -492,8 +497,10 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 		return nil, app_errors.ErrDatabase
 	}
 
-	if err := s.groupManager.Invalidate(); err != nil {
-		logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+	if s.groupManager != nil {
+		if err := s.groupManager.Invalidate(); err != nil {
+			logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+		}
 	}
 
 	return &group, nil
@@ -662,6 +669,60 @@ func (s *GroupService) GetGroupStats(ctx context.Context, groupID uint) (*GroupS
 	return s.getStandardGroupStats(ctx, groupID)
 }
 
+func (s *GroupService) SaveGroupModels(ctx context.Context, groupID uint, modelIDs []string) error {
+	normalized := normalizeModelIDs(modelIDs)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	result := s.db.WithContext(ctx).Model(&models.Group{}).Where("id = ?", groupID).Update("models", datatypes.JSON(data))
+	if result.Error != nil {
+		return app_errors.ParseDBError(result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return app_errors.ErrResourceNotFound
+	}
+	if s.groupManager != nil {
+		if err := s.groupManager.Invalidate(); err != nil {
+			logrus.WithContext(ctx).WithError(err).Error("failed to invalidate group cache")
+		}
+	}
+	return nil
+}
+
+func (s *GroupService) GetGroupModels(ctx context.Context, groupID uint) ([]string, error) {
+	var group models.Group
+	if err := s.db.WithContext(ctx).Select("id", "models").First(&group, groupID).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if len(group.Models) == 0 {
+		return []string{}, nil
+	}
+	var modelIDs []string
+	if err := json.Unmarshal(group.Models, &modelIDs); err != nil {
+		return nil, fmt.Errorf("failed to parse group models: %w", err)
+	}
+	return normalizeModelIDs(modelIDs), nil
+}
+
+func normalizeModelIDs(modelIDs []string) []string {
+	seen := make(map[string]struct{}, len(modelIDs))
+	normalized := make([]string, 0, len(modelIDs))
+	for _, modelID := range modelIDs {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			continue
+		}
+		if _, exists := seen[modelID]; exists {
+			continue
+		}
+		seen[modelID] = struct{}{}
+		normalized = append(normalized, modelID)
+	}
+	sort.Strings(normalized)
+	return normalized
+}
+
 // queryGroupHourlyStats queries aggregated hourly statistics from group_hourly_stats table
 func (s *GroupService) queryGroupHourlyStats(ctx context.Context, groupID uint, hours int) (RequestStats, error) {
 	var result struct {
@@ -686,7 +747,7 @@ func (s *GroupService) queryGroupHourlyStats(ctx context.Context, groupID uint, 
 
 // fetchKeyStats retrieves API key statistics for a group
 func (s *GroupService) fetchKeyStats(ctx context.Context, groupID uint) (KeyStats, error) {
-	var totalKeys, activeKeys int64
+	var totalKeys, activeKeys, invalidKeys, disabledKeys int64
 
 	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
 		Where("group_id = ?", groupID).
@@ -700,10 +761,23 @@ func (s *GroupService) fetchKeyStats(ctx context.Context, groupID uint) (KeyStat
 		return KeyStats{}, fmt.Errorf("failed to get active keys: %w", err)
 	}
 
+	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
+		Where("group_id = ? AND status = ?", groupID, models.KeyStatusInvalid).
+		Count(&invalidKeys).Error; err != nil {
+		return KeyStats{}, fmt.Errorf("failed to get invalid keys: %w", err)
+	}
+
+	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
+		Where("group_id = ? AND status = ?", groupID, models.KeyStatusDisabled).
+		Count(&disabledKeys).Error; err != nil {
+		return KeyStats{}, fmt.Errorf("failed to get disabled keys: %w", err)
+	}
+
 	return KeyStats{
-		TotalKeys:   totalKeys,
-		ActiveKeys:  activeKeys,
-		InvalidKeys: totalKeys - activeKeys,
+		TotalKeys:    totalKeys,
+		ActiveKeys:   activeKeys,
+		InvalidKeys:  invalidKeys,
+		DisabledKeys: disabledKeys,
 	}, nil
 }
 
@@ -845,7 +919,22 @@ func (s *GroupService) GetGroupConfigOptions() ([]ConfigOption, error) {
 		})
 	}
 
+	options = append(options, schedulerConfigOptions()...)
+
 	return options, nil
+}
+
+func schedulerConfigOptions() []ConfigOption {
+	return []ConfigOption{
+		{Key: "key_selection_strategy", Name: "Key selection strategy", Description: "round_robin, random, sticky, or fill_first", DefaultValue: "round_robin"},
+		{Key: "key_affinity_scope", Name: "Key affinity scope", Description: "group, model, or model+proxy_key", DefaultValue: "group"},
+		{Key: "fill_cooldown_minutes", Name: "Fill-first cooldown minutes", Description: "Cooldown for transient rate limits", DefaultValue: 0},
+		{Key: "fill_switch_status_codes", Name: "Fill-first switch status codes", Description: "Comma-separated status codes that switch the current key", DefaultValue: ""},
+		{Key: "fill_quota_patterns", Name: "Fill-first quota patterns", Description: "Comma-separated quota or billing exhaustion patterns", DefaultValue: ""},
+		{Key: "fill_max_consecutive_requests", Name: "Fill-first max consecutive requests", Description: "0 means unlimited", DefaultValue: 0},
+		{Key: "fill_max_consecutive_tokens", Name: "Fill-first max consecutive tokens", Description: "0 means unlimited", DefaultValue: 0},
+		{Key: "fill_sticky_ttl_seconds", Name: "Fill-first sticky TTL seconds", Description: "0 means no TTL", DefaultValue: 0},
+	}
 }
 
 // validateAndCleanConfig verifies GroupConfig overrides.
@@ -872,8 +961,11 @@ func (s *GroupService) validateAndCleanConfig(configMap map[string]any) (map[str
 		}
 	}
 
-	if err := s.settingsManager.ValidateGroupConfigOverrides(configMap); err != nil {
-		return nil, NewI18nError(app_errors.ErrValidation, "error.invalid_config_format", map[string]any{"error": err.Error()})
+	systemOverrides := filterSystemSettingOverrides(configMap)
+	if len(systemOverrides) > 0 && s.settingsManager != nil {
+		if err := s.settingsManager.ValidateGroupConfigOverrides(systemOverrides); err != nil {
+			return nil, NewI18nError(app_errors.ErrValidation, "error.invalid_config_format", map[string]any{"error": err.Error()})
+		}
 	}
 
 	configBytes, err := json.Marshal(configMap)
@@ -883,6 +975,9 @@ func (s *GroupService) validateAndCleanConfig(configMap map[string]any) (map[str
 
 	var validatedConfig models.GroupConfig
 	if err := json.Unmarshal(configBytes, &validatedConfig); err != nil {
+		return nil, NewI18nError(app_errors.ErrValidation, "error.invalid_config_format", map[string]any{"error": err.Error()})
+	}
+	if err := validateSchedulerGroupConfig(validatedConfig); err != nil {
 		return nil, NewI18nError(app_errors.ErrValidation, "error.invalid_config_format", map[string]any{"error": err.Error()})
 	}
 
@@ -897,6 +992,57 @@ func (s *GroupService) validateAndCleanConfig(configMap map[string]any) (map[str
 	}
 
 	return finalMap, nil
+}
+
+func filterSystemSettingOverrides(configMap map[string]any) map[string]any {
+	systemKeys := make(map[string]struct{})
+	systemType := reflect.TypeOf(types.SystemSettings{})
+	for i := 0; i < systemType.NumField(); i++ {
+		key := strings.Split(systemType.Field(i).Tag.Get("json"), ",")[0]
+		if key != "" && key != "-" {
+			systemKeys[key] = struct{}{}
+		}
+	}
+
+	filtered := make(map[string]any)
+	for key, value := range configMap {
+		if _, ok := systemKeys[key]; ok {
+			filtered[key] = value
+		}
+	}
+	return filtered
+}
+
+func validateSchedulerGroupConfig(config models.GroupConfig) error {
+	if config.KeySelectionStrategy != nil {
+		switch strings.TrimSpace(*config.KeySelectionStrategy) {
+		case "", "round_robin", "random", "sticky", "fill_first":
+		default:
+			return fmt.Errorf("unknown key_selection_strategy: %s", *config.KeySelectionStrategy)
+		}
+	}
+
+	if config.KeyAffinityScope != nil {
+		switch strings.TrimSpace(*config.KeyAffinityScope) {
+		case "", "group", "model", "model+proxy_key":
+		default:
+			return fmt.Errorf("unknown key_affinity_scope: %s", *config.KeyAffinityScope)
+		}
+	}
+
+	numericFields := map[string]*int{
+		"fill_cooldown_minutes":         config.FillCooldownMinutes,
+		"fill_max_consecutive_requests": config.FillMaxConsecutiveRequests,
+		"fill_max_consecutive_tokens":   config.FillMaxConsecutiveTokens,
+		"fill_sticky_ttl_seconds":       config.FillStickyTTLSeconds,
+	}
+	for name, value := range numericFields {
+		if value != nil && *value < 0 {
+			return fmt.Errorf("%s must be non-negative", name)
+		}
+	}
+
+	return nil
 }
 
 // normalizeHeaderRules deduplicates and normalises header rules.

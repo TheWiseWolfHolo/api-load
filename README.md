@@ -2,23 +2,22 @@
 
 English | [中文](README_CN.md) | [日本語](README_JP.md)
 
-[![Release](https://img.shields.io/github/v/release/tbphp/gpt-load)](https://github.com/tbphp/gpt-load/releases)
+[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/gpt-load)](https://github.com/TheWiseWolfHolo/gpt-load/releases)
 ![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A high-performance, enterprise-grade AI API transparent proxy service designed specifically for enterprises and developers who need to integrate multiple AI services. Built with Go, featuring intelligent key management, load balancing, and comprehensive monitoring capabilities, designed for high-concurrency production environments.
 
-For detailed documentation, please visit [Official Documentation](https://www.gpt-load.com/docs?lang=en)
-
-<a href="https://trendshift.io/repositories/14880" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14880" alt="tbphp%2Fgpt-load | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-<a href="https://hellogithub.com/repository/tbphp/gpt-load" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=554dc4c46eb14092b9b0c56f1eb9021c&claim_uid=Qlh8vzrWJ0HCneG" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
 ## Features
 
 - **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats
-- **Intelligent Key Management**: High-performance key pool with group-based management, automatic rotation, and failure recovery
+- **Intelligent Key Management**: High-performance key pool with group-based management, disabled status workflows, notes-aware import/export, automatic rotation, and failure recovery
+- **Model-Aware Scheduling**: Model discovery, enabled model management, alias mapping, and selectable key strategies including round-robin, random, sticky, and fill-first
 - **Load Balancing**: Weighted load balancing across multiple upstream endpoints to enhance service availability
+- **Migration And Export Safety**: Full-system migration envelopes plus plain, encrypted, masked, and config-only export modes
 - **Smart Failure Handling**: Automatic key blacklist management and recovery mechanisms to ensure service continuity
+- **Proxy And Secret Safety**: Proxy policy resolution with credential masking for API responses, UI display, logs, and masked exports
 - **Dynamic Configuration**: System settings and group configurations support hot-reload without requiring restarts
 - **Enterprise Architecture**: Distributed leader-follower deployment supporting horizontal scaling and high availability
 - **Modern Management**: Vue 3-based web management interface that is intuitive and user-friendly
@@ -51,7 +50,7 @@ docker run -d --name gpt-load \
     -p 3001:3001 \
     -e AUTH_KEY=your-secure-key-here \
     -v "$(pwd)/data":/app/data \
-    ghcr.io/tbphp/gpt-load:latest
+    ghcr.io/thewisewolfholo/gpt-load:latest
 ```
 
 > Please change `your-secure-key-here` to a strong password (never use the default value), then you can log in to the management interface: <http://localhost:3001>
@@ -65,8 +64,8 @@ docker run -d --name gpt-load \
 mkdir -p gpt-load && cd gpt-load
 
 # Download configuration files
-wget https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/docker-compose.yml
-wget -O .env https://raw.githubusercontent.com/tbphp/gpt-load/refs/heads/main/.env.example
+wget https://raw.githubusercontent.com/TheWiseWolfHolo/gpt-load/refs/heads/main/docker-compose.yml
+wget -O .env https://raw.githubusercontent.com/TheWiseWolfHolo/gpt-load/refs/heads/main/.env.example
 
 # Edit the .env file and change AUTH_KEY to a strong password. Never use default or simple keys like sk-123456.
 
@@ -109,7 +108,7 @@ Source build requires a locally installed database (SQLite, MySQL, or PostgreSQL
 
 ```bash
 # Clone and build
-git clone https://github.com/tbphp/gpt-load.git
+git clone https://github.com/TheWiseWolfHolo/gpt-load.git
 cd gpt-load
 go mod tidy
 
@@ -139,8 +138,6 @@ Cluster deployment requires all nodes to connect to the same MySQL (or PostgreSQ
 
 - All nodes must configure identical `AUTH_KEY`, `DATABASE_DSN`, `REDIS_DSN`
 - Leader-follower architecture where follower nodes must configure environment variable: `IS_SLAVE=true`
-
-For details, please refer to [Cluster Deployment Documentation](https://www.gpt-load.com/docs/cluster?lang=en)
 
 ## Configuration System
 
@@ -262,6 +259,19 @@ Supported Proxy Protocol Formats:
 | Key Validation Interval    | `key_validation_interval_minutes` | 60      | ✅             | Background scheduled key validation cycle (minutes)                        |
 | Key Validation Concurrency | `key_validation_concurrency`      | 10      | ✅             | Concurrency for background validation of invalid keys                      |
 | Key Validation Timeout     | `key_validation_timeout_seconds`  | 20      | ✅             | API request timeout for validating individual keys in background (seconds) |
+
+**Scheduler Configuration:**
+
+| Setting                    | Field Name                         | Default       | Group Override | Description                                                |
+| -------------------------- | ---------------------------------- | ------------- | -------------- | ---------------------------------------------------------- |
+| Key Selection Strategy     | `key_selection_strategy`           | `round_robin` | ✅             | Key scheduler: `round_robin`, `random`, `sticky`, or `fill_first` |
+| Key Affinity Scope         | `key_affinity_scope`               | `group`       | ✅             | Sticky scope: group, model, or model plus proxy key        |
+| Fill Cooldown Minutes      | `fill_cooldown_minutes`            | 0             | ✅             | Cooldown duration for transient fill-first failures        |
+| Fill Switch Status Codes   | `fill_switch_status_codes`         | -             | ✅             | Status codes or ranges that switch away from the current key |
+| Fill Quota Patterns        | `fill_quota_patterns`              | -             | ✅             | Error text patterns that mark quota or billing exhaustion  |
+| Fill Max Consecutive Requests | `fill_max_consecutive_requests` | 0             | ✅             | Request limit before switching; 0 means unlimited          |
+| Fill Max Consecutive Tokens | `fill_max_consecutive_tokens`     | 0             | ✅             | Token limit before switching; 0 means unlimited            |
+| Fill Sticky TTL Seconds    | `fill_sticky_ttl_seconds`          | 0             | ✅             | Sticky assignment TTL; 0 means no TTL limit                |
 
 </details>
 
@@ -583,11 +593,6 @@ response = client.messages.create(
 
 - **[New API](https://github.com/QuantumNous/new-api)** - Excellent AI model aggregation management and distribution system
 
-## Contributing
-
-Thanks to all the developers who have contributed to GPT-Load!
-
-[![Contributors](https://contrib.rocks/image?repo=tbphp/gpt-load)](https://github.com/tbphp/gpt-load/graphs/contributors)
 
 ## Supporters
 
@@ -602,4 +607,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Star History
 
-[![Stargazers over time](https://starchart.cc/tbphp/gpt-load.svg?variant=adaptive)](https://starchart.cc/tbphp/gpt-load)
+[![Stargazers over time](https://starchart.cc/TheWiseWolfHolo/gpt-load.svg?variant=adaptive)](https://starchart.cc/TheWiseWolfHolo/gpt-load)

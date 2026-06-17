@@ -1,12 +1,16 @@
 package httpclient
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
 
 // TestStripSensitiveOnCrossHostRedirect asserts that the custom-named x-api-key
@@ -49,7 +53,7 @@ func TestStripSensitiveOnCrossHostRedirect(t *testing.T) {
 	}
 
 	req, _ := http.NewRequest(http.MethodPost, "http://victim.local/v1/messages", nil)
-	req.Header.Set("x-api-key", "sk-secret-upstream-key")
+	req.Header.Set("x-api-key", "sk-test-upstream-key")
 	req.Header.Set("Authorization", "Bearer secret-bearer")
 
 	resp, err := client.Do(req)
@@ -85,7 +89,7 @@ func TestSensitiveHeadersPreservedSameHost(t *testing.T) {
 
 	client := &http.Client{CheckRedirect: stripSensitiveOnCrossHostRedirect}
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/redirect", nil)
-	req.Header.Set("x-api-key", "sk-secret-upstream-key")
+	req.Header.Set("x-api-key", "sk-test-upstream-key")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -96,7 +100,30 @@ func TestSensitiveHeadersPreservedSameHost(t *testing.T) {
 	if hops == 0 {
 		t.Fatal("expected a same-host redirect hop")
 	}
-	if gotAPIKey != "sk-secret-upstream-key" {
+	if gotAPIKey != "sk-test-upstream-key" {
 		t.Errorf("x-api-key was incorrectly stripped on same-host redirect: %q", gotAPIKey)
+	}
+}
+
+func TestSEC002InvalidProxyURLLogMasksCredentials(t *testing.T) {
+	var buf bytes.Buffer
+	originalOutput := logrus.StandardLogger().Out
+	originalLevel := logrus.GetLevel()
+	logrus.SetOutput(&buf)
+	logrus.SetLevel(logrus.WarnLevel)
+	t.Cleanup(func() {
+		logrus.SetOutput(originalOutput)
+		if originalOutput == nil {
+			logrus.SetOutput(os.Stderr)
+		}
+		logrus.SetLevel(originalLevel)
+	})
+
+	manager := NewHTTPClientManager()
+	manager.GetClient(&Config{ProxyURL: "http://dummy-user:dummy-pass@%zz"})
+
+	output := buf.String()
+	if strings.Contains(output, "dummy-user") || strings.Contains(output, "dummy-pass") {
+		t.Fatalf("proxy credentials leaked in log output: %q", output)
 	}
 }

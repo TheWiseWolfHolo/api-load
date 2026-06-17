@@ -76,6 +76,14 @@ interface GroupFormData {
   model_redirect_strict: boolean;
   config: Record<string, number | string | boolean>;
   configItems: ConfigItem[];
+  key_selection_strategy: "round_robin" | "random" | "sticky" | "fill_first";
+  key_affinity_scope: "group" | "model" | "model+proxy_key";
+  fill_cooldown_minutes: number;
+  fill_switch_status_codes: string;
+  fill_quota_patterns: string;
+  fill_max_consecutive_requests: number;
+  fill_max_consecutive_tokens: number;
+  fill_sticky_ttl_seconds: number;
   header_rules: HeaderRuleItem[];
   proxy_keys: string;
   group_type?: string;
@@ -101,6 +109,14 @@ const formData = reactive<GroupFormData>({
   model_redirect_strict: false,
   config: {},
   configItems: [] as ConfigItem[],
+  key_selection_strategy: "round_robin",
+  key_affinity_scope: "group",
+  fill_cooldown_minutes: 0,
+  fill_switch_status_codes: "",
+  fill_quota_patterns: "",
+  fill_max_consecutive_requests: 0,
+  fill_max_consecutive_tokens: 0,
+  fill_sticky_ttl_seconds: 0,
   header_rules: [] as HeaderRuleItem[],
   proxy_keys: "",
   group_type: "standard",
@@ -110,6 +126,31 @@ const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
+const schedulerConfigKeys = new Set([
+  "key_selection_strategy",
+  "key_affinity_scope",
+  "fill_cooldown_minutes",
+  "fill_switch_status_codes",
+  "fill_quota_patterns",
+  "fill_max_consecutive_requests",
+  "fill_max_consecutive_tokens",
+  "fill_sticky_ttl_seconds",
+]);
+const strategyOptions = computed(() => [
+  { label: t("keys.strategyRoundRobin"), value: "round_robin" },
+  { label: t("keys.strategyRandom"), value: "random" },
+  { label: t("keys.strategySticky"), value: "sticky" },
+  { label: t("keys.strategyFillFirst"), value: "fill_first" },
+]);
+const affinityOptions = computed(() => [
+  { label: t("keys.affinityGroup"), value: "group" },
+  { label: t("keys.affinityModel"), value: "model" },
+  { label: t("keys.affinityModelProxyKey"), value: "model+proxy_key" },
+]);
+const showAffinityFields = computed(() =>
+  ["sticky", "fill_first"].includes(formData.key_selection_strategy)
+);
+const showFillFirstFields = computed(() => formData.key_selection_strategy === "fill_first");
 
 // 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
 const userModifiedFields = ref({
@@ -302,6 +343,14 @@ function resetForm() {
     model_redirect_strict: false,
     config: {},
     configItems: [],
+    key_selection_strategy: "round_robin",
+    key_affinity_scope: "group",
+    fill_cooldown_minutes: 0,
+    fill_switch_status_codes: "",
+    fill_quota_patterns: "",
+    fill_max_consecutive_requests: 0,
+    fill_max_consecutive_tokens: 0,
+    fill_sticky_ttl_seconds: 0,
     header_rules: [],
     proxy_keys: "",
     group_type: "standard",
@@ -316,18 +365,40 @@ function resetForm() {
   }
 }
 
+function normalizeStrategy(value: unknown): GroupFormData["key_selection_strategy"] {
+  if (value === "random" || value === "sticky" || value === "fill_first") {
+    return value;
+  }
+  return "round_robin";
+}
+
+function normalizeAffinity(value: unknown): GroupFormData["key_affinity_scope"] {
+  if (value === "model" || value === "model+proxy_key") {
+    return value;
+  }
+  return "group";
+}
+
+function normalizeNonNegativeNumber(value: unknown): number {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : 0;
+}
+
 // 加载分组数据（编辑模式）
 function loadGroupData() {
   if (!props.group) {
     return;
   }
 
-  const configItems = Object.entries(props.group.config || {}).map(([key, value]) => {
-    return {
-      key,
-      value,
-    };
-  });
+  const groupConfig = props.group.config || {};
+  const configItems = Object.entries(groupConfig)
+    .filter(([key]) => !schedulerConfigKeys.has(key))
+    .map(([key, value]) => {
+      return {
+        key,
+        value,
+      };
+    });
   Object.assign(formData, {
     name: props.group.name || "",
     display_name: props.group.display_name || "",
@@ -344,6 +415,16 @@ function loadGroupData() {
     model_redirect_strict: props.group.model_redirect_strict || false,
     config: {},
     configItems,
+    key_selection_strategy: normalizeStrategy(groupConfig.key_selection_strategy),
+    key_affinity_scope: normalizeAffinity(groupConfig.key_affinity_scope),
+    fill_cooldown_minutes: normalizeNonNegativeNumber(groupConfig.fill_cooldown_minutes),
+    fill_switch_status_codes: String(groupConfig.fill_switch_status_codes || ""),
+    fill_quota_patterns: String(groupConfig.fill_quota_patterns || ""),
+    fill_max_consecutive_requests: normalizeNonNegativeNumber(
+      groupConfig.fill_max_consecutive_requests
+    ),
+    fill_max_consecutive_tokens: normalizeNonNegativeNumber(groupConfig.fill_max_consecutive_tokens),
+    fill_sticky_ttl_seconds: normalizeNonNegativeNumber(groupConfig.fill_sticky_ttl_seconds),
     header_rules: (props.group.header_rules || []).map((rule: HeaderRuleItem) => ({
       key: rule.key || "",
       value: rule.value || "",
@@ -516,6 +597,10 @@ async function handleSubmit() {
         }
       }
     });
+    if (!validateSchedulerConfig()) {
+      return;
+    }
+    Object.assign(config, buildSchedulerConfig());
 
     // 构建提交数据
     const submitData = {
@@ -559,6 +644,38 @@ async function handleSubmit() {
   } finally {
     loading.value = false;
   }
+}
+
+function validateSchedulerConfig(): boolean {
+  const numericFields = [
+    formData.fill_cooldown_minutes,
+    formData.fill_max_consecutive_requests,
+    formData.fill_max_consecutive_tokens,
+    formData.fill_sticky_ttl_seconds,
+  ];
+  if (numericFields.some(value => value < 0)) {
+    message.error(t("keys.schedulerInvalidNumber"));
+    return false;
+  }
+  return true;
+}
+
+function buildSchedulerConfig(): Record<string, number | string> {
+  const config: Record<string, number | string> = {
+    key_selection_strategy: formData.key_selection_strategy,
+  };
+  if (showAffinityFields.value) {
+    config.key_affinity_scope = formData.key_affinity_scope;
+  }
+  if (showFillFirstFields.value) {
+    config.fill_cooldown_minutes = formData.fill_cooldown_minutes;
+    config.fill_switch_status_codes = formData.fill_switch_status_codes.trim();
+    config.fill_quota_patterns = formData.fill_quota_patterns.trim();
+    config.fill_max_consecutive_requests = formData.fill_max_consecutive_requests;
+    config.fill_max_consecutive_tokens = formData.fill_max_consecutive_tokens;
+    config.fill_sticky_ttl_seconds = formData.fill_sticky_ttl_seconds;
+  }
+  return config;
 }
 </script>
 
@@ -851,6 +968,78 @@ async function handleSubmit() {
           <n-collapse>
             <n-collapse-item name="advanced">
               <template #header>{{ t("keys.advancedConfig") }}</template>
+              <div v-if="formData.group_type !== 'aggregate'" class="config-section">
+                <h5 class="config-title-with-tooltip">
+                  {{ t("keys.schedulerConfig") }}
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <n-icon :component="HelpCircleOutline" class="help-icon config-help" />
+                    </template>
+                    {{ t("keys.schedulerConfigTooltip") }}
+                  </n-tooltip>
+                </h5>
+                <div class="form-row">
+                  <n-form-item :label="t('keys.keySelectionStrategy')" class="form-item-half">
+                    <n-select
+                      v-model:value="formData.key_selection_strategy"
+                      :options="strategyOptions"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    v-if="showAffinityFields"
+                    :label="t('keys.keyAffinityScope')"
+                    class="form-item-half"
+                  >
+                    <n-select v-model:value="formData.key_affinity_scope" :options="affinityOptions" />
+                  </n-form-item>
+                </div>
+                <div v-if="showFillFirstFields" class="scheduler-grid">
+                  <n-form-item :label="t('keys.fillCooldownMinutes')">
+                    <n-input-number
+                      v-model:value="formData.fill_cooldown_minutes"
+                      :min="0"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item :label="t('keys.fillMaxConsecutiveRequests')">
+                    <n-input-number
+                      v-model:value="formData.fill_max_consecutive_requests"
+                      :min="0"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item :label="t('keys.fillMaxConsecutiveTokens')">
+                    <n-input-number
+                      v-model:value="formData.fill_max_consecutive_tokens"
+                      :min="0"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item :label="t('keys.fillStickyTtlSeconds')">
+                    <n-input-number
+                      v-model:value="formData.fill_sticky_ttl_seconds"
+                      :min="0"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item :label="t('keys.fillSwitchStatusCodes')">
+                    <n-input
+                      v-model:value="formData.fill_switch_status_codes"
+                      placeholder="429,500-599"
+                    />
+                  </n-form-item>
+                  <n-form-item :label="t('keys.fillQuotaPatterns')">
+                    <n-input
+                      v-model:value="formData.fill_quota_patterns"
+                      placeholder="insufficient_quota,quota_exceeded"
+                    />
+                  </n-form-item>
+                </div>
+              </div>
               <div class="config-section">
                 <h5 class="config-title-with-tooltip">
                   {{ t("keys.groupConfig") }}
@@ -1244,6 +1433,12 @@ async function handleSubmit() {
   margin-top: 16px;
 }
 
+.scheduler-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+
 .config-title {
   font-size: 0.9rem;
   font-weight: 600;
@@ -1469,6 +1664,10 @@ async function handleSubmit() {
     flex-direction: column;
     gap: 8px;
     align-items: stretch;
+  }
+
+  .scheduler-grid {
+    grid-template-columns: 1fr;
   }
 
   .upstream-weight {

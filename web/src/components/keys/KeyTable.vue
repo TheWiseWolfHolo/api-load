@@ -4,6 +4,7 @@ import type { APIKey, Group, KeyStatus } from "@/types/models";
 import { appState, triggerSyncOperationRefresh } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
 import { getGroupDisplayName, maskKey } from "@/utils/display";
+import { setShouldConfirmDisableKey, shouldConfirmDisableKey } from "@/utils/preferences";
 import {
   AddCircleOutline,
   AlertCircleOutline,
@@ -17,6 +18,7 @@ import {
 } from "@vicons/ionicons5";
 import {
   NButton,
+  NCheckbox,
   NDropdown,
   NEmpty,
   NIcon,
@@ -48,7 +50,7 @@ const props = defineProps<Props>();
 const keys = ref<KeyRow[]>([]);
 const loading = ref(false);
 const searchText = ref("");
-const statusFilter = ref<"all" | "active" | "invalid">("all");
+const statusFilter = ref<"all" | "active" | "invalid" | "disabled">("all");
 const currentPage = ref(1);
 const pageSize = ref(12);
 const total = ref(0);
@@ -61,6 +63,7 @@ const statusOptions = [
   { label: t("common.all"), value: "all" },
   { label: t("keys.valid"), value: "active" },
   { label: t("keys.invalid"), value: "invalid" },
+  { label: t("keys.disabled"), value: "disabled" },
 ];
 
 // 更多操作下拉菜单选项
@@ -68,6 +71,7 @@ const moreOptions = [
   { label: t("keys.exportAllKeys"), key: "copyAll" },
   { label: t("keys.exportValidKeys"), key: "copyValid" },
   { label: t("keys.exportInvalidKeys"), key: "copyInvalid" },
+  { label: t("keys.exportDisabledKeys"), key: "copyDisabled" },
   { type: "divider" },
   { label: t("keys.restoreAllInvalidKeys"), key: "restoreAll" },
   {
@@ -89,6 +93,8 @@ const moreOptions = [
 let testingMsg: MessageReactive | null = null;
 const isDeling = ref(false);
 const isRestoring = ref(false);
+const isStatusUpdating = ref(false);
+const disableKeySkipConfirm = ref(false);
 
 const createDialogShow = ref(false);
 const deleteDialogShow = ref(false);
@@ -168,6 +174,9 @@ function handleMoreAction(key: string) {
       break;
     case "copyInvalid":
       copyInvalidKeys();
+      break;
+    case "copyDisabled":
+      copyDisabledKeys();
       break;
     case "restoreAll":
       restoreAllInvalid();
@@ -324,7 +333,7 @@ async function saveKeyNotes() {
 }
 
 async function restoreKey(key: KeyRow) {
-  if (!props.selectedGroup?.id || !key.key_value || isRestoring.value) {
+  if (!props.selectedGroup?.id || !key.key_value || isStatusUpdating.value) {
     return;
   }
 
@@ -338,11 +347,11 @@ async function restoreKey(key: KeyRow) {
         return;
       }
 
-      isRestoring.value = true;
+      isStatusUpdating.value = true;
       d.loading = true;
 
       try {
-        await keysApi.restoreKeys(props.selectedGroup.id, key.key_value);
+        await keysApi.updateKeyStatus(key.id, "active");
         await loadKeys();
         // 触发同步操作刷新
         triggerSyncOperationRefresh(props.selectedGroup.name, "RESTORE_SINGLE");
@@ -350,10 +359,76 @@ async function restoreKey(key: KeyRow) {
         console.error("Restore failed");
       } finally {
         d.loading = false;
-        isRestoring.value = false;
+        isStatusUpdating.value = false;
       }
     },
   });
+}
+
+async function disableKey(key: KeyRow) {
+  if (!props.selectedGroup?.id || !key.key_value || isStatusUpdating.value) {
+    return;
+  }
+
+  if (!shouldConfirmDisableKey()) {
+    await applyDisableKey(key);
+    return;
+  }
+
+  disableKeySkipConfirm.value = false;
+  const d = dialog.warning({
+    title: t("keys.disableKey"),
+    content: () =>
+      h("div", null, [
+        h("p", null, t("keys.confirmDisableKey", { key: maskKey(key.key_value) })),
+        h(
+          NCheckbox,
+          {
+            checked: disableKeySkipConfirm.value,
+            "onUpdate:checked": (value: boolean) => {
+              disableKeySkipConfirm.value = value;
+            },
+          },
+          { default: () => t("keys.doNotConfirmDisableKeyAgain") }
+        ),
+      ]),
+    positiveText: t("common.confirm"),
+    negativeText: t("common.cancel"),
+    onPositiveClick: async () => {
+      if (!props.selectedGroup?.id) {
+        return;
+      }
+
+      if (disableKeySkipConfirm.value) {
+        setShouldConfirmDisableKey(false);
+      }
+      d.loading = true;
+
+      try {
+        await applyDisableKey(key);
+      } catch (_error) {
+        console.error("Disable failed");
+      } finally {
+        d.loading = false;
+      }
+    },
+  });
+}
+
+async function applyDisableKey(key: KeyRow) {
+  if (!props.selectedGroup?.id || isStatusUpdating.value) {
+    return;
+  }
+
+  isStatusUpdating.value = true;
+  try {
+    await keysApi.updateKeyStatus(key.id, "disabled");
+    await loadKeys();
+    // 触发同步操作刷新
+    triggerSyncOperationRefresh(props.selectedGroup.name, "DISABLE_SINGLE");
+  } finally {
+    isStatusUpdating.value = false;
+  }
 }
 
 async function deleteKey(key: KeyRow) {
@@ -421,6 +496,8 @@ function getStatusClass(status: KeyStatus): string {
       return "status-valid";
     case "invalid":
       return "status-invalid";
+    case "disabled":
+      return "status-disabled";
     default:
       return "status-unknown";
   }
@@ -448,6 +525,14 @@ async function copyInvalidKeys() {
   }
 
   keysApi.exportKeys(props.selectedGroup.id, "invalid");
+}
+
+async function copyDisabledKeys() {
+  if (!props.selectedGroup?.id) {
+    return;
+  }
+
+  keysApi.exportKeys(props.selectedGroup.id, "disabled");
 }
 
 async function restoreAllInvalid() {
@@ -703,7 +788,13 @@ function resetPage() {
                   </template>
                   {{ t("keys.validShort") }}
                 </n-tag>
-                <n-tag v-else :bordered="false" round>
+                <n-tag v-else-if="key.status === 'disabled'" type="default" :bordered="false" round>
+                  <template #icon>
+                    <n-icon :component="RemoveCircleOutline" />
+                  </template>
+                  {{ t("keys.disabledShort") }}
+                </n-tag>
+                <n-tag v-else type="error" :bordered="false" round>
                   <template #icon>
                     <n-icon :component="AlertCircleOutline" />
                   </template>
@@ -765,6 +856,16 @@ function resetPage() {
                   :title="t('keys.testKey')"
                 >
                   {{ t("keys.testShort") }}
+                </n-button>
+                <n-button
+                  v-if="key.status === 'active'"
+                  tertiary
+                  size="tiny"
+                  type="warning"
+                  @click="disableKey(key)"
+                  :title="t('keys.disableKey')"
+                >
+                  {{ t("common.disable") }}
                 </n-button>
                 <n-button
                   v-if="key.status !== 'active'"
@@ -1063,6 +1164,12 @@ function resetPage() {
   border-color: var(--invalid-border);
   background: var(--card-bg-solid);
   opacity: 0.85;
+}
+
+.key-card.status-disabled {
+  border-color: #94a3b8;
+  background: var(--bg-secondary);
+  opacity: 0.78;
 }
 
 .key-card.status-error {

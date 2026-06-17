@@ -1,13 +1,11 @@
 package services
 
 import (
-	"encoding/json"
 	"fmt"
 	"gpt-load/internal/encryption"
 	"gpt-load/internal/keypool"
 	"gpt-load/internal/models"
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -38,6 +36,11 @@ type RestoreKeysResult struct {
 	RestoredCount int   `json:"restored_count"`
 	IgnoredCount  int   `json:"ignored_count"`
 	TotalInGroup  int64 `json:"total_in_group"`
+}
+
+type KeyStatusUpdateResult struct {
+	ChangedCount int `json:"changed_count"`
+	IgnoredCount int `json:"ignored_count"`
 }
 
 // KeyService provides services related to API keys.
@@ -160,24 +163,14 @@ func (s *KeyService) processAndCreateKeys(
 // ParseKeysFromText parses a string of keys from various formats into a string slice.
 // This function is exported to be shared with the handler layer.
 func (s *KeyService) ParseKeysFromText(text string) []string {
-	var keys []string
-
-	// First, try to parse as a JSON array of strings
-	if json.Unmarshal([]byte(text), &keys) == nil && len(keys) > 0 {
-		return s.filterValidKeys(keys)
+	records, err := ParseKeyImportInput(text)
+	if err != nil {
+		return nil
 	}
-
-	// 通用解析：通过分隔符分割文本，不使用复杂的正则表达式
-	delimiters := regexp.MustCompile(`[\s,;\n\r\t]+`)
-	splitKeys := delimiters.Split(strings.TrimSpace(text), -1)
-
-	for _, key := range splitKeys {
-		key = strings.TrimSpace(key)
-		if key != "" {
-			keys = append(keys, key)
-		}
+	keys := make([]string, 0, len(records))
+	for _, record := range records {
+		keys = append(keys, record.Key)
 	}
-
 	return s.filterValidKeys(keys)
 }
 
@@ -289,16 +282,85 @@ func (s *KeyService) DeleteMultipleKeys(groupID uint, keysText string) (*DeleteK
 	}, nil
 }
 
+func (s *KeyService) IsValidKeyStatusFilter(status string) bool {
+	switch status {
+	case "", "all", models.KeyStatusActive, models.KeyStatusInvalid, models.KeyStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *KeyService) IsValidKeyStatusValue(status string) bool {
+	switch status {
+	case models.KeyStatusActive, models.KeyStatusInvalid, models.KeyStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *KeyService) SetKeyStatus(keyID uint, status string) (*KeyStatusUpdateResult, error) {
+	if !s.IsValidKeyStatusValue(status) {
+		return nil, fmt.Errorf("invalid key status: %s", status)
+	}
+
+	var key models.APIKey
+	if err := s.DB.First(&key, keyID).Error; err != nil {
+		return nil, err
+	}
+	if key.Status == status {
+		return &KeyStatusUpdateResult{IgnoredCount: 1}, nil
+	}
+
+	updates := map[string]any{"status": status}
+	key.Status = status
+	if status == models.KeyStatusActive {
+		updates["failure_count"] = 0
+		key.FailureCount = 0
+	}
+
+	if err := s.DB.Model(&models.APIKey{}).Where("id = ?", key.ID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := s.KeyProvider.SyncKeyToStore(&key); err != nil {
+		return nil, err
+	}
+
+	return &KeyStatusUpdateResult{ChangedCount: 1}, nil
+}
+
+func (s *KeyService) SetKeysStatus(keyIDs []uint, status string) (*KeyStatusUpdateResult, error) {
+	result := &KeyStatusUpdateResult{}
+	for _, keyID := range keyIDs {
+		itemResult, err := s.SetKeyStatus(keyID, status)
+		if err != nil {
+			return nil, err
+		}
+		result.ChangedCount += itemResult.ChangedCount
+		result.IgnoredCount += itemResult.IgnoredCount
+	}
+	return result, nil
+}
+
 // ListKeysInGroupQuery builds a query to list all keys within a specific group, filtered by status.
-func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, searchHash string) *gorm.DB {
+func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, searchHash string, notesKeyword string, searchKeyword string) *gorm.DB {
 	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID)
 
-	if statusFilter != "" {
+	if statusFilter != "" && statusFilter != "all" {
 		query = query.Where("status = ?", statusFilter)
 	}
 
-	if searchHash != "" {
+	notesKeyword = strings.TrimSpace(notesKeyword)
+	searchKeyword = strings.TrimSpace(searchKeyword)
+	if searchHash != "" && searchKeyword != "" {
+		query = query.Where("key_hash = ? OR notes LIKE ?", searchHash, "%"+searchKeyword+"%")
+	} else if searchHash != "" {
 		query = query.Where("key_hash = ?", searchHash)
+	} else if notesKeyword != "" {
+		query = query.Where("notes LIKE ?", "%"+notesKeyword+"%")
+	} else if searchKeyword != "" {
+		query = query.Where("notes LIKE ?", "%"+searchKeyword+"%")
 	}
 
 	orderBy := "last_used_at desc, id desc"
@@ -340,30 +402,6 @@ func (s *KeyService) TestMultipleKeys(group *models.Group, keysText string) ([]k
 
 // StreamKeysToWriter fetches keys from the database in batches and writes them to the provided writer.
 func (s *KeyService) StreamKeysToWriter(groupID uint, statusFilter string, writer io.Writer) error {
-	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID).Select("id, key_value")
-
-	switch statusFilter {
-	case models.KeyStatusActive, models.KeyStatusInvalid:
-		query = query.Where("status = ?", statusFilter)
-	case "all":
-	default:
-		return fmt.Errorf("invalid status filter: %s", statusFilter)
-	}
-
-	var keys []models.APIKey
-	err := query.FindInBatches(&keys, chunkSize, func(tx *gorm.DB, batch int) error {
-		for _, key := range keys {
-			decryptedKey, err := s.EncryptionSvc.Decrypt(key.KeyValue)
-			if err != nil {
-				logrus.WithError(err).WithField("key_id", key.ID).Error("Failed to decrypt key for streaming, skipping")
-				continue
-			}
-			if _, err := writer.Write([]byte(decryptedKey + "\n")); err != nil {
-				return err
-			}
-		}
-		return nil
-	}).Error
-
+	_, err := s.ExportKeysToWriter(groupID, statusFilter, "txt", writer)
 	return err
 }

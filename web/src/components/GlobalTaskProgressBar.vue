@@ -13,6 +13,7 @@ const visible = ref(false);
 let pollTimer: number | null = null;
 let isPolling = false; // 添加标志位
 const message = useMessage();
+const taskCompletionMessageDuration = 6000;
 
 onMounted(() => {
   startPolling();
@@ -71,12 +72,10 @@ async function pollOnce() {
             });
           }
 
+          localStorage.setItem("last_closed_task", task.finished_at || "");
           message.info(msg, {
             closable: true,
-            duration: 0,
-            onClose: () => {
-              localStorage.setItem("last_closed_task", task.finished_at || "");
-            },
+            duration: taskCompletionMessageDuration,
           });
 
           // 触发分组数据刷新

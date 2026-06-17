@@ -10,8 +10,9 @@ import (
 
 // Key状态
 const (
-	KeyStatusActive  = "active"
-	KeyStatusInvalid = "invalid"
+	KeyStatusActive   = "active"
+	KeyStatusInvalid  = "invalid"
+	KeyStatusDisabled = "disabled"
 )
 
 // SystemSetting 对应 system_settings 表
@@ -40,6 +41,14 @@ type GroupConfig struct {
 	KeyValidationConcurrency     *int    `json:"key_validation_concurrency,omitempty"`
 	KeyValidationTimeoutSeconds  *int    `json:"key_validation_timeout_seconds,omitempty"`
 	EnableRequestBodyLogging     *bool   `json:"enable_request_body_logging,omitempty"`
+	KeySelectionStrategy         *string `json:"key_selection_strategy,omitempty"`
+	KeyAffinityScope             *string `json:"key_affinity_scope,omitempty"`
+	FillCooldownMinutes          *int    `json:"fill_cooldown_minutes,omitempty"`
+	FillSwitchStatusCodes        *string `json:"fill_switch_status_codes,omitempty"`
+	FillQuotaPatterns            *string `json:"fill_quota_patterns,omitempty"`
+	FillMaxConsecutiveRequests   *int    `json:"fill_max_consecutive_requests,omitempty"`
+	FillMaxConsecutiveTokens     *int    `json:"fill_max_consecutive_tokens,omitempty"`
+	FillStickyTTLSeconds         *int    `json:"fill_sticky_ttl_seconds,omitempty"`
 }
 
 // HeaderRule defines a single rule for header manipulation.
@@ -99,6 +108,8 @@ type Group struct {
 	HeaderRules         datatypes.JSON       `gorm:"type:json" json:"header_rules"`
 	ModelRedirectRules  datatypes.JSONMap    `gorm:"type:json" json:"model_redirect_rules"`
 	ModelRedirectStrict bool                 `gorm:"default:false" json:"model_redirect_strict"`
+	Models              datatypes.JSON       `gorm:"type:json" json:"models"`
+	ModelMappings       datatypes.JSON       `gorm:"type:json" json:"model_mappings"`
 	APIKeys             []APIKey             `gorm:"foreignKey:GroupID" json:"api_keys"`
 	SubGroups           []GroupSubGroup      `gorm:"-" json:"sub_groups,omitempty"`
 	LastValidatedAt     *time.Time           `json:"last_validated_at"`
@@ -135,27 +146,41 @@ const (
 
 // RequestLog 对应 request_logs 表
 type RequestLog struct {
-	ID              string    `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Timestamp       time.Time `gorm:"not null;index" json:"timestamp"`
-	GroupID         uint      `gorm:"not null;index" json:"group_id"`
-	GroupName       string    `gorm:"type:varchar(255);index" json:"group_name"`
-	ParentGroupID   uint      `gorm:"index" json:"parent_group_id"`
-	ParentGroupName string    `gorm:"type:varchar(255);index" json:"parent_group_name"`
-	KeyValue        string    `gorm:"type:text" json:"key_value"`
-	KeyHash         string    `gorm:"type:varchar(128);index" json:"key_hash"`
-	Model           string    `gorm:"type:varchar(255);index" json:"model"`
-	IsSuccess       bool      `gorm:"not null" json:"is_success"`
-	SourceIP        string    `gorm:"type:varchar(64)" json:"source_ip"`
-	StatusCode      int       `gorm:"not null" json:"status_code"`
-	RequestPath     string    `gorm:"type:varchar(500)" json:"request_path"`
-	Duration        int64     `gorm:"not null" json:"duration_ms"`
-	ErrorMessage    string    `gorm:"type:text" json:"error_message"`
-	UserAgent       string    `gorm:"type:varchar(512)" json:"user_agent"`
-	RequestType     string    `gorm:"type:varchar(20);not null;default:'final';index" json:"request_type"`
-	UpstreamAddr    string    `gorm:"type:varchar(500)" json:"upstream_addr"`
-	IsStream        bool      `gorm:"not null" json:"is_stream"`
-	RequestBody     string    `gorm:"type:text" json:"request_body"`
+	ID                string    `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Timestamp         time.Time `gorm:"not null;index" json:"timestamp"`
+	GroupID           uint      `gorm:"not null;index" json:"group_id"`
+	GroupName         string    `gorm:"type:varchar(255);index" json:"group_name"`
+	ParentGroupID     uint      `gorm:"index" json:"parent_group_id"`
+	ParentGroupName   string    `gorm:"type:varchar(255);index" json:"parent_group_name"`
+	KeyValue          string    `gorm:"type:text" json:"key_value"`
+	KeyHash           string    `gorm:"type:varchar(128);index" json:"key_hash"`
+	Model             string    `gorm:"type:varchar(255);index" json:"model"`
+	IsSuccess         bool      `gorm:"not null" json:"is_success"`
+	SourceIP          string    `gorm:"type:varchar(64)" json:"source_ip"`
+	StatusCode        int       `gorm:"not null" json:"status_code"`
+	RequestPath       string    `gorm:"type:varchar(500)" json:"request_path"`
+	Duration          int64     `gorm:"not null" json:"duration_ms"`
+	ErrorMessage      string    `gorm:"type:text" json:"error_message"`
+	UserAgent         string    `gorm:"type:varchar(512)" json:"user_agent"`
+	RequestType       string    `gorm:"type:varchar(20);not null;default:'final';index" json:"request_type"`
+	UpstreamAddr      string    `gorm:"type:varchar(500)" json:"upstream_addr"`
+	IsStream          bool      `gorm:"not null" json:"is_stream"`
+	RequestBody       string    `gorm:"type:text" json:"request_body"`
+	IsSecurityWarning bool      `gorm:"not null;default:false" json:"is_security_warning"`
+	InputTokens       int64     `gorm:"not null;default:0" json:"input_tokens"`
+	OutputTokens      int64     `gorm:"not null;default:0" json:"output_tokens"`
+	TotalTokens       int64     `gorm:"not null;default:0" json:"total_tokens"`
+	CacheReadTokens   int64     `gorm:"not null;default:0" json:"cache_read_tokens"`
+	CacheWriteTokens  int64     `gorm:"not null;default:0" json:"cache_write_tokens"`
+	ThinkingTokens    int64     `gorm:"not null;default:0" json:"thinking_tokens"`
+	TokenUsageSource  string    `gorm:"type:varchar(32);not null;default:'none';index" json:"token_usage_source"`
 }
+
+const (
+	TokenUsageSourceNone      = "none"
+	TokenUsageSourceUpstream  = "upstream"
+	TokenUsageSourceEstimated = "estimated"
+)
 
 // StatCard 用于仪表盘的单个统计卡片数据
 type StatCard struct {
@@ -177,6 +202,7 @@ type SecurityWarning struct {
 // DashboardStatsResponse 用于仪表盘基础统计的API响应
 type DashboardStatsResponse struct {
 	KeyCount         StatCard          `json:"key_count"`
+	DisabledKeys     int64             `json:"disabled_keys"`
 	RPM              StatCard          `json:"rpm"`
 	RequestCount     StatCard          `json:"request_count"`
 	ErrorRate        StatCard          `json:"error_rate"`

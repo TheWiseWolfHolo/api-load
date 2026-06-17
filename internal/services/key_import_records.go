@@ -1,0 +1,141 @@
+package services
+
+import (
+	"fmt"
+	"gpt-load/internal/models"
+	"strings"
+)
+
+const (
+	DuplicatePolicyKeep         = "keep"
+	DuplicatePolicyUpdateNotes  = "update_notes"
+	DuplicatePolicyUpdateStatus = "update_status"
+	DuplicatePolicyOverwrite    = "overwrite"
+)
+
+type KeyImportOptions struct {
+	DuplicatePolicy string
+	AllowEmptyNotes bool
+}
+
+func (s *KeyService) ImportKeyRecords(groupID uint, records []KeyImportRecord, options KeyImportOptions) (*KeyImportResult, error) {
+	policy := strings.TrimSpace(options.DuplicatePolicy)
+	if policy == "" {
+		policy = DuplicatePolicyKeep
+	}
+	switch policy {
+	case DuplicatePolicyKeep, DuplicatePolicyUpdateNotes, DuplicatePolicyUpdateStatus, DuplicatePolicyOverwrite:
+	default:
+		return nil, fmt.Errorf("invalid duplicate policy: %s", policy)
+	}
+
+	result := &KeyImportResult{}
+	if len(records) == 0 {
+		return result, nil
+	}
+
+	hashes := make([]string, 0, len(records))
+	recordByHash := make(map[string]KeyImportRecord, len(records))
+	for _, record := range records {
+		record.Key = strings.TrimSpace(record.Key)
+		if record.Key == "" || !s.isValidKeyFormat(record.Key) {
+			result.IgnoredCount++
+			continue
+		}
+		if record.Status == "" {
+			record.Status = models.KeyStatusActive
+		}
+		hash := s.EncryptionSvc.Hash(record.Key)
+		if _, exists := recordByHash[hash]; exists {
+			result.IgnoredCount++
+			continue
+		}
+		recordByHash[hash] = record
+		hashes = append(hashes, hash)
+	}
+	if len(hashes) == 0 {
+		return result, nil
+	}
+
+	var existing []models.APIKey
+	if err := s.DB.Where("group_id = ? AND key_hash IN ?", groupID, hashes).Find(&existing).Error; err != nil {
+		return nil, err
+	}
+	existingByHash := make(map[string]models.APIKey, len(existing))
+	for _, key := range existing {
+		existingByHash[key.KeyHash] = key
+	}
+
+	newKeys := make([]models.APIKey, 0, len(records))
+	for _, hash := range hashes {
+		record := recordByHash[hash]
+		if existingKey, exists := existingByHash[hash]; exists {
+			result.DuplicateCount++
+			updated, err := s.applyDuplicatePolicy(existingKey, record, policy, options.AllowEmptyNotes)
+			if err != nil {
+				return nil, err
+			}
+			if updated {
+				result.UpdatedCount++
+			}
+			continue
+		}
+
+		encryptedKey, err := s.EncryptionSvc.Encrypt(record.Key)
+		if err != nil {
+			return nil, err
+		}
+		newKeys = append(newKeys, models.APIKey{
+			GroupID:  groupID,
+			KeyValue: encryptedKey,
+			KeyHash:  hash,
+			Notes:    strings.TrimSpace(record.Notes),
+			Status:   record.Status,
+		})
+	}
+
+	if len(newKeys) > 0 {
+		if err := s.KeyProvider.AddKeys(groupID, newKeys); err != nil {
+			return nil, err
+		}
+		result.AddedCount = len(newKeys)
+	}
+
+	return result, nil
+}
+
+func (s *KeyService) applyDuplicatePolicy(existing models.APIKey, record KeyImportRecord, policy string, allowEmptyNotes bool) (bool, error) {
+	switch policy {
+	case DuplicatePolicyKeep:
+		return false, nil
+	case DuplicatePolicyUpdateNotes:
+		notes := strings.TrimSpace(record.Notes)
+		if notes == "" && !allowEmptyNotes {
+			return false, nil
+		}
+		if existing.Notes == notes {
+			return false, nil
+		}
+		existing.Notes = notes
+	case DuplicatePolicyUpdateStatus:
+		if existing.Status == record.Status {
+			return false, nil
+		}
+		existing.Status = record.Status
+	case DuplicatePolicyOverwrite:
+		notes := strings.TrimSpace(record.Notes)
+		if existing.Notes == notes && existing.Status == record.Status {
+			return false, nil
+		}
+		existing.Notes = notes
+		existing.Status = record.Status
+	}
+
+	if err := s.DB.Model(&models.APIKey{}).Where("id = ?", existing.ID).Updates(map[string]any{
+		"notes":  existing.Notes,
+		"status": existing.Status,
+	}).Error; err != nil {
+		return false, err
+	}
+	return true, s.KeyProvider.SyncKeyToStore(&existing)
+}

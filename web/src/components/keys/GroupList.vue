@@ -2,6 +2,7 @@
 import { keysApi } from "@/api/keys";
 import type { Group } from "@/types/models";
 import { getGroupDisplayName } from "@/utils/display";
+import { getProviderMeta } from "@/utils/providerMeta";
 import { Add, LinkOutline, Search } from "@vicons/ionicons5";
 import { NButton, NCard, NEmpty, NInput, NSpin, NTag } from "naive-ui";
 import { computed, onBeforeUpdate, ref, watch } from "vue";
@@ -143,6 +144,13 @@ function getChannelTagType(channelType: string) {
     default:
       return "default";
   }
+}
+
+function getGroupProviderMeta(group: Group) {
+  if (group.group_type === "aggregate") {
+    return { ...getProviderMeta(), displayName: t("keys.aggregateGroup") };
+  }
+  return getProviderMeta(group.channel_type);
 }
 
 function openCreateGroupModal() {
@@ -398,12 +406,12 @@ function handleDragEnd() {
                 @dragstart="handleDragStart($event, group.id)"
                 @dragend="handleDragEnd"
               >
-                <span v-if="group.group_type === 'aggregate'">🔗</span>
-                <span v-else-if="group.channel_type === 'openai'">🤖</span>
-                <span v-else-if="group.channel_type === 'openai-response'">🔁</span>
-                <span v-else-if="group.channel_type === 'gemini'">💎</span>
-                <span v-else-if="group.channel_type === 'anthropic'">🧠</span>
-                <span v-else>🔧</span>
+                <img
+                  class="provider-icon"
+                  :src="getGroupProviderMeta(group).icon"
+                  :alt="getGroupProviderMeta(group).displayName"
+                  :title="getGroupProviderMeta(group).displayName"
+                />
               </div>
               <div class="group-content">
                 <div class="group-name">{{ getGroupDisplayName(group) }}</div>
@@ -607,6 +615,12 @@ function handleDragEnd() {
   box-sizing: border-box;
   cursor: grab;
   user-select: none;
+}
+
+.provider-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .group-item.active .group-icon {

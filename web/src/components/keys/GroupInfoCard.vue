@@ -9,7 +9,7 @@ import type {
 } from "@/types/models";
 import { appState } from "@/utils/app-state";
 import { copy } from "@/utils/clipboard";
-import { getGroupDisplayName, maskProxyKeys } from "@/utils/display";
+import { getGroupDisplayName, maskProxyKeys, maskProxyUrl } from "@/utils/display";
 import { CopyOutline, EyeOffOutline, EyeOutline, Pencil, Trash } from "@vicons/ionicons5";
 import {
   NButton,
@@ -33,6 +33,7 @@ import { useI18n } from "vue-i18n";
 import AggregateGroupModal from "./AggregateGroupModal.vue";
 import GroupCopyModal from "./GroupCopyModal.vue";
 import GroupFormModal from "./GroupFormModal.vue";
+import GroupModelManager from "./GroupModelManager.vue";
 
 const { t } = useI18n();
 
@@ -207,6 +208,17 @@ function getConfigDisplayName(key: string): string {
 function getConfigDescription(key: string): string {
   const option = configOptions.value.find(opt => opt.key === key);
   return option?.description || t("keys.noDescription");
+}
+
+function getConfigDisplayValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  const text = String(value);
+  if (key === "proxy_url" || key.endsWith("_proxy_url")) {
+    return maskProxyUrl(text);
+  }
+  return text;
 }
 
 function handleEdit() {
@@ -702,7 +714,7 @@ function resetPage() {
                         </div>
                       </n-tooltip>
                     </template>
-                    {{ value || "-" }}
+                    {{ getConfigDisplayValue(String(key), value) }}
                   </n-form-item>
                   <n-form-item
                     v-if="group?.header_rules && group.header_rules.length > 0"
@@ -763,6 +775,13 @@ function resetPage() {
                 </n-form>
               </div>
             </div>
+          </n-collapse-item>
+          <n-collapse-item
+            v-if="!isAggregateGroup && group"
+            :title="t('keys.modelManagement')"
+            name="models"
+          >
+            <group-model-manager :group="group" @saved="loadStats" />
           </n-collapse-item>
         </n-collapse>
       </div>

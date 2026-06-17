@@ -126,7 +126,11 @@ func (ps *ProxyServer) executeRequestWithRetry(
 ) {
 	cfg := group.EffectiveConfig
 
-	apiKey, err := ps.keyProvider.SelectKey(group.ID)
+	selectionReq := keypool.SelectionRequest{
+		Model:    channelHandler.ExtractModel(c, bodyBytes),
+		ProxyKey: extractProxyKeyForAffinity(c),
+	}
+	apiKey, err := ps.keyProvider.SelectKeyForRequest(group, selectionReq)
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
@@ -234,6 +238,10 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			logrus.Debugf("Request failed with status %d (attempt %d/%d) for key %s. Parsed Error: %s", statusCode, retryCount+1, cfg.MaxRetries, utils.MaskAPIKey(apiKey.KeyValue), parsedError)
 		}
 
+		if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: statusCode, ErrorMessage: parsedError}); err != nil {
+			logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
+		}
+
 		// 使用解析后的错误信息更新密钥状态
 		ps.keyProvider.UpdateStatus(apiKey, group, false, parsedError)
 
@@ -262,6 +270,9 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	}
 
 	// ps.keyProvider.UpdateStatus(apiKey, group, true) // 请求成功不再重置成功次数，减少IO消耗
+	if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: resp.StatusCode}); err != nil {
+		logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
+	}
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
 
 	// Check if this is a model list request (needs special handling)
@@ -278,7 +289,10 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		if isStream {
 			ps.handleStreamingResponse(c, resp)
 		} else {
-			ps.handleNormalResponse(c, resp)
+			responseBody := ps.handleNormalResponse(c, resp)
+			if usage, ok := extractUpstreamTokenUsage(responseBody); ok {
+				c.Set(upstreamTokenUsageContextKey, usage)
+			}
 		}
 	}
 
@@ -290,6 +304,16 @@ func shouldFailoverOnStatusCode(statusCode int, group *models.Group) bool {
 		return false
 	}
 	return group.FailoverStatusCodeMatcher.Match(statusCode)
+}
+
+func extractProxyKeyForAffinity(c *gin.Context) string {
+	if value := c.GetHeader("Authorization"); value != "" {
+		return value
+	}
+	if value := c.GetHeader("X-Api-Key"); value != "" {
+		return value
+	}
+	return c.GetHeader("X-Goog-Api-Key")
 }
 
 // logRequest is a helper function to create and record a request log.
@@ -360,6 +384,12 @@ func (ps *ProxyServer) logRequest(
 
 	if finalError != nil {
 		logEntry.ErrorMessage = finalError.Error()
+	}
+
+	if rawUsage, ok := c.Get(upstreamTokenUsageContextKey); ok {
+		if usage, ok := rawUsage.(services.TokenUsage); ok {
+			services.ApplyUpstreamTokenUsage(logEntry, usage)
+		}
 	}
 
 	if err := ps.requestLogService.Record(logEntry); err != nil {

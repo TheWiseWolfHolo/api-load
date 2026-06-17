@@ -31,6 +31,16 @@ type RequestLogService struct {
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 	ticker          *time.Ticker
+	bufferMu        sync.Mutex
+	bufferedLogs    []*models.RequestLog
+	backpressure    LogBackpressureConfig
+	droppedLogs     int64
+}
+
+type LogBackpressureConfig struct {
+	BatchSize          int
+	EmergencyThreshold int
+	HardLimit          int
 }
 
 // NewRequestLogService creates a new RequestLogService instance
@@ -41,6 +51,97 @@ func NewRequestLogService(db *gorm.DB, store store.Store, sm *config.SystemSetti
 		settingsManager: sm,
 		stopChan:        make(chan struct{}),
 	}
+}
+
+func (s *RequestLogService) ConfigureBackpressure(config LogBackpressureConfig) {
+	if config.BatchSize <= 0 {
+		config.BatchSize = DefaultLogFlushBatchSize
+	}
+	s.bufferMu.Lock()
+	s.backpressure = config
+	s.bufferMu.Unlock()
+}
+
+func (s *RequestLogService) EnqueueBufferedLog(log *models.RequestLog) error {
+	s.bufferMu.Lock()
+	if s.backpressure.HardLimit > 0 && len(s.bufferedLogs) >= s.backpressure.HardLimit {
+		if !log.IsSecurityWarning {
+			s.droppedLogs++
+			s.bufferMu.Unlock()
+			return nil
+		}
+		if s.dropOldestNonSecurityWarningLocked() {
+			s.droppedLogs++
+		}
+	}
+	s.bufferedLogs = append(s.bufferedLogs, log)
+	shouldEmergencyFlush := s.backpressure.EmergencyThreshold > 0 && len(s.bufferedLogs) > s.backpressure.EmergencyThreshold
+	shouldBatchFlush := !shouldEmergencyFlush && s.backpressure.BatchSize > 0 && len(s.bufferedLogs) >= s.backpressure.BatchSize
+	s.bufferMu.Unlock()
+
+	if shouldEmergencyFlush {
+		return s.FlushBufferedLogs()
+	}
+	if shouldBatchFlush {
+		return s.FlushBufferedLogs()
+	}
+	return nil
+}
+
+func (s *RequestLogService) dropOldestNonSecurityWarningLocked() bool {
+	for i, log := range s.bufferedLogs {
+		if log == nil || !log.IsSecurityWarning {
+			s.bufferedLogs = append(s.bufferedLogs[:i], s.bufferedLogs[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (s *RequestLogService) FlushBufferedLogs() error {
+	for {
+		batch := s.nextBufferedBatch()
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := s.writeLogsToDB(batch); err != nil {
+			s.requeueBufferedLogs(batch)
+			return err
+		}
+	}
+}
+
+func (s *RequestLogService) nextBufferedBatch() []*models.RequestLog {
+	s.bufferMu.Lock()
+	defer s.bufferMu.Unlock()
+	if len(s.bufferedLogs) == 0 {
+		return nil
+	}
+	batchSize := s.backpressure.BatchSize
+	if batchSize <= 0 || batchSize > len(s.bufferedLogs) {
+		batchSize = len(s.bufferedLogs)
+	}
+	batch := append([]*models.RequestLog(nil), s.bufferedLogs[:batchSize]...)
+	s.bufferedLogs = append([]*models.RequestLog(nil), s.bufferedLogs[batchSize:]...)
+	return batch
+}
+
+func (s *RequestLogService) requeueBufferedLogs(logs []*models.RequestLog) {
+	s.bufferMu.Lock()
+	s.bufferedLogs = append(logs, s.bufferedLogs...)
+	s.bufferMu.Unlock()
+}
+
+func (s *RequestLogService) PendingLogCount() int {
+	s.bufferMu.Lock()
+	defer s.bufferMu.Unlock()
+	return len(s.bufferedLogs)
+}
+
+func (s *RequestLogService) DroppedLogCount() int64 {
+	s.bufferMu.Lock()
+	defer s.bufferMu.Unlock()
+	return s.droppedLogs
 }
 
 // Start initializes the service and starts the periodic flush routine
