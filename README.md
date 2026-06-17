@@ -26,6 +26,13 @@ A high-performance, enterprise-grade AI API transparent proxy service designed s
 - **Production Ready**: Graceful shutdown, error recovery, and comprehensive security mechanisms
 - **Dual Authentication**: Separate authentication for management and proxy, with proxy authentication supporting global and group-level keys
 
+## Recent Additions
+
+- **Provider Metadata**: Group icons and provider-aware defaults for OpenAI Chat, OpenAI Responses, Gemini, and Claude.
+- **Key Operations**: Manual key disable/enable workflows, import/export notes, and safer export modes for migration or sharing.
+- **Model Operations**: Upstream model discovery, enabled model lists, and alias mapping for cleaner routing.
+- **Runtime Reliability**: Request log backpressure, token usage accounting, proxy credential masking, and configurable scheduling strategies.
+
 ## Supported AI Services
 
 GPT-Load serves as a transparent proxy service, completely preserving the native API formats of various AI service providers:
@@ -372,16 +379,6 @@ openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 
 Access the management console at: <http://localhost:3001> (default address)
 
-### Interface Overview
-
-<img src="screenshot/dashboard.png" alt="Dashboard" width="600"/>
-
-<br/>
-
-<img src="screenshot/keys.png" alt="Key Management" width="600"/>
-
-<br/>
-
 The web management interface provides the following features:
 
 - **Dashboard**: Real-time statistics and system status overview
@@ -593,13 +590,6 @@ response = client.messages.create(
 
 - **[New API](https://github.com/QuantumNous/new-api)** - Excellent AI model aggregation management and distribution system
 
-
-## Supporters
-
-- Thank you very much for the support from the [LINUX DO](https://linux.do) community!
-
-- This project is supported by DigitalOcean.
-  [![DigitalOcean Referral Badge](https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%202.svg)](https://www.digitalocean.com/?refcode=3d52cff21342&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge)
 
 ## License
 

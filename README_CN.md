@@ -26,6 +26,13 @@
 - **生产就绪**: 优雅关闭、错误恢复、完善的安全机制
 - **双重认证体系**: 管理端与代理端认证分离，代理认证支持全局和分组级别密钥
 
+## 近期新增
+
+- **服务商元数据**: 分组图标和服务商默认识别，覆盖 OpenAI Chat、OpenAI Responses、Gemini 和 Claude。
+- **密钥操作**: 支持手动禁用/启用、带备注导入导出，以及迁移或共享时更安全的导出模式。
+- **模型管理**: 支持上游模型发现、启用模型列表和模型别名映射，让路由配置更清晰。
+- **运行可靠性**: 请求日志背压、Token 用量统计、代理凭证脱敏，以及可配置的密钥调度策略。
+
 ## 支持的 AI 服务
 
 GPT-Load 作为透明代理服务，完整保留各 AI 服务商的原生 API 格式：
@@ -372,16 +379,6 @@ openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 
 访问管理控制台：<http://localhost:3001>（默认地址）
 
-### 界面展示
-
-<img src="screenshot/dashboard.png" alt="仪表盘" width="600" />
-
-<br/>
-
-<img src="screenshot/keys.png" alt="密钥管理" width="600" />
-
-<br/>
-
 Web 管理界面提供以下功能：
 
 - **仪表盘**: 实时统计信息和系统状态概览
@@ -593,12 +590,6 @@ response = client.messages.create(
 
 - **[New API](https://github.com/QuantumNous/new-api)** - 优秀的AI模型聚合管理分发系统
 
-
-## 支持者
-
-- 非常感谢 [LINUX DO](https://linux.do) 社区的支持！
-- 本项目由 DigitalOcean 支持。
-  [![DigitalOcean Referral Badge](https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%202.svg)](https://www.digitalocean.com/?refcode=3d52cff21342&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge)
 
 ## 许可证
 

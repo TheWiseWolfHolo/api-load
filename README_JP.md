@@ -26,6 +26,13 @@
 - **本番対応**: グレースフルシャットダウン、エラー復旧、包括的なセキュリティメカニズム
 - **デュアル認証**: 管理とプロキシの分離認証、プロキシ認証はグローバルおよびグループレベルのキーをサポート
 
+## 最近の追加機能
+
+- **プロバイダーメタデータ**: OpenAI Chat、OpenAI Responses、Gemini、Claude 向けのグループアイコンとプロバイダー既定値。
+- **キー操作**: 手動の無効化/有効化、メモ付きインポート/エクスポート、移行や共有向けの安全なエクスポートモード。
+- **モデル管理**: アップストリームモデル検出、有効モデルリスト、モデルエイリアスマッピングによる明確なルーティング設定。
+- **運用信頼性**: リクエストログのバックプレッシャー、Token 使用量集計、プロキシ認証情報のマスキング、設定可能なキー戦略。
+
 ## サポートされているAIサービス
 
 GPT-Loadは、さまざまなAIサービスプロバイダーのネイティブAPIフォーマットを完全に保持するトランスペアレントプロキシサービスとして機能します：
@@ -372,16 +379,6 @@ openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 
 管理コンソールにアクセス：<http://localhost:3001>（デフォルトアドレス）
 
-### インターフェースの概要
-
-<img src="screenshot/dashboard.png" alt="ダッシュボード" width="600"/>
-
-<br/>
-
-<img src="screenshot/keys.png" alt="キー管理" width="600"/>
-
-<br/>
-
 Web管理インターフェースは以下の機能を提供します：
 
 - **ダッシュボード**: リアルタイム統計とシステムステータスの概要
@@ -592,13 +589,6 @@ response = client.messages.create(
 ## 関連プロジェクト
 
 - **[New API](https://github.com/QuantumNous/new-api)** - 優秀なAIモデル統合管理配信システム
-
-## サポーター
-
-- [LINUX DO](https://linux.do) コミュニティからのサポートに心より感謝いたします！
-
-- このプロジェクトはDigitalOceanの支援を受けています。
-  [![DigitalOcean Referral Badge](https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%202.svg)](https://www.digitalocean.com/?refcode=3d52cff21342&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge)
 
 ## ライセンス
 

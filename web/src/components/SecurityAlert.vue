@@ -111,10 +111,6 @@ const handleDismissPermanently = () => {
   isDismissedPermanently.value = true;
 };
 
-// 打开安全配置文档
-const openSecurityDocs = () => {
-  window.open("https://www.gpt-load.com/docs/configuration/security", "_blank");
-};
 </script>
 
 <template>
@@ -177,15 +173,6 @@ const openSecurityDocs = () => {
       <n-space size="small">
         <n-button
           size="small"
-          type="primary"
-          @click="openSecurityDocs"
-          class="security-primary-btn"
-        >
-          {{ t("security.configDocs") }}
-        </n-button>
-
-        <n-button
-          size="small"
           secondary
           @click="handleDismissPermanently"
           class="security-secondary-btn"
@@ -198,27 +185,11 @@ const openSecurityDocs = () => {
 </template>
 
 <style scoped>
-/* 安全提醒按钮样式优化 */
-.security-primary-btn {
-  font-weight: 600;
-}
-
 .security-secondary-btn {
   font-weight: 500;
 }
 
 /* 暗黑模式下的按钮优化 */
-:root.dark .security-primary-btn {
-  background: var(--primary-color) !important;
-  color: white !important;
-  border: 1px solid var(--primary-color) !important;
-}
-
-:root.dark .security-primary-btn:hover {
-  background: var(--primary-color-hover) !important;
-  border-color: var(--primary-color-hover) !important;
-}
-
 :root.dark .security-secondary-btn {
   background: rgba(255, 255, 255, 0.1) !important;
   color: var(--text-primary) !important;

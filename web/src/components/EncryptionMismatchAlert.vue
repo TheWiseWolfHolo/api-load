@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import http from "@/utils/http";
-import { NAlert, NButton, NCollapse, NCollapseItem } from "naive-ui";
+import { NAlert, NCollapse, NCollapseItem } from "naive-ui";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -52,11 +52,6 @@ const checkEncryptionStatus = async () => {
 // 关闭警告（仅本次会话）
 const handleClose = () => {
   isClosedThisSession.value = true;
-};
-
-// 打开文档
-const openDocs = () => {
-  window.open("https://www.gpt-load.com/docs/configuration/security", "_blank");
 };
 
 // 组件挂载时检查状态
@@ -227,16 +222,6 @@ docker compose run --rm gpt-load migrate-keys --from "old-key"</pre
           </div>
         </n-collapse-item>
       </n-collapse>
-
-      <n-button
-        size="small"
-        type="primary"
-        :bordered="false"
-        @click="openDocs"
-        class="encryption-docs-btn"
-      >
-        {{ t("encryptionAlert.viewDocs") }}
-      </n-button>
     </div>
   </n-alert>
 </template>
@@ -266,32 +251,4 @@ docker compose run --rm gpt-load migrate-keys --from "old-key"</pre
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* 按钮样式 */
-.encryption-docs-btn {
-  font-weight: 600;
-}
-
-/* 暗黑模式下的按钮优化 */
-:root.dark .encryption-docs-btn {
-  background: #d32f2f !important;
-  color: white !important;
-  border: none !important;
-}
-
-:root.dark .encryption-docs-btn:hover {
-  background: #b71c1c !important;
-  color: white !important;
-}
-
-/* 亮色模式下的按钮 */
-:root:not(.dark) .encryption-docs-btn {
-  background: #d32f2f !important;
-  color: white !important;
-  border: none !important;
-}
-
-:root:not(.dark) .encryption-docs-btn:hover {
-  background: #b71c1c !important;
-  color: white !important;
-}
 </style>
