@@ -22,6 +22,7 @@ type KeyProvider struct {
 	store           store.Store
 	settingsManager *config.SystemSettingsManager
 	encryptionSvc   encryption.Service
+	selectionRNG    SelectionRNG
 }
 
 // NewProvider 创建一个新的 KeyProvider 实例。
@@ -31,60 +32,78 @@ func NewProvider(db *gorm.DB, store store.Store, settingsManager *config.SystemS
 		store:           store,
 		settingsManager: settingsManager,
 		encryptionSvc:   encryptionSvc,
+		selectionRNG:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
 // SelectKey 为指定的分组原子性地选择并轮换一个可用的 APIKey。
 func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
-
-	// 1. Atomically rotate the key ID from the list
-	keyIDStr, err := p.store.Rotate(activeKeysListKey)
+	listLen, err := p.store.LLen(activeKeysListKey)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return nil, app_errors.ErrNoActiveKeys
+		return nil, fmt.Errorf("failed to read active key list length: %w", err)
+	}
+	if listLen == 0 {
+		return nil, app_errors.ErrNoActiveKeys
+	}
+
+	for range listLen {
+		// 1. Atomically rotate the key ID from the list
+		keyIDStr, err := p.store.Rotate(activeKeysListKey)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil, app_errors.ErrNoActiveKeys
+			}
+			return nil, fmt.Errorf("failed to rotate key from store: %w", err)
 		}
-		return nil, fmt.Errorf("failed to rotate key from store: %w", err)
+
+		keyID, err := strconv.ParseUint(keyIDStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse key ID '%s': %w", keyIDStr, err)
+		}
+
+		// 2. Get key details from HASH
+		keyHashKey := fmt.Sprintf("key:%d", keyID)
+		keyDetails, err := p.store.HGetAll(keyHashKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get key details for key ID %d: %w", keyID, err)
+		}
+		if keyDetails["status"] != models.KeyStatusActive {
+			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
+				return nil, fmt.Errorf("failed to remove inactive key %d from active list: %w", keyID, err)
+			}
+			continue
+		}
+
+		// 3. Manually unmarshal the map into an APIKey struct
+		failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
+		createdAt, _ := strconv.ParseInt(keyDetails["created_at"], 10, 64)
+
+		// Decrypt the key value for use by channels
+		encryptedKeyValue := keyDetails["key_string"]
+		decryptedKeyValue, err := p.encryptionSvc.Decrypt(encryptedKeyValue)
+		if err != nil {
+			// If decryption fails, try to use the value as-is (backward compatibility for unencrypted keys)
+			logrus.WithFields(logrus.Fields{
+				"keyID": keyID,
+				"error": err,
+			}).Debug("Failed to decrypt key value, using as-is for backward compatibility")
+			decryptedKeyValue = encryptedKeyValue
+		}
+
+		apiKey := &models.APIKey{
+			ID:           uint(keyID),
+			KeyValue:     decryptedKeyValue,
+			Status:       keyDetails["status"],
+			FailureCount: failureCount,
+			GroupID:      groupID,
+			CreatedAt:    time.Unix(createdAt, 0),
+		}
+
+		return apiKey, nil
 	}
 
-	keyID, err := strconv.ParseUint(keyIDStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse key ID '%s': %w", keyIDStr, err)
-	}
-
-	// 2. Get key details from HASH
-	keyHashKey := fmt.Sprintf("key:%d", keyID)
-	keyDetails, err := p.store.HGetAll(keyHashKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get key details for key ID %d: %w", keyID, err)
-	}
-
-	// 3. Manually unmarshal the map into an APIKey struct
-	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-	createdAt, _ := strconv.ParseInt(keyDetails["created_at"], 10, 64)
-
-	// Decrypt the key value for use by channels
-	encryptedKeyValue := keyDetails["key_string"]
-	decryptedKeyValue, err := p.encryptionSvc.Decrypt(encryptedKeyValue)
-	if err != nil {
-		// If decryption fails, try to use the value as-is (backward compatibility for unencrypted keys)
-		logrus.WithFields(logrus.Fields{
-			"keyID": keyID,
-			"error": err,
-		}).Debug("Failed to decrypt key value, using as-is for backward compatibility")
-		decryptedKeyValue = encryptedKeyValue
-	}
-
-	apiKey := &models.APIKey{
-		ID:           uint(keyID),
-		KeyValue:     decryptedKeyValue,
-		Status:       keyDetails["status"],
-		FailureCount: failureCount,
-		GroupID:      groupID,
-		CreatedAt:    time.Unix(createdAt, 0),
-	}
-
-	return apiKey, nil
+	return nil, app_errors.ErrNoActiveKeys
 }
 
 // UpdateStatus 异步地提交一个 Key 状态更新任务。
@@ -146,9 +165,13 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 	}
 
 	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-	isActive := keyDetails["status"] == models.KeyStatusActive
+	status := keyDetails["status"]
+	isActive := status == models.KeyStatusActive
 
 	if failureCount == 0 && isActive {
+		return nil
+	}
+	if status == models.KeyStatusDisabled {
 		return nil
 	}
 
@@ -572,6 +595,24 @@ func (p *KeyProvider) addKeyToStore(key *models.APIKey) error {
 	return nil
 }
 
+func (p *KeyProvider) SyncKeyToStore(key *models.APIKey) error {
+	keyHashKey := fmt.Sprintf("key:%d", key.ID)
+	if err := p.store.HSet(keyHashKey, p.apiKeyToMap(key)); err != nil {
+		return fmt.Errorf("failed to HSet key details for key %d: %w", key.ID, err)
+	}
+
+	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", key.GroupID)
+	if err := p.store.LRem(activeKeysListKey, 0, key.ID); err != nil {
+		return fmt.Errorf("failed to LRem key %d before syncing active list: %w", key.ID, err)
+	}
+	if key.Status == models.KeyStatusActive {
+		if err := p.store.LPush(activeKeysListKey, key.ID); err != nil {
+			return fmt.Errorf("failed to LPush key %d to group %d: %w", key.ID, key.GroupID, err)
+		}
+	}
+	return nil
+}
+
 // addKeysToCacheBatch 批量添加密钥到缓存（用于批量导入场景）
 func (p *KeyProvider) addKeysToCacheBatch(groupID uint, keys []models.APIKey) error {
 	if len(keys) == 0 {
@@ -599,16 +640,19 @@ func (p *KeyProvider) addKeysToCacheBatch(groupID uint, keys []models.APIKey) er
 		}
 	}
 
-	// 2. 收集所有密钥 ID
 	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
-	activeKeyIDs := make([]any, len(keys))
+	activeKeyIDs := make([]any, 0, len(keys))
 	for i := range keys {
-		activeKeyIDs[i] = keys[i].ID
+		if keys[i].Status == models.KeyStatusActive {
+			activeKeyIDs = append(activeKeyIDs, keys[i].ID)
+		}
 	}
 
 	// 3. 批量 LPush 活跃密钥
-	if err := p.store.LPush(activeKeysListKey, activeKeyIDs...); err != nil {
-		return fmt.Errorf("failed to batch LPush keys to group %d: %w", groupID, err)
+	if len(activeKeyIDs) > 0 {
+		if err := p.store.LPush(activeKeysListKey, activeKeyIDs...); err != nil {
+			return fmt.Errorf("failed to batch LPush keys to group %d: %w", groupID, err)
+		}
 	}
 
 	return nil

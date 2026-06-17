@@ -3,6 +3,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -260,6 +262,8 @@ type GroupResponse struct {
 	ParamOverrides      datatypes.JSONMap   `json:"param_overrides"`
 	ModelRedirectRules  datatypes.JSONMap   `json:"model_redirect_rules"`
 	ModelRedirectStrict bool                `json:"model_redirect_strict"`
+	Models              datatypes.JSON      `json:"models"`
+	ModelMappings       datatypes.JSON      `json:"model_mappings"`
 	Config              datatypes.JSONMap   `json:"config"`
 	HeaderRules         []models.HeaderRule `json:"header_rules"`
 	ProxyKeys           string              `json:"proxy_keys"`
@@ -304,6 +308,8 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		ParamOverrides:      group.ParamOverrides,
 		ModelRedirectRules:  group.ModelRedirectRules,
 		ModelRedirectStrict: group.ModelRedirectStrict,
+		Models:              group.Models,
+		ModelMappings:       group.ModelMappings,
 		Config:              group.Config,
 		HeaderRules:         headerRules,
 		ProxyKeys:           group.ProxyKeys,
@@ -311,6 +317,99 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		CreatedAt:           group.CreatedAt,
 		UpdatedAt:           group.UpdatedAt,
 	}
+}
+
+type GroupModelsRequest struct {
+	Models []string `json:"models"`
+}
+
+type GroupModelsResponse struct {
+	Models []string `json:"models"`
+}
+
+func (s *Server) SaveGroupModels(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrBadRequest, "validation.invalid_group_id")
+		return
+	}
+
+	var req GroupModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+
+	if s.handleGroupError(c, s.GroupService.SaveGroupModels(c.Request.Context(), uint(id), req.Models)) {
+		return
+	}
+
+	models, err := s.GroupService.GetGroupModels(c.Request.Context(), uint(id))
+	if s.handleGroupError(c, err) {
+		return
+	}
+	response.Success(c, GroupModelsResponse{Models: models})
+}
+
+func (s *Server) GetGroupModels(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrBadRequest, "validation.invalid_group_id")
+		return
+	}
+
+	models, err := s.GroupService.GetGroupModels(c.Request.Context(), uint(id))
+	if s.handleGroupError(c, err) {
+		return
+	}
+
+	response.Success(c, GroupModelsResponse{Models: models})
+}
+
+func (s *Server) DiscoverGroupModels(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrBadRequest, "validation.invalid_group_id")
+		return
+	}
+
+	var group models.Group
+	if err := s.DB.WithContext(c.Request.Context()).First(&group, uint(id)).Error; err != nil {
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+
+	var keys []models.APIKey
+	if err := s.DB.WithContext(c.Request.Context()).
+		Where("group_id = ? AND status = ?", group.ID, models.KeyStatusActive).
+		Order("id asc").
+		Find(&keys).Error; err != nil {
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+	for i := range keys {
+		if s.EncryptionSvc == nil {
+			continue
+		}
+		decrypted, err := s.EncryptionSvc.Decrypt(keys[i].KeyValue)
+		if err == nil {
+			keys[i].KeyValue = decrypted
+		}
+	}
+
+	discoverySvc := services.NewModelDiscoveryService(http.DefaultClient)
+	modelIDs, err := discoverySvc.DiscoverModels(&group, keys)
+	if err != nil {
+		if errors.Is(err, services.ErrModelDiscoveryUnsupported) {
+			response.Error(c, app_errors.ErrBadRequest)
+			return
+		}
+		logrus.WithContext(c.Request.Context()).WithError(err).Warn("model discovery failed")
+		response.Error(c, app_errors.ErrBadGateway)
+		return
+	}
+
+	response.Success(c, GroupModelsResponse{Models: modelIDs})
 }
 
 // DeleteGroup handles deleting a group.

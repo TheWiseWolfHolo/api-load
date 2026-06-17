@@ -17,7 +17,7 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		logrus.Error("Streaming unsupported by the writer, falling back to normal response")
-		ps.handleNormalResponse(c, resp)
+		_ = ps.handleNormalResponse(c, resp)
 		return
 	}
 
@@ -41,8 +41,14 @@ func (ps *ProxyServer) handleStreamingResponse(c *gin.Context, resp *http.Respon
 	}
 }
 
-func (ps *ProxyServer) handleNormalResponse(c *gin.Context, resp *http.Response) {
-	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
-		logUpstreamError("copying response body", err)
+func (ps *ProxyServer) handleNormalResponse(c *gin.Context, resp *http.Response) []byte {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logUpstreamError("reading response body", err)
+		return nil
 	}
+	if _, err := c.Writer.Write(body); err != nil {
+		logUpstreamError("writing response body", err)
+	}
+	return body
 }

@@ -140,6 +140,21 @@ export const keysApi = {
     await http.put(`/keys/${keyId}/notes`, { notes }, { hideMessage: true });
   },
 
+  // 更新密钥状态
+  async updateKeyStatus(
+    keyId: number,
+    status: Exclude<KeyStatus, undefined>
+  ): Promise<{ changed_count: number; ignored_count: number }> {
+    const res = await http.put(
+      `/keys/${keyId}/status`,
+      { status },
+      {
+        hideMessage: true,
+      }
+    );
+    return res.data;
+  },
+
   // 测试密钥
   async testKeys(
     group_id: number,
@@ -228,7 +243,7 @@ export const keysApi = {
   },
 
   // 导出密钥
-  exportKeys(groupId: number, status: "all" | "active" | "invalid" = "all"): void {
+  exportKeys(groupId: number, status: "all" | "active" | "invalid" | "disabled" = "all"): void {
     const authKey = localStorage.getItem("authKey");
     if (!authKey) {
       window.$message.error(i18n.global.t("auth.noAuthKeyFound"));
@@ -315,5 +330,20 @@ export const keysApi = {
   async getParentAggregateGroups(groupId: number): Promise<ParentAggregateGroup[]> {
     const res = await http.get(`/groups/${groupId}/parent-aggregate-groups`);
     return res.data || [];
+  },
+
+  async getGroupModels(groupId: number): Promise<string[]> {
+    const res = await http.get(`/groups/${groupId}/models`);
+    return res.data?.models || [];
+  },
+
+  async saveGroupModels(groupId: number, models: string[]): Promise<string[]> {
+    const res = await http.put(`/groups/${groupId}/models`, { models });
+    return res.data?.models || [];
+  },
+
+  async discoverGroupModels(groupId: number): Promise<string[]> {
+    const res = await http.post(`/groups/${groupId}/models/discover`);
+    return res.data?.models || [];
   },
 };

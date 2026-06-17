@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { settingsApi, type Setting, type SettingCategory } from "@/api/settings";
 import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
+import { setShouldConfirmDisableKey, shouldConfirmDisableKey } from "@/utils/preferences";
 import { HelpCircle, Save } from "@vicons/ionicons5";
 import {
   NButton,
@@ -28,6 +29,7 @@ const formRef = ref();
 const form = ref<Record<string, string | number | boolean>>({});
 const isSaving = ref(false);
 const message = useMessage();
+const confirmDisableKey = ref(shouldConfirmDisableKey());
 
 fetchSettings();
 
@@ -97,10 +99,29 @@ function generateValidationRules(item: Setting): FormItemRule[] {
   }
   return rules;
 }
+
+function handleConfirmDisableKeyChange(value: boolean) {
+  confirmDisableKey.value = value;
+  setShouldConfirmDisableKey(value);
+}
 </script>
 
 <template>
   <n-space vertical>
+    <n-card size="small" :title="t('settings.localPreferences')" hoverable bordered>
+      <n-grid :x-gap="36" :y-gap="0" responsive="screen" cols="1 s:2 m:2 l:4 xl:4">
+        <n-grid-item>
+          <n-form-item :label="t('settings.confirmDisableKey')">
+            <n-switch
+              :value="confirmDisableKey"
+              size="small"
+              @update:value="handleConfirmDisableKeyChange"
+            />
+          </n-form-item>
+        </n-grid-item>
+      </n-grid>
+    </n-card>
+
     <n-form ref="formRef" :model="form" label-placement="top">
       <n-space vertical>
         <n-card

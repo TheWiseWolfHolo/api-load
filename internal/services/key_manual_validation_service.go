@@ -45,13 +45,9 @@ func NewKeyManualValidationService(db *gorm.DB, validator *keypool.KeyValidator,
 
 // StartValidationTask starts a new manual validation task for a given group.
 func (s *KeyManualValidationService) StartValidationTask(group *models.Group, status string) (*TaskStatus, error) {
-	var keys []models.APIKey
-	query := s.DB.Where("group_id = ?", group.ID)
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if err := query.Find(&keys).Error; err != nil {
-		return nil, fmt.Errorf("failed to get keys for group %s with status '%s': %w", group.Name, status, err)
+	keys, err := s.queryKeysForValidation(group, status)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(keys) == 0 {
@@ -67,6 +63,27 @@ func (s *KeyManualValidationService) StartValidationTask(group *models.Group, st
 	go s.runValidation(group, keys, status)
 
 	return taskStatus, nil
+}
+
+func (s *KeyManualValidationService) queryKeysForValidation(group *models.Group, status string) ([]models.APIKey, error) {
+	if status == models.KeyStatusDisabled {
+		return nil, fmt.Errorf("disabled keys cannot be manually validated in this phase")
+	}
+	if status != "" && status != models.KeyStatusActive && status != models.KeyStatusInvalid {
+		return nil, fmt.Errorf("invalid validation status: %s", status)
+	}
+
+	var keys []models.APIKey
+	query := s.DB.Where("group_id = ?", group.ID)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	} else {
+		query = query.Where("status IN ?", []string{models.KeyStatusActive, models.KeyStatusInvalid})
+	}
+	if err := query.Find(&keys).Error; err != nil {
+		return nil, fmt.Errorf("failed to get keys for group %s with status '%s': %w", group.Name, status, err)
+	}
+	return keys, nil
 }
 
 func (s *KeyManualValidationService) runValidation(group *models.Group, keys []models.APIKey, status string) {

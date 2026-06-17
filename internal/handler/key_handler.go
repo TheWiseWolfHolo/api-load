@@ -78,6 +78,15 @@ type ValidateGroupKeysRequest struct {
 	Status  string `json:"status,omitempty"`
 }
 
+type UpdateKeyStatusRequest struct {
+	Status string `json:"status" binding:"required"`
+}
+
+type BatchUpdateKeyStatusRequest struct {
+	KeyIDs []uint `json:"key_ids" binding:"required"`
+	Status string `json:"status" binding:"required"`
+}
+
 // AddMultipleKeys handles creating new keys from a text block within a specific group.
 func (s *Server) AddMultipleKeys(c *gin.Context) {
 	var req KeyTextRequest
@@ -202,7 +211,7 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 	}
 
 	statusFilter := c.Query("status")
-	if statusFilter != "" && statusFilter != models.KeyStatusActive && statusFilter != models.KeyStatusInvalid {
+	if !s.KeyService.IsValidKeyStatusFilter(statusFilter) {
 		response.ErrorI18nFromAPIError(c, app_errors.ErrValidation, "validation.invalid_status_filter")
 		return
 	}
@@ -212,8 +221,13 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 	if searchKeyword != "" {
 		searchHash = s.EncryptionSvc.Hash(searchKeyword)
 	}
+	notesKeyword := c.Query("notes")
+	generalSearch := c.Query("search")
+	if generalSearch != "" {
+		searchHash = s.EncryptionSvc.Hash(generalSearch)
+	}
 
-	query := s.KeyService.ListKeysInGroupQuery(groupID, statusFilter, searchHash)
+	query := s.KeyService.ListKeysInGroupQuery(groupID, statusFilter, searchHash, notesKeyword, generalSearch)
 
 	var keys []models.APIKey
 	paginatedResult, err := response.Paginate(c, query, &keys)
@@ -235,6 +249,60 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 	paginatedResult.Items = keys
 
 	response.Success(c, paginatedResult)
+}
+
+func (s *Server) UpdateKeyStatus(c *gin.Context) {
+	keyIDInt, err := strconv.Atoi(c.Param("id"))
+	if err != nil || keyIDInt <= 0 {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid key ID format"))
+		return
+	}
+
+	var req UpdateKeyStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	if !s.KeyService.IsValidKeyStatusValue(req.Status) {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrValidation, "validation.invalid_status_value")
+		return
+	}
+
+	result, err := s.KeyService.SetKeyStatus(uint(keyIDInt), req.Status)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			response.Error(c, app_errors.ErrResourceNotFound)
+		} else {
+			response.Error(c, app_errors.ParseDBError(err))
+		}
+		return
+	}
+
+	response.Success(c, result)
+}
+
+func (s *Server) BatchUpdateKeyStatus(c *gin.Context) {
+	var req BatchUpdateKeyStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	if len(req.KeyIDs) == 0 {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "key_ids cannot be empty"))
+		return
+	}
+	if !s.KeyService.IsValidKeyStatusValue(req.Status) {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrValidation, "validation.invalid_status_value")
+		return
+	}
+
+	result, err := s.KeyService.SetKeysStatus(req.KeyIDs, req.Status)
+	if err != nil {
+		response.Error(c, app_errors.ParseDBError(err))
+		return
+	}
+
+	response.Success(c, result)
 }
 
 // DeleteMultipleKeys handles deleting keys from a text block within a specific group.
@@ -477,10 +545,16 @@ func (s *Server) ExportKeys(c *gin.Context) {
 		statusFilter = "all"
 	}
 
-	switch statusFilter {
-	case "all", models.KeyStatusActive, models.KeyStatusInvalid:
-	default:
+	if !s.KeyService.IsValidKeyStatusFilter(statusFilter) {
 		response.ErrorI18nFromAPIError(c, app_errors.ErrValidation, "validation.invalid_status_filter")
+		return
+	}
+	format := c.Query("format")
+	if format == "" {
+		format = "txt"
+	}
+	if format != "txt" && format != "jsonl" {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "invalid export format"))
 		return
 	}
 
@@ -489,11 +563,15 @@ func (s *Server) ExportKeys(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("keys-%s-%s.txt", group.Name, statusFilter)
+	filename := fmt.Sprintf("keys-%s-%s.%s", group.Name, statusFilter, format)
 	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Header("Content-Type", "text/plain; charset=utf-8")
+	if format == "jsonl" {
+		c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	} else {
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+	}
 
-	if err := s.KeyService.StreamKeysToWriter(groupID, statusFilter, c.Writer); err != nil {
+	if _, err := s.KeyService.ExportKeysToWriter(groupID, statusFilter, format, c.Writer); err != nil {
 		log.Printf("Failed to stream keys: %v", err)
 	}
 }

@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"sort"
+	"strings"
 	"sync"
 
 	app_errors "gpt-load/internal/errors"
@@ -22,6 +25,25 @@ type SubGroupInput struct {
 type AggregateValidationResult struct {
 	ValidationEndpoint string
 	SubGroups          []models.GroupSubGroup
+}
+
+// AggregateModelSource identifies the sub-group that exposes a model.
+type AggregateModelSource struct {
+	GroupID     uint   `json:"group_id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Weight      int    `json:"weight"`
+}
+
+// AggregateModelSummaryItem is a single exposed model and its contributing sub-groups.
+type AggregateModelSummaryItem struct {
+	ID      string                 `json:"id"`
+	Sources []AggregateModelSource `json:"sources"`
+}
+
+// AggregateModelSummary describes the model union available through an aggregate group.
+type AggregateModelSummary struct {
+	Models []AggregateModelSummaryItem `json:"models"`
 }
 
 // AggregateGroupService encapsulates aggregate group specific behaviours.
@@ -167,6 +189,143 @@ func (s *AggregateGroupService) GetSubGroups(ctx context.Context, groupID uint) 
 	}
 
 	return subGroups, nil
+}
+
+// GetAggregateModelSummary returns a deterministic union of positive-weight sub-group models.
+func (s *AggregateGroupService) GetAggregateModelSummary(ctx context.Context, groupID uint) (*AggregateModelSummary, error) {
+	var group models.Group
+	if err := s.db.WithContext(ctx).First(&group, groupID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, NewI18nError(app_errors.ErrResourceNotFound, "group.not_found", nil)
+		}
+		return nil, app_errors.ParseDBError(err)
+	}
+
+	if group.GroupType != "aggregate" {
+		return nil, NewI18nError(app_errors.ErrBadRequest, "group.not_aggregate", nil)
+	}
+
+	var groupSubGroups []models.GroupSubGroup
+	if err := s.db.WithContext(ctx).
+		Where("group_id = ? AND weight > 0", groupID).
+		Order("sub_group_id asc").
+		Find(&groupSubGroups).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if len(groupSubGroups) == 0 {
+		return &AggregateModelSummary{Models: []AggregateModelSummaryItem{}}, nil
+	}
+
+	subGroupIDs := make([]uint, 0, len(groupSubGroups))
+	weightByID := make(map[uint]int, len(groupSubGroups))
+	for _, link := range groupSubGroups {
+		subGroupIDs = append(subGroupIDs, link.SubGroupID)
+		weightByID[link.SubGroupID] = link.Weight
+	}
+
+	var subGroups []models.Group
+	if err := s.db.WithContext(ctx).Where("id IN ?", subGroupIDs).Find(&subGroups).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	subGroupByID := make(map[uint]models.Group, len(subGroups))
+	for _, subGroup := range subGroups {
+		subGroupByID[subGroup.ID] = subGroup
+	}
+
+	sourcesByModel := make(map[string][]AggregateModelSource)
+	for _, link := range groupSubGroups {
+		subGroup, ok := subGroupByID[link.SubGroupID]
+		if !ok {
+			continue
+		}
+		var modelIDs []string
+		if len(subGroup.Models) > 0 {
+			if err := json.Unmarshal(subGroup.Models, &modelIDs); err != nil {
+				return nil, err
+			}
+		}
+		source := AggregateModelSource{
+			GroupID:     subGroup.ID,
+			Name:        subGroup.Name,
+			DisplayName: subGroup.DisplayName,
+			Weight:      weightByID[subGroup.ID],
+		}
+		for _, modelID := range normalizeModelIDs(modelIDs) {
+			sourcesByModel[modelID] = append(sourcesByModel[modelID], source)
+		}
+	}
+
+	modelIDs := make([]string, 0, len(sourcesByModel))
+	for modelID := range sourcesByModel {
+		modelIDs = append(modelIDs, modelID)
+	}
+	sort.Strings(modelIDs)
+
+	items := make([]AggregateModelSummaryItem, 0, len(modelIDs))
+	for _, modelID := range modelIDs {
+		sources := sourcesByModel[modelID]
+		sort.Slice(sources, func(i, j int) bool {
+			return sources[i].GroupID < sources[j].GroupID
+		})
+		items = append(items, AggregateModelSummaryItem{ID: modelID, Sources: sources})
+	}
+
+	return &AggregateModelSummary{Models: items}, nil
+}
+
+func (s *AggregateGroupService) GetAggregateExternalModels(ctx context.Context, groupID uint) ([]string, error) {
+	var group models.Group
+	if err := s.db.WithContext(ctx).First(&group, groupID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, NewI18nError(app_errors.ErrResourceNotFound, "group.not_found", nil)
+		}
+		return nil, app_errors.ParseDBError(err)
+	}
+	if group.GroupType != "aggregate" {
+		return nil, NewI18nError(app_errors.ErrBadRequest, "group.not_aggregate", nil)
+	}
+
+	modelIDs := []string{}
+	if len(group.Models) > 0 {
+		var manualModels []string
+		if err := json.Unmarshal(group.Models, &manualModels); err != nil {
+			return nil, err
+		}
+		modelIDs = append(modelIDs, manualModels...)
+	}
+
+	positiveSubGroups := make(map[uint]struct{})
+	var links []models.GroupSubGroup
+	if err := s.db.WithContext(ctx).Where("group_id = ? AND weight > 0", groupID).Find(&links).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	for _, link := range links {
+		positiveSubGroups[link.SubGroupID] = struct{}{}
+	}
+
+	if len(group.ModelMappings) > 0 {
+		var rules []ModelMappingRule
+		if err := json.Unmarshal(group.ModelMappings, &rules); err != nil {
+			return nil, err
+		}
+		for _, rule := range rules {
+			alias := strings.TrimSpace(rule.Alias)
+			if alias == "" {
+				continue
+			}
+			for _, target := range rule.Targets {
+				if target.Weight <= 0 {
+					continue
+				}
+				if _, ok := positiveSubGroups[target.SubGroupID]; ok {
+					modelIDs = append(modelIDs, alias)
+					break
+				}
+			}
+		}
+	}
+
+	return normalizeModelIDs(modelIDs), nil
 }
 
 // AddSubGroups adds new sub groups to an aggregate group

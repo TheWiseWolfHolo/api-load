@@ -14,11 +14,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type TokenStatsItem struct {
+	Dimension        string `json:"dimension"`
+	TotalTokens      int64  `json:"total_tokens"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	ThinkingTokens   int64  `json:"thinking_tokens"`
+}
+
+type TokenStatsResponse struct {
+	Items []TokenStatsItem `json:"items"`
+}
+
 // Stats Get dashboard statistics
 func (s *Server) Stats(c *gin.Context) {
-	var activeKeys, invalidKeys int64
+	var activeKeys, invalidKeys, disabledKeys int64
 	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusActive).Count(&activeKeys)
 	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusInvalid).Count(&invalidKeys)
+	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusDisabled).Count(&disabledKeys)
 
 	now := time.Now()
 	rpmStats, err := s.getRPMStats(now)
@@ -97,7 +112,8 @@ func (s *Server) Stats(c *gin.Context) {
 			SubValue:    invalidKeys,
 			SubValueTip: i18n.Message(c, "dashboard.invalid_keys"),
 		},
-		RPM: rpmStats,
+		DisabledKeys: disabledKeys,
+		RPM:          rpmStats,
 		RequestCount: models.StatCard{
 			Value:         float64(currentPeriod.TotalRequests),
 			Trend:         reqTrend,
@@ -179,6 +195,55 @@ func (s *Server) Chart(c *gin.Context) {
 	}
 
 	response.Success(c, chartData)
+}
+
+func (s *Server) TokenStats(c *gin.Context) {
+	groupBy := c.DefaultQuery("group_by", "model")
+	dimensionExpr := ""
+	switch groupBy {
+	case "model":
+		dimensionExpr = "model"
+	case "group":
+		dimensionExpr = "group_name"
+	case "hour":
+		dimensionExpr = "strftime('%Y-%m-%dT%H:00:00Z', timestamp)"
+	default:
+		response.Error(c, app_errors.ErrBadRequest)
+		return
+	}
+
+	now := time.Now()
+	startTime := now.Add(-24 * time.Hour)
+	endTime := now
+	if raw := c.Query("start_time"); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			response.Error(c, app_errors.ErrBadRequest)
+			return
+		}
+		startTime = parsed
+	}
+	if raw := c.Query("end_time"); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			response.Error(c, app_errors.ErrBadRequest)
+			return
+		}
+		endTime = parsed
+	}
+
+	var items []TokenStatsItem
+	if err := s.DB.Model(&models.RequestLog{}).
+		Select(dimensionExpr+" as dimension, COALESCE(SUM(total_tokens), 0) as total_tokens, COALESCE(SUM(input_tokens), 0) as input_tokens, COALESCE(SUM(output_tokens), 0) as output_tokens, COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens, COALESCE(SUM(thinking_tokens), 0) as thinking_tokens").
+		Where("timestamp >= ? AND timestamp <= ? AND request_type = ?", startTime, endTime, models.RequestTypeFinal).
+		Group("dimension").
+		Order("total_tokens desc").
+		Scan(&items).Error; err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrDatabase, "database.token_stats_failed")
+		return
+	}
+
+	response.Success(c, TokenStatsResponse{Items: items})
 }
 
 type hourlyStatResult struct {

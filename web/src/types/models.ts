@@ -6,13 +6,26 @@ export interface ApiResponse<T> {
 }
 
 // 密钥状态
-export type KeyStatus = "active" | "invalid" | undefined;
+export type KeyStatus = "active" | "invalid" | "disabled" | undefined;
 
 // 分组类型
 export type GroupType = "standard" | "aggregate";
 
+export type KeySelectionStrategy = "round_robin" | "random" | "sticky" | "fill_first";
+
+export type KeyAffinityScope = "group" | "model" | "model+proxy_key";
+
 // 渠道类型
-export type ChannelType = "openai" | "openai-response" | "gemini" | "anthropic";
+export type ChannelType =
+  | "openai"
+  | "openai-response"
+  | "gemini"
+  | "anthropic"
+  | "openrouter"
+  | "deepseek"
+  | "qwen"
+  | "xai"
+  | "azure-openai";
 
 // 数据模型定义
 export interface APIKey {
@@ -37,6 +50,42 @@ export interface HeaderRule {
   key: string;
   value: string;
   action: "set" | "remove";
+}
+
+export interface GroupConfig {
+  request_timeout?: number;
+  idle_conn_timeout?: number;
+  connect_timeout?: number;
+  max_idle_conns?: number;
+  max_idle_conns_per_host?: number;
+  response_header_timeout?: number;
+  proxy_url?: string;
+  max_retries?: number;
+  blacklist_threshold?: number;
+  failover_status_codes?: string;
+  key_validation_interval_minutes?: number;
+  key_validation_concurrency?: number;
+  key_validation_timeout_seconds?: number;
+  enable_request_body_logging?: boolean;
+  key_selection_strategy?: KeySelectionStrategy;
+  key_affinity_scope?: KeyAffinityScope;
+  fill_cooldown_minutes?: number;
+  fill_switch_status_codes?: string;
+  fill_quota_patterns?: string;
+  fill_max_consecutive_requests?: number;
+  fill_max_consecutive_tokens?: number;
+  fill_sticky_ttl_seconds?: number;
+}
+
+export interface ModelMappingTarget {
+  sub_group_id: number;
+  model: string;
+  weight: number;
+}
+
+export interface ModelMappingRule {
+  alias: string;
+  targets: ModelMappingTarget[];
 }
 
 // 子分组配置（创建/更新时使用）
@@ -72,12 +121,14 @@ export interface Group {
   channel_type: ChannelType;
   upstreams: UpstreamInfo[];
   validation_endpoint: string;
-  config: Record<string, unknown>;
+  config: GroupConfig;
   api_keys?: APIKey[];
   endpoint?: string;
   param_overrides: Record<string, unknown>;
   model_redirect_rules: Record<string, string>;
   model_redirect_strict: boolean;
+  models?: string[];
+  model_mappings?: ModelMappingRule[];
   header_rules?: HeaderRule[];
   proxy_keys: string;
   group_type?: GroupType;
@@ -91,7 +142,7 @@ export interface GroupConfigOption {
   key: string;
   name: string;
   description: string;
-  default_value: string | number;
+  default_value: string | number | boolean;
 }
 
 // GroupStatsResponse defines the complete statistics for a group.
@@ -107,6 +158,7 @@ export interface KeyStats {
   total_keys: number;
   active_keys: number;
   invalid_keys: number;
+  disabled_keys: number;
 }
 
 // RequestStats defines the statistics for requests over a period.
@@ -167,6 +219,13 @@ export interface RequestLog {
   upstream_addr: string;
   is_stream: boolean;
   request_body?: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  thinking_tokens: number;
+  token_usage_source: "none" | "upstream" | "estimated";
 }
 
 export interface Pagination {
@@ -229,10 +288,25 @@ export interface SecurityWarning {
 // 仪表盘基础统计响应
 export interface DashboardStatsResponse {
   key_count: StatCard;
+  disabled_keys: number;
   rpm: StatCard;
   request_count: StatCard;
   error_rate: StatCard;
   security_warnings: SecurityWarning[];
+}
+
+export interface TokenStatsItem {
+  dimension: string;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  thinking_tokens: number;
+}
+
+export interface TokenStatsResponse {
+  items: TokenStatsItem[];
 }
 
 // 图表数据集

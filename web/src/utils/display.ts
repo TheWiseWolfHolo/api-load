@@ -69,3 +69,20 @@ export function maskProxyKeys(keys: string): string {
     .map(key => maskKey(key.trim()))
     .join(", ");
 }
+
+export function maskProxyUrl(rawUrl: string): string {
+  if (!rawUrl) {
+    return "";
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.username && !parsed.password) {
+      return rawUrl;
+    }
+    parsed.username = "***";
+    parsed.password = "";
+    return parsed.toString();
+  } catch {
+    return rawUrl.replace(/:\/\/[^/@\s]+@/, "://***@");
+  }
+}
