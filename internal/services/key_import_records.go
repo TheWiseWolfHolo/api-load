@@ -1,8 +1,8 @@
 package services
 
 import (
+	"api-load/internal/models"
 	"fmt"
-	"gpt-load/internal/models"
 	"strings"
 )
 

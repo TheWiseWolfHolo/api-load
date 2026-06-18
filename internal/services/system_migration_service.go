@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
+	"api-load/internal/encryption"
+	"api-load/internal/models"
+	"api-load/internal/utils"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -91,7 +91,7 @@ func (s *SystemExportService) Export(ctx context.Context, options SystemExportOp
 	}
 
 	envelope := SystemExportEnvelope{
-		Version:        "gpt-load-migration/v1",
+		Version:        "api-load-migration/v1",
 		ExportedAt:     time.Now().UTC(),
 		Groups:         make([]SystemExportGroup, 0, len(groups)),
 		ProxyPools:     []any{},

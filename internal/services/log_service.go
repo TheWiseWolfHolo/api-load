@@ -1,10 +1,10 @@
 package services
 
 import (
+	"api-load/internal/encryption"
+	"api-load/internal/models"
 	"encoding/csv"
 	"fmt"
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/models"
 	"io"
 	"strconv"
 	"time"

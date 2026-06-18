@@ -1,9 +1,9 @@
 package services
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/models"
 	"context"
-	"gpt-load/internal/config"
-	"gpt-load/internal/models"
 	"sync"
 	"time"
 

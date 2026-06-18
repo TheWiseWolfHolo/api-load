@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/models"
+	"api-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"

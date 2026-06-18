@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 
 	"gorm.io/datatypes"
 )

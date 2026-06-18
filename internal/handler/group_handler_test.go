@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"testing"
 
-	"gpt-load/internal/config"
-	"gpt-load/internal/keypool"
-	"gpt-load/internal/models"
-	"gpt-load/internal/services"
-	"gpt-load/internal/store"
+	"api-load/internal/config"
+	"api-load/internal/keypool"
+	"api-load/internal/models"
+	"api-load/internal/services"
+	"api-load/internal/store"
 
 	"github.com/gin-gonic/gin"
 )

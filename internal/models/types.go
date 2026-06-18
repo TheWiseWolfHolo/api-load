@@ -1,8 +1,8 @@
 package models
 
 import (
-	"gpt-load/internal/failover"
-	"gpt-load/internal/types"
+	"api-load/internal/failover"
+	"api-load/internal/types"
 	"time"
 
 	"gorm.io/datatypes"

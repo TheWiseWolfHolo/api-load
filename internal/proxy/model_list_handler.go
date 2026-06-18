@@ -1,9 +1,9 @@
 package proxy
 
 import (
-	"gpt-load/internal/channel"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
+	"api-load/internal/channel"
+	"api-load/internal/models"
+	"api-load/internal/utils"
 	"io"
 	"net/http"
 	"strings"

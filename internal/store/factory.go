@@ -1,9 +1,9 @@
 package store
 
 import (
+	"api-load/internal/types"
 	"context"
 	"fmt"
-	"gpt-load/internal/types"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"

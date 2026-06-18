@@ -1,10 +1,10 @@
 package services
 
 import (
+	"api-load/internal/models"
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"gpt-load/internal/models"
 	"strings"
 	"testing"
 )

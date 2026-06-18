@@ -1,4 +1,4 @@
-const CONFIRM_DISABLE_KEY_STORAGE_KEY = "gpt-load-confirm-disable-key";
+const CONFIRM_DISABLE_KEY_STORAGE_KEY = "api-load-confirm-disable-key";
 
 export function shouldConfirmDisableKey(): boolean {
   return localStorage.getItem(CONFIRM_DISABLE_KEY_STORAGE_KEY) !== "false";

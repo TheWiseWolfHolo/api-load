@@ -1,7 +1,7 @@
 package services
 
 import (
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 	"testing"
 )
 

@@ -1,13 +1,13 @@
 package channel
 
 import (
+	app_errors "api-load/internal/errors"
+	"api-load/internal/models"
+	"api-load/internal/utils"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
 	"io"
 	"net/http"
 	"net/url"

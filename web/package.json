@@ -1,21 +1,21 @@
 {
-  "name": "gpt-load-frontend",
+  "name": "api-load-frontend",
   "private": true,
   "version": "0.1.0",
-  "description": "GPT Load Balancer Frontend - A modern Vue 3 frontend for GPT load balancing service",
+  "description": "API-Load Frontend - A modern Vue 3 console for multi-provider AI API load balancing",
   "type": "module",
-  "keywords": ["vue3", "typescript", "vite", "naive-ui", "gpt-load", "frontend"],
-  "author": "tbphp",
+  "keywords": ["vue3", "typescript", "vite", "naive-ui", "api-load", "frontend"],
+  "author": "TheWiseWolfHolo",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tbphp/gpt-load.git",
+    "url": "https://github.com/TheWiseWolfHolo/api-load.git",
     "directory": "web"
   },
   "bugs": {
-    "url": "https://github.com/tbphp/gpt-load/issues"
+    "url": "https://github.com/TheWiseWolfHolo/api-load/issues"
   },
-  "homepage": "https://github.com/tbphp/gpt-load#readme",
+  "homepage": "https://github.com/TheWiseWolfHolo/api-load#readme",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",

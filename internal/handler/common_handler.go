@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"gpt-load/internal/channel"
-	"gpt-load/internal/response"
+	"api-load/internal/channel"
+	"api-load/internal/response"
 
 	"github.com/gin-gonic/gin"
 )

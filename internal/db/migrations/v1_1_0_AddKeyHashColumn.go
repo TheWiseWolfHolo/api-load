@@ -1,9 +1,9 @@
 package db
 
 import (
+	"api-load/internal/encryption"
+	"api-load/internal/models"
 	"fmt"
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/models"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"

@@ -1,12 +1,12 @@
 package services
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/models"
+	"api-load/internal/store"
 	"context"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/config"
-	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"strings"
 	"sync"
 	"time"

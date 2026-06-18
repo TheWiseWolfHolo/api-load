@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 )
 
 func TestIMP001LegacyTextImportRemainsCompatible(t *testing.T) {

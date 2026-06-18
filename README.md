@@ -1,12 +1,14 @@
-# GPT-Load
+# API-Load
+
+<p align="center"><img src="web/src/assets/logo.svg" width="96" alt="API-Load logo"></p>
 
 English | [中文](README_CN.md) | [日本語](README_JP.md)
 
-[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/gpt-load)](https://github.com/TheWiseWolfHolo/gpt-load/releases)
+[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load)](https://github.com/TheWiseWolfHolo/api-load/releases)
 ![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A high-performance, enterprise-grade AI API transparent proxy service designed specifically for enterprises and developers who need to integrate multiple AI services. Built with Go, featuring intelligent key management, load balancing, and comprehensive monitoring capabilities, designed for high-concurrency production environments.
+API-Load is a high-performance, enterprise-grade AI API transparent proxy service designed specifically for enterprises and developers who need to integrate multiple AI services. Built with Go, it features intelligent key management, load balancing, and comprehensive monitoring capabilities for high-concurrency production environments.
 
 
 ## Features
@@ -35,7 +37,7 @@ A high-performance, enterprise-grade AI API transparent proxy service designed s
 
 ## Supported AI Services
 
-GPT-Load serves as a transparent proxy service, completely preserving the native API formats of various AI service providers:
+API-Load serves as a transparent proxy service, completely preserving the native API formats of various AI service providers:
 
 - **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
 - **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
@@ -53,11 +55,11 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 ### Method 1: Docker Quick Start
 
 ```bash
-docker run -d --name gpt-load \
+docker run -d --name api-load \
     -p 3001:3001 \
     -e AUTH_KEY=your-secure-key-here \
     -v "$(pwd)/data":/app/data \
-    ghcr.io/thewisewolfholo/gpt-load:latest
+    ghcr.io/thewisewolfholo/api-load:latest
 ```
 
 > Please change `your-secure-key-here` to a strong password (never use the default value), then you can log in to the management interface: <http://localhost:3001>
@@ -68,11 +70,11 @@ docker run -d --name gpt-load \
 
 ```bash
 # Create Directory
-mkdir -p gpt-load && cd gpt-load
+mkdir -p api-load && cd api-load
 
 # Download configuration files
-wget https://raw.githubusercontent.com/TheWiseWolfHolo/gpt-load/refs/heads/main/docker-compose.yml
-wget -O .env https://raw.githubusercontent.com/TheWiseWolfHolo/gpt-load/refs/heads/main/.env.example
+wget https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/refs/heads/main/docker-compose.yml
+wget -O .env https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/refs/heads/main/.env.example
 
 # Edit the .env file and change AUTH_KEY to a strong password. Never use default or simple keys like sk-123456.
 
@@ -115,8 +117,8 @@ Source build requires a locally installed database (SQLite, MySQL, or PostgreSQL
 
 ```bash
 # Clone and build
-git clone https://github.com/TheWiseWolfHolo/gpt-load.git
-cd gpt-load
+git clone https://github.com/TheWiseWolfHolo/api-load.git
+cd api-load
 go mod tidy
 
 # Create configuration
@@ -150,7 +152,7 @@ Cluster deployment requires all nodes to connect to the same MySQL (or PostgreSQ
 
 ### Configuration Architecture Overview
 
-GPT-Load adopts a dual-layer configuration architecture:
+API-Load adopts a dual-layer configuration architecture:
 
 #### 1. Static Configuration (Environment Variables)
 
@@ -192,7 +194,7 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 | Setting             | Environment Variable | Default              | Description                                         |
 | ------------------- | -------------------- | -------------------- | --------------------------------------------------- |
-| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path       |
+| Database Connection | `DATABASE_DSN`       | `./data/api-load.db` | Database connection string (DSN) or file path. The default SQLite path is retained for compatibility. |
 | Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty |
 
 **Performance & CORS Configuration:**
@@ -217,7 +219,7 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 **Proxy Configuration:**
 
-GPT-Load automatically reads proxy settings from environment variables to make requests to upstream AI providers.
+API-Load automatically reads proxy settings from environment variables to make requests to upstream AI providers.
 
 | Setting     | Environment Variable | Default | Description                                     |
 | ----------- | -------------------- | ------- | ----------------------------------------------- |
@@ -284,7 +286,7 @@ Supported Proxy Protocol Formats:
 
 ## Data Encryption Migration
 
-GPT-Load supports encrypted storage of API keys. You can enable, disable, or change the encryption key at any time.
+API-Load supports encrypted storage of API keys. You can enable, disable, or change the encryption key at any time.
 
 <details>
 <summary>View Data Encryption Migration Details</summary>
@@ -311,13 +313,13 @@ docker compose down
 
 # 4. Execute migration command
 # Enable encryption (your-32-char-secret-key is your key, recommend using 32+ character random string)
-docker compose run --rm gpt-load migrate-keys --to "your-32-char-secret-key"
+docker compose run --rm api-load migrate-keys --to "your-32-char-secret-key"
 
 # Disable encryption
-docker compose run --rm gpt-load migrate-keys --from "your-current-key"
+docker compose run --rm api-load migrate-keys --from "your-current-key"
 
 # Change encryption key
-docker compose run --rm gpt-load migrate-keys --from "old-key" --to "new-32-char-secret-key"
+docker compose run --rm api-load migrate-keys --from "old-key" --to "new-32-char-secret-key"
 
 # 5. Update configuration file
 # Edit .env file, set ENCRYPTION_KEY to match the --to parameter
@@ -391,7 +393,7 @@ The web management interface provides the following features:
 <details>
 <summary>Proxy Interface Invocation</summary>
 
-GPT-Load routes requests to different AI services through group names. Usage is as follows:
+API-Load routes requests to different AI services through group names. Usage is as follows:
 
 ### 1. Proxy Endpoint Format
 
@@ -412,7 +414,7 @@ Configure **Proxy Keys** in the web management interface, which supports system-
 
 ### 3. OpenAI Interface Example
 
-GPT-Load currently supports two OpenAI-compatible group types:
+API-Load currently supports two OpenAI-compatible group types:
 
 - `openai` (OpenAI Chat Completions format)
 - `openai-response` (OpenAI Responses format)
@@ -582,7 +584,7 @@ response = client.messages.create(
 )
 ```
 
-> **Important Note**: As a transparent proxy service, GPT-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the **Proxy Key** configured in the management interface for seamless migration.
+> **Important Note**: As a transparent proxy service, API-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the **Proxy Key** configured in the management interface for seamless migration.
 
 </details>
 
@@ -590,6 +592,11 @@ response = client.messages.create(
 
 - **[New API](https://github.com/QuantumNous/new-api)** - Excellent AI model aggregation management and distribution system
 
+## Acknowledgements
+
+API-Load is based on secondary development of [tbphp/gpt-load](https://github.com/tbphp/gpt-load). Thanks to the original project authors and community for providing the foundation.
+
+This project continues to extend multi-provider management, scheduling strategies, UI experience, deployment, and operations documentation on top of that foundation, and is maintained as the independent API-Load project.
 
 ## License
 
@@ -597,4 +604,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Star History
 
-[![Stargazers over time](https://starchart.cc/TheWiseWolfHolo/gpt-load.svg?variant=adaptive)](https://starchart.cc/TheWiseWolfHolo/gpt-load)
+[![Stargazers over time](https://starchart.cc/TheWiseWolfHolo/api-load.svg?variant=adaptive)](https://starchart.cc/TheWiseWolfHolo/api-load)

@@ -3,10 +3,10 @@ package handler
 import (
 	"strings"
 
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/models"
-	"gpt-load/internal/response"
-	"gpt-load/internal/utils"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/models"
+	"api-load/internal/response"
+	"api-load/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

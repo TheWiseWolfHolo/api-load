@@ -1,10 +1,10 @@
 package services
 
 import (
+	"api-load/internal/store"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gpt-load/internal/store"
 	"time"
 )
 

@@ -59,7 +59,7 @@ export default {
     deselectAll: "Deselect All",
   },
   login: {
-    title: "GPT Load",
+    title: "API-Load",
     subtitle: "Intelligent Load Balancing Platform",
     welcome: "Welcome Back",
     welcomeDesc: "Please enter your auth key to continue",

@@ -1,15 +1,15 @@
 package handler
 
 import (
+	"api-load/internal/encryption"
+	"api-load/internal/i18n"
+	"api-load/internal/keypool"
+	"api-load/internal/models"
+	"api-load/internal/services"
+	"api-load/internal/store"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/i18n"
-	"gpt-load/internal/keypool"
-	"gpt-load/internal/models"
-	"gpt-load/internal/services"
-	"gpt-load/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"testing"

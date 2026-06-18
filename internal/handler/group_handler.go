@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/i18n"
-	"gpt-load/internal/models"
-	"gpt-load/internal/response"
-	"gpt-load/internal/services"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/i18n"
+	"api-load/internal/models"
+	"api-load/internal/response"
+	"api-load/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

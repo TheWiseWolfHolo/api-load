@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"

@@ -1,12 +1,12 @@
 package channel
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/httpclient"
+	"api-load/internal/models"
+	"api-load/internal/utils"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/config"
-	"gpt-load/internal/httpclient"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
 	"net/url"
 	"sync"
 	"time"

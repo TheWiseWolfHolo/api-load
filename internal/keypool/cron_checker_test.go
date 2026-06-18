@@ -1,8 +1,8 @@
 package keypool
 
 import (
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/models"
+	"api-load/internal/encryption"
+	"api-load/internal/models"
 	"sync/atomic"
 	"testing"
 )

@@ -1,8 +1,8 @@
 package channel
 
 import (
+	"api-load/internal/models"
 	"context"
-	"gpt-load/internal/models"
 	"net/http"
 	"net/url"
 

@@ -1,13 +1,13 @@
 package router
 
 import (
+	"api-load/internal/handler"
+	"api-load/internal/i18n"
+	"api-load/internal/middleware"
+	"api-load/internal/proxy"
+	"api-load/internal/services"
+	"api-load/internal/types"
 	"embed"
-	"gpt-load/internal/handler"
-	"gpt-load/internal/i18n"
-	"gpt-load/internal/middleware"
-	"gpt-load/internal/proxy"
-	"gpt-load/internal/services"
-	"gpt-load/internal/types"
 	"io/fs"
 	"net/http"
 	"strings"

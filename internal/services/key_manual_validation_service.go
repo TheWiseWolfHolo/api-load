@@ -1,12 +1,12 @@
 package services
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/encryption"
+	"api-load/internal/keypool"
+	"api-load/internal/models"
+	"api-load/internal/types"
 	"fmt"
-	"gpt-load/internal/config"
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/keypool"
-	"gpt-load/internal/models"
-	"gpt-load/internal/types"
 	"sync"
 	"time"
 
