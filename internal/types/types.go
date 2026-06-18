@@ -86,7 +86,10 @@ type LogConfig struct {
 
 // DatabaseConfig represents database configuration
 type DatabaseConfig struct {
-	DSN string `json:"dsn"`
+	DSN                    string `json:"dsn"`
+	MaxIdleConns           int    `json:"max_idle_conns"`
+	MaxOpenConns           int    `json:"max_open_conns"`
+	ConnMaxLifetimeMinutes int    `json:"conn_max_lifetime_minutes"`
 }
 
 type RetryError struct {

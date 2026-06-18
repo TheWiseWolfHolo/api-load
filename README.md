@@ -195,6 +195,9 @@ API-Load adopts a dual-layer configuration architecture:
 | Setting             | Environment Variable | Default              | Description                                         |
 | ------------------- | -------------------- | -------------------- | --------------------------------------------------- |
 | Database Connection | `DATABASE_DSN`       | `./data/api-load.db` | Database connection string (DSN) or file path. The default SQLite path is retained for compatibility. |
+| Max Idle Connections | `DB_MAX_IDLE_CONNS` | 50 | Maximum idle database connections. Lower this for small managed PostgreSQL instances. |
+| Max Open Connections | `DB_MAX_OPEN_CONNS` | 500 | Maximum open database connections. Lower this for small managed PostgreSQL instances. |
+| Connection Max Lifetime | `DB_CONN_MAX_LIFETIME_MINUTES` | 60 | Maximum database connection reuse lifetime in minutes. |
 | Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty |
 
 **Performance & CORS Configuration:**

@@ -99,7 +99,10 @@ func (m *Manager) ReloadConfig() error {
 			FilePath:   utils.GetEnvOrDefault("LOG_FILE_PATH", "./data/logs/app.log"),
 		},
 		Database: types.DatabaseConfig{
-			DSN: utils.GetEnvOrDefault("DATABASE_DSN", "./data/api-load.db"),
+			DSN:                    utils.GetEnvOrDefault("DATABASE_DSN", "./data/api-load.db"),
+			MaxIdleConns:           utils.ParseInteger(os.Getenv("DB_MAX_IDLE_CONNS"), 50),
+			MaxOpenConns:           utils.ParseInteger(os.Getenv("DB_MAX_OPEN_CONNS"), 500),
+			ConnMaxLifetimeMinutes: utils.ParseInteger(os.Getenv("DB_CONN_MAX_LIFETIME_MINUTES"), 60),
 		},
 		RedisDSN:      os.Getenv("REDIS_DSN"),
 		EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
