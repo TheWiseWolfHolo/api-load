@@ -73,10 +73,26 @@ func NewDB(configManager types.ConfigManager) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
-	// Set connection pool parameters for all drivers
-	sqlDB.SetMaxIdleConns(50)
-	sqlDB.SetMaxOpenConns(500)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	maxOpenConns := dbConfig.MaxOpenConns
+	if maxOpenConns <= 0 {
+		maxOpenConns = 500
+	}
+	maxIdleConns := dbConfig.MaxIdleConns
+	if maxIdleConns <= 0 {
+		maxIdleConns = 50
+	}
+	if maxIdleConns > maxOpenConns {
+		maxIdleConns = maxOpenConns
+	}
+	connMaxLifetimeMinutes := dbConfig.ConnMaxLifetimeMinutes
+	if connMaxLifetimeMinutes <= 0 {
+		connMaxLifetimeMinutes = 60
+	}
+
+	// Set connection pool parameters for all drivers.
+	sqlDB.SetMaxIdleConns(maxIdleConns)
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 
 	return DB, nil
 }
