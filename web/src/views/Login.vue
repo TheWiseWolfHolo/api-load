@@ -149,11 +149,8 @@ const handleLogin = async () => {
 .login-title {
   font-family: var(--font-display);
   font-size: 2.5rem;
-  font-weight: 700;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 600;
+  color: var(--primary-color);
   margin-bottom: 8px;
   letter-spacing: 0;
 }
@@ -168,6 +165,7 @@ const handleLogin = async () => {
 .login-card {
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-color-light);
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
@@ -189,8 +187,8 @@ const handleLogin = async () => {
 }
 
 .login-btn {
-  background: var(--primary-gradient);
-  border: none;
+  background: var(--primary-color);
+  border: 1px solid var(--primary-color);
   font-weight: 600;
   letter-spacing: 0;
   height: 48px;
@@ -198,9 +196,9 @@ const handleLogin = async () => {
 }
 
 .login-btn:hover {
-  background: linear-gradient(135deg, var(--primary-color-hover) 0%, var(--primary-color) 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(193, 95, 60, 0.28);
+  background: var(--primary-color-hover);
+  border-color: var(--primary-color-hover);
+  box-shadow: 0 8px 22px rgba(155, 95, 70, 0.18);
 }
 
 :deep(.n-input) {
@@ -239,7 +237,7 @@ const handleLogin = async () => {
 }
 
 :root.dark .login-btn:hover {
-  background: linear-gradient(135deg, #de7356 0%, #c15f3c 100%);
-  box-shadow: 0 8px 25px rgba(222, 115, 86, 0.22);
+  background: var(--primary-color-hover);
+  box-shadow: 0 8px 22px rgba(193, 95, 60, 0.2);
 }
 </style>

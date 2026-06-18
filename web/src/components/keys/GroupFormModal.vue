@@ -3,7 +3,14 @@ import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
 import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
 import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
-import { Add, Close, HelpCircleOutline, Remove } from "@vicons/ionicons5";
+import {
+  Add,
+  AlertCircleOutline,
+  CheckmarkCircleOutline,
+  Close,
+  HelpCircleOutline,
+  Remove,
+} from "@vicons/ionicons5";
 import {
   NButton,
   NCard,
@@ -423,7 +430,9 @@ function loadGroupData() {
     fill_max_consecutive_requests: normalizeNonNegativeNumber(
       groupConfig.fill_max_consecutive_requests
     ),
-    fill_max_consecutive_tokens: normalizeNonNegativeNumber(groupConfig.fill_max_consecutive_tokens),
+    fill_max_consecutive_tokens: normalizeNonNegativeNumber(
+      groupConfig.fill_max_consecutive_tokens
+    ),
     fill_sticky_ttl_seconds: normalizeNonNegativeNumber(groupConfig.fill_sticky_ttl_seconds),
     header_rules: (props.group.header_rules || []).map((rule: HeaderRuleItem) => ({
       key: rule.key || "",
@@ -990,7 +999,10 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     :label="t('keys.keyAffinityScope')"
                     class="form-item-half"
                   >
-                    <n-select v-model:value="formData.key_affinity_scope" :options="affinityOptions" />
+                    <n-select
+                      v-model:value="formData.key_affinity_scope"
+                      :options="affinityOptions"
+                    />
                   </n-form-item>
                 </div>
                 <div v-if="showFillFirstFields" class="scheduler-grid">
@@ -1298,11 +1310,19 @@ function buildSchedulerConfig(): Record<string, number | string> {
                   </div>
                   <template #feedback>
                     <div style="font-size: 12px; color: #999; margin: 4px 0">
-                      <div v-if="formData.model_redirect_strict" style="color: #f5a623">
-                        ⚠️ {{ t("keys.modelRedirectStrictWarning") }}
+                      <div
+                        v-if="formData.model_redirect_strict"
+                        style="display: flex; align-items: center; gap: 4px; color: #9b7a43"
+                      >
+                        <n-icon :component="AlertCircleOutline" />
+                        <span>{{ t("keys.modelRedirectStrictWarning") }}</span>
                       </div>
-                      <div v-else style="color: #52c41a">
-                        ✅ {{ t("keys.modelRedirectLooseInfo") }}
+                      <div
+                        v-else
+                        style="display: flex; align-items: center; gap: 4px; color: #43845c"
+                      >
+                        <n-icon :component="CheckmarkCircleOutline" />
+                        <span>{{ t("keys.modelRedirectLooseInfo") }}</span>
                       </div>
                     </div>
                   </template>

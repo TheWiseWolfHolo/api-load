@@ -642,7 +642,7 @@ export default {
     clickToSwitch: "{mode}に切り替えるにはクリック",
   },
   encryptionAlert: {
-    title: "⚠️ 暗号化設定エラー",
+    title: "暗号化設定エラー",
     viewSolution: "解決策を表示",
     viewDocs: "ドキュメントを表示",
     scenario: {

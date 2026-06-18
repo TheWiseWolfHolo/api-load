@@ -36,23 +36,23 @@
 :root,
 :root.light {
   /* 背景色 */
-  --bg-primary: #f4f3ee;
-  --bg-secondary: #eeeae2;
-  --bg-tertiary: #e6dfd4;
-  --bg-gradient: linear-gradient(135deg, #f4f3ee 0%, #e7dfd3 100%);
+  --bg-primary: #fbfaf7;
+  --bg-secondary: #f7f5ef;
+  --bg-tertiary: #f1ede5;
+  --bg-gradient: linear-gradient(180deg, #fbfaf7 0%, #f4f3ee 100%);
 
   /* 文字颜色 */
   --text-primary: #191919;
-  --text-secondary: #5f5a51;
-  --text-tertiary: #8b8579;
+  --text-secondary: #5f5a52;
+  --text-tertiary: #948d82;
   --text-inverse: #ffffff;
 
   /* 边框颜色 */
-  --border-color: #ded8cc;
-  --border-color-light: rgba(25, 25, 25, 0.08);
+  --border-color: #e4ded4;
+  --border-color-light: rgba(25, 25, 25, 0.07);
 
   /* 卡片背景 */
-  --card-bg: rgba(255, 255, 255, 0.95);
+  --card-bg: rgba(255, 255, 255, 0.96);
   --card-bg-solid: #ffffff;
 
   /* 组件颜色 */
@@ -60,35 +60,35 @@
   --footer-bg: rgba(255, 255, 255, 0.95);
 
   /* 状态颜色 */
-  --success-bg: rgba(24, 160, 88, 0.1);
-  --success-border: rgba(24, 160, 88, 0.3);
-  --error-bg: rgba(255, 193, 7, 0.1);
-  --error-border: rgba(255, 193, 7, 0.5);
-  --invalid-bg: #f7f4ee;
-  --invalid-border: #ded8cc;
+  --success-bg: rgba(67, 132, 92, 0.1);
+  --success-border: rgba(67, 132, 92, 0.24);
+  --error-bg: rgba(183, 78, 73, 0.08);
+  --error-border: rgba(183, 78, 73, 0.22);
+  --invalid-bg: #f7f5ef;
+  --invalid-border: #e4ded4;
 
   /* 图表颜色 */
-  --chart-bg: #ffffff;
-  --chart-grid: #e7dfd3;
+  --chart-bg: #fffefa;
+  --chart-grid: #eee8dc;
   --chart-axis: #ded8cc;
   --chart-text: #5f5a51;
-  --chart-legend-bg: rgba(255, 255, 255, 0.72);
+  --chart-legend-bg: rgba(255, 255, 255, 0.86);
   --chart-legend-text: #191919;
   --chart-legend-secondary: #5f5a51;
 
   /* 阴影 */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(25, 25, 25, 0.04);
+  --shadow-md: 0 6px 16px rgba(25, 25, 25, 0.06);
+  --shadow-lg: 0 14px 32px rgba(25, 25, 25, 0.08);
 
   /* 其他 */
   --overlay-bg: rgba(255, 255, 255, 0.8);
   --code-bg: #f7f4ee;
-  --scrollbar-bg: rgba(25, 25, 25, 0.08);
-  --hover-bg: rgba(193, 95, 60, 0.08);
+  --scrollbar-bg: rgba(95, 90, 82, 0.14);
+  --hover-bg: rgba(193, 95, 60, 0.07);
   --modal-color: rgba(255, 255, 255, 0.95);
-  --success-color: #18a058;
-  --error-color: #d03050;
+  --success-color: #43845c;
+  --error-color: #b74e49;
 }
 
 /* 深色主题变量 */
@@ -143,10 +143,10 @@
   --overlay-bg: rgba(25, 25, 25, 0.8);
   --code-bg: #191919;
   --scrollbar-bg: rgba(244, 243, 238, 0.1);
-  --hover-bg: rgba(222, 115, 86, 0.15);
+  --hover-bg: rgba(193, 95, 60, 0.14);
   --modal-color: rgba(25, 25, 25, 0.98);
-  --success-color: #52c41a;
-  --error-color: #ff4d4f;
+  --success-color: #78b88d;
+  --error-color: #df8178;
 }
 
 /* 通用颜色（不受主题影响） */
@@ -159,14 +159,36 @@
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
 
   /* 主题色 */
-  --primary-color: #c15f3c;
-  --primary-color-hover: #de7356;
-  --primary-color-pressed: #9f4c2f;
-  --primary-color-suppl: rgba(193, 95, 60, 0.12);
-  --primary-gradient: linear-gradient(135deg, #c15f3c 0%, #de7356 100%);
-  --secondary-gradient: linear-gradient(135deg, #b1ada1 0%, #7e7669 100%);
-  --success-gradient: linear-gradient(135deg, #3a8f67 0%, #62b986 100%);
-  --warning-gradient: linear-gradient(135deg, #d39b46 0%, #e6bc68 100%);
+  --primary-color: #9b5f46;
+  --primary-color-hover: #8d523d;
+  --primary-color-pressed: #774331;
+  --primary-color-suppl: rgba(193, 95, 60, 0.09);
+  --primary-color-suppl-hover: rgba(193, 95, 60, 0.12);
+  --primary-border: rgba(193, 95, 60, 0.22);
+  --primary-gradient: linear-gradient(
+    135deg,
+    rgba(193, 95, 60, 0.12) 0%,
+    rgba(193, 95, 60, 0.04) 100%
+  );
+  --secondary-gradient: linear-gradient(
+    135deg,
+    rgba(177, 173, 161, 0.22) 0%,
+    rgba(177, 173, 161, 0.08) 100%
+  );
+  --success-gradient: linear-gradient(
+    135deg,
+    rgba(67, 132, 92, 0.16) 0%,
+    rgba(67, 132, 92, 0.06) 100%
+  );
+  --warning-gradient: linear-gradient(
+    135deg,
+    rgba(180, 131, 58, 0.18) 0%,
+    rgba(180, 131, 58, 0.06) 100%
+  );
+  --metric-success: #43845c;
+  --metric-warning: #9b7a43;
+  --metric-info: #547083;
+  --metric-error: #b74e49;
 
   /* 边框半径 */
   --border-radius-sm: 6px;

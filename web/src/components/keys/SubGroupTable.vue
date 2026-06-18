@@ -673,23 +673,23 @@ function formatNumber(num: number): string {
   transition: width 0.3s ease;
 }
 
-/* Active state - green gradient */
+/* Active state */
 .key-card .weight-fill-active {
-  background: linear-gradient(90deg, #0e7a43, #18a058, #36ad6a, #5fd299) !important;
+  background: linear-gradient(90deg, #6b8f78, #8bad96) !important;
 }
 
 :root.dark .key-card .weight-fill-active {
-  background: linear-gradient(90deg, #4aba7d, #63e2b7, #7fe7c4, #a3f5d0) !important;
+  background: linear-gradient(90deg, #78b88d, #9bc9a8) !important;
 }
 
-/* Unavailable state - striped pattern (red/orange warning) */
+/* Unavailable state - striped pattern */
 .key-card .weight-fill-unavailable {
   background: repeating-linear-gradient(
     45deg,
-    #f5a9a9,
-    #f5a9a9 8px,
-    #e88592 8px,
-    #e88592 16px
+    #d9a69b,
+    #d9a69b 8px,
+    #c4877e 8px,
+    #c4877e 16px
   ) !important;
   opacity: 0.85;
 }

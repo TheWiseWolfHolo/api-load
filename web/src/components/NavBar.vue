@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { type MenuOption } from "naive-ui";
-import { computed, h, watch } from "vue";
+import {
+  BarChartOutline,
+  DocumentTextOutline,
+  KeyOutline,
+  SettingsOutline,
+} from "@vicons/ionicons5";
+import { NIcon, type MenuOption } from "naive-ui";
+import { computed, h, type Component, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 
@@ -17,10 +23,10 @@ const emit = defineEmits(["close"]);
 
 const menuOptions = computed<MenuOption[]>(() => {
   const options: MenuOption[] = [
-    renderMenuItem("dashboard", t("nav.dashboard"), "📊"),
-    renderMenuItem("keys", t("nav.keys"), "🔑"),
-    renderMenuItem("logs", t("nav.logs"), "📋"),
-    renderMenuItem("settings", t("nav.settings"), "⚙️"),
+    renderMenuItem("dashboard", t("nav.dashboard"), BarChartOutline),
+    renderMenuItem("keys", t("nav.keys"), KeyOutline),
+    renderMenuItem("logs", t("nav.logs"), DocumentTextOutline),
+    renderMenuItem("settings", t("nav.settings"), SettingsOutline),
   ];
 
   return options;
@@ -35,7 +41,7 @@ watch(activeMenu, () => {
   }
 });
 
-function renderMenuItem(key: string, label: string, icon: string): MenuOption {
+function renderMenuItem(key: string, label: string, icon: Component): MenuOption {
   return {
     label: () =>
       h(
@@ -48,7 +54,7 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
         },
         {
           default: () => [
-            h("span", { class: "nav-item-icon" }, icon),
+            h(NIcon, { class: "nav-item-icon", component: icon }),
             h("span", { class: "nav-item-text" }, label),
           ],
         }
@@ -77,6 +83,13 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
   font-weight: 500;
 }
 
+:deep(.nav-item-icon) {
+  width: 17px;
+  height: 17px;
+  color: var(--text-tertiary);
+  transition: color 0.2s ease;
+}
+
 :deep(.n-menu-item) {
   border-radius: var(--border-radius-md);
 }
@@ -91,20 +104,23 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
 
 :deep(.n-menu-item:hover) {
   background: var(--primary-color-suppl);
-  transform: translateY(-1px);
   border-radius: var(--border-radius-md);
 }
 
 :deep(.n-menu-item--selected) {
-  background: var(--primary-gradient);
-  color: white;
+  background: var(--primary-color-suppl);
+  color: var(--primary-color);
   font-weight: 600;
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
+  border: 1px solid var(--primary-border);
   border-radius: var(--border-radius-md);
 }
 
+:deep(.n-menu-item--selected .nav-item-icon) {
+  color: var(--primary-color);
+}
+
 :deep(.n-menu-item--selected:hover) {
-  background: linear-gradient(135deg, var(--primary-color-hover) 0%, var(--primary-color) 100%);
-  transform: translateY(-1px);
+  background: var(--primary-color-suppl-hover);
 }
 </style>

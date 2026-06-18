@@ -641,7 +641,7 @@ export default {
     clickToSwitch: "Click to switch to {mode}",
   },
   encryptionAlert: {
-    title: "⚠️ Encryption Configuration Error",
+    title: "Encryption Configuration Error",
     viewSolution: "View Solution",
     viewDocs: "View Documentation",
     scenario: {

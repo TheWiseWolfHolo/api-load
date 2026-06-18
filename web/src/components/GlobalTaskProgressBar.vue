@@ -2,7 +2,8 @@
 import { keysApi } from "@/api/keys";
 import type { TaskInfo } from "@/types/models";
 import { appState } from "@/utils/app-state";
-import { NButton, NCard, NProgress, NText, useMessage } from "naive-ui";
+import { PulseOutline } from "@vicons/ionicons5";
+import { NButton, NCard, NIcon, NProgress, NText, useMessage } from "naive-ui";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -147,7 +148,9 @@ function getTaskTitle(): string {
     <div class="progress-container">
       <div class="progress-header">
         <div class="progress-info">
-          <span class="progress-icon">⚡</span>
+          <span class="progress-icon">
+            <n-icon :component="PulseOutline" />
+          </span>
           <div class="progress-details">
             <n-text strong class="progress-title">
               {{ getTaskTitle() }}
@@ -259,7 +262,14 @@ function getTaskTitle(): string {
 }
 
 .progress-icon {
-  font-size: 20px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--border-radius-sm);
+  background: var(--primary-color-suppl);
+  color: var(--primary-color);
+  font-size: 18px;
   animation: pulse 1.5s ease-in-out infinite;
 }
 

@@ -229,14 +229,14 @@ docker compose run --rm gpt-load migrate-keys --from "old-key"</pre
 <style scoped>
 /* 解决方案内容背景 */
 .solution-content {
-  background: #f7f9fc;
-  border: 1px solid #e1e4e8;
+  background: #fbfaf7;
+  border: 1px solid #e4ded4;
 }
 
 /* 浅色模式下的代码块 */
 .solution-content pre {
-  background: #f0f2f5;
-  border: 1px solid #d6dae0;
+  background: #f7f5ef;
+  border: 1px solid #e4ded4;
 }
 
 /* 暗黑模式下的解决方案背景 */
@@ -250,5 +250,4 @@ docker compose run --rm gpt-load migrate-keys --from "old-key"</pre
   background: #0d0d0d !important;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-
 </style>
