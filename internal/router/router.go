@@ -24,6 +24,10 @@ type embedFileSystem struct {
 }
 
 func (e embedFileSystem) Exists(prefix string, path string) bool {
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		path = "."
+	}
 	_, err := e.Open(path)
 	return err == nil
 }
