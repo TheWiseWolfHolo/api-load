@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import type { DashboardStatsResponse } from "@/types/models";
-import { NCard, NGrid, NGridItem, NSpace, NTag, NTooltip } from "naive-ui";
+import {
+  KeyOutline,
+  ShieldCheckmarkOutline,
+  SpeedometerOutline,
+  StatsChartOutline,
+} from "@vicons/ionicons5";
+import { NCard, NGrid, NGridItem, NIcon, NSpace, NTag, NTooltip } from "naive-ui";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -67,7 +73,9 @@ onMounted(() => {
         <n-grid-item span="1">
           <n-card :bordered="false" class="stat-card" style="animation-delay: 0s">
             <div class="stat-header">
-              <div class="stat-icon key-icon">🔑</div>
+              <div class="stat-icon key-icon">
+                <n-icon :component="KeyOutline" />
+              </div>
               <n-tooltip v-if="stats?.key_count.sub_value" trigger="hover">
                 <template #trigger>
                   <n-tag type="error" size="small" class="stat-trend">
@@ -100,7 +108,9 @@ onMounted(() => {
         <n-grid-item span="1">
           <n-card :bordered="false" class="stat-card" style="animation-delay: 0.05s">
             <div class="stat-header">
-              <div class="stat-icon rpm-icon">⏱️</div>
+              <div class="stat-icon rpm-icon">
+                <n-icon :component="SpeedometerOutline" />
+              </div>
               <n-tag
                 v-if="stats?.rpm && stats.rpm.trend !== undefined"
                 :type="stats?.rpm.trend_is_growth ? 'success' : 'error'"
@@ -133,7 +143,9 @@ onMounted(() => {
         <n-grid-item span="1">
           <n-card :bordered="false" class="stat-card" style="animation-delay: 0.1s">
             <div class="stat-header">
-              <div class="stat-icon request-icon">📈</div>
+              <div class="stat-icon request-icon">
+                <n-icon :component="StatsChartOutline" />
+              </div>
               <n-tag
                 v-if="stats?.request_count && stats.request_count.trend !== undefined"
                 :type="stats?.request_count.trend_is_growth ? 'success' : 'error'"
@@ -166,7 +178,9 @@ onMounted(() => {
         <n-grid-item span="1">
           <n-card :bordered="false" class="stat-card" style="animation-delay: 0.15s">
             <div class="stat-header">
-              <div class="stat-icon error-icon">🛡️</div>
+              <div class="stat-icon error-icon">
+                <n-icon :component="ShieldCheckmarkOutline" />
+              </div>
               <n-tag
                 v-if="stats?.error_rate.trend !== 0"
                 :type="stats?.error_rate.trend_is_growth ? 'success' : 'error'"
@@ -207,7 +221,7 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: var(--card-bg);
+  background: var(--card-bg-solid);
   border-radius: var(--border-radius-lg);
   border: 1px solid var(--border-color-light);
   position: relative;
@@ -218,7 +232,7 @@ onMounted(() => {
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-header {
@@ -235,25 +249,32 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
-  color: white;
-  box-shadow: var(--shadow-md);
+  font-size: 1.35rem;
+  border: 1px solid transparent;
 }
 
 .key-icon {
-  background: linear-gradient(135deg, #c15f3c 0%, #de7356 100%);
+  background: rgba(193, 95, 60, 0.08);
+  border-color: rgba(193, 95, 60, 0.18);
+  color: var(--primary-color);
 }
 
 .rpm-icon {
-  background: linear-gradient(135deg, #b1ada1 0%, #7e7669 100%);
+  background: rgba(84, 112, 131, 0.08);
+  border-color: rgba(84, 112, 131, 0.18);
+  color: var(--metric-info);
 }
 
 .request-icon {
-  background: linear-gradient(135deg, #4c8c73 0%, #76b39b 100%);
+  background: rgba(67, 132, 92, 0.08);
+  border-color: rgba(67, 132, 92, 0.18);
+  color: var(--metric-success);
 }
 
 .error-icon {
-  background: linear-gradient(135deg, #d39b46 0%, #e6bc68 100%);
+  background: rgba(183, 78, 73, 0.08);
+  border-color: rgba(183, 78, 73, 0.18);
+  color: var(--metric-error);
 }
 
 .stat-trend {
@@ -274,8 +295,9 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 600;
   line-height: 1.2;
   color: var(--text-primary);
   margin-bottom: 4px;
@@ -304,19 +326,19 @@ onMounted(() => {
 }
 
 .key-bar {
-  background: linear-gradient(90deg, #c15f3c 0%, #de7356 100%);
+  background: var(--primary-color);
 }
 
 .rpm-bar {
-  background: linear-gradient(90deg, #b1ada1 0%, #7e7669 100%);
+  background: var(--metric-info);
 }
 
 .request-bar {
-  background: linear-gradient(90deg, #4c8c73 0%, #76b39b 100%);
+  background: var(--metric-success);
 }
 
 .error-bar {
-  background: linear-gradient(90deg, #d39b46 0%, #e6bc68 100%);
+  background: var(--metric-error);
 }
 
 @keyframes slideInUp {

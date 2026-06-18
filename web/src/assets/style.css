@@ -134,12 +134,12 @@ body {
 }
 
 :root:not(.dark) ::-webkit-scrollbar-thumb {
-  background: var(--primary-gradient);
+  background: rgba(95, 90, 82, 0.22);
   border-radius: 1px;
 }
 
 :root:not(.dark) ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, var(--primary-color-hover) 0%, var(--primary-color) 100%);
+  background: rgba(95, 90, 82, 0.32);
 }
 
 /* 深色模式滚动条 */
@@ -149,21 +149,21 @@ body {
 }
 
 :root.dark ::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #c15f3c 0%, #8d7669 100%);
+  background: rgba(244, 243, 238, 0.2);
   border-radius: 1px;
 }
 
 :root.dark ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #de7356 0%, #b1ada1 100%);
+  background: rgba(244, 243, 238, 0.32);
 }
 
 /* 通用卡片样式和悬停效果 */
 .modern-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--card-bg);
   backdrop-filter: blur(10px);
   border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color-light);
   transition: all 0.2s ease;
 }
 
@@ -182,8 +182,7 @@ body {
 }
 
 .modern-button:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 输入框增强 */
@@ -198,23 +197,23 @@ body {
 
 /* 选择文本样式 - 浅色模式 */
 :root:not(.dark) ::selection {
-  background: rgba(193, 95, 60, 0.22);
+  background: rgba(193, 95, 60, 0.16);
   color: #191919;
 }
 
 :root:not(.dark) ::-moz-selection {
-  background: rgba(193, 95, 60, 0.22);
+  background: rgba(193, 95, 60, 0.16);
   color: #191919;
 }
 
 /* 选择文本样式 - 暗黑模式 */
 :root.dark ::selection {
-  background: #c15f3c;
+  background: rgba(193, 95, 60, 0.45);
   color: #ffffff;
 }
 
 :root.dark ::-moz-selection {
-  background: #c15f3c;
+  background: rgba(193, 95, 60, 0.45);
   color: #ffffff;
 }
 
@@ -224,7 +223,7 @@ body {
 }
 
 *:focus-visible {
-  outline: 2px solid rgba(193, 95, 60, 0.5);
+  outline: 2px solid rgba(193, 95, 60, 0.36);
   outline-offset: 2px;
 }
 

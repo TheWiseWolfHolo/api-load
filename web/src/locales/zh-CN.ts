@@ -623,7 +623,7 @@ export default {
     clickToSwitch: "点击切换到{mode}",
   },
   encryptionAlert: {
-    title: "⚠️ 加密配置错误",
+    title: "加密配置错误",
     viewSolution: "查看解决方案",
     viewDocs: "查看文档",
     scenario: {

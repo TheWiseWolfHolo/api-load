@@ -366,6 +366,7 @@ function handleDragEnd() {
               :class="{
                 active: selectedGroup?.id === group.id,
                 aggregate: group.group_type === 'aggregate',
+                'can-drag': canDrag,
                 dragging: draggingGroupId === group.id,
                 'drop-before':
                   dropTarget?.groupId === group.id &&
@@ -376,7 +377,10 @@ function handleDragEnd() {
                   dropTarget?.position === 'after' &&
                   draggingGroupId !== group.id,
               }"
+              :draggable="canDrag"
               @click="handleGroupClick(group)"
+              @dragstart="handleDragStart($event, group.id)"
+              @dragend="handleDragEnd"
               @dragover="handleDragOver($event, group.id)"
               @drop="handleDrop($event, group.id)"
               :ref="
@@ -390,12 +394,9 @@ function handleDragEnd() {
                   <div
                     class="drag-handle"
                     :class="{ 'drag-disabled': !canDrag }"
-                    :draggable="canDrag"
                     :role="'button'"
                     :aria-label="t('keys.dragHandle')"
                     :aria-describedby="dragDisabledHint ? `drag-hint-${group.id}` : undefined"
-                    @dragstart="handleDragStart($event, group.id)"
-                    @dragend="handleDragEnd"
                     @click.stop
                   >
                     <n-icon :component="MenuOutline" />
@@ -435,13 +436,13 @@ function handleDragEnd() {
 
       <!-- 添加分组按钮 -->
       <div class="add-section">
-        <n-button type="success" size="small" block @click="openCreateGroupModal">
+        <n-button type="primary" secondary size="small" block @click="openCreateGroupModal">
           <template #icon>
             <n-icon :component="Add" />
           </template>
           {{ t("keys.createGroup") }}
         </n-button>
-        <n-button type="info" size="small" block @click="openCreateAggregateGroupModal">
+        <n-button size="small" block @click="openCreateAggregateGroupModal">
           <template #icon>
             <n-icon :component="LinkOutline" />
           </template>
@@ -476,7 +477,7 @@ function handleDragEnd() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--card-bg-solid);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .group-list-card:hover {
@@ -515,7 +516,7 @@ function handleDragEnd() {
   padding: 6px 8px;
   border: 1px solid var(--primary-color-suppl);
   border-radius: 6px;
-  background: var(--primary-color-suppl);
+  background: rgba(193, 95, 60, 0.08);
   color: var(--primary-color);
   font-size: 12px;
   font-weight: 600;
@@ -530,16 +531,21 @@ function handleDragEnd() {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(25, 25, 25, 0.07);
   font-size: 12px;
   color: var(--text-primary);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.72);
   box-sizing: border-box;
   position: relative;
 }
 
 .group-item.dragging {
   opacity: 0.6;
+  cursor: grabbing;
+}
+
+.group-item.can-drag {
+  cursor: grab;
 }
 
 .group-item.drop-before::before,
@@ -551,7 +557,7 @@ function handleDragEnd() {
   height: 3px;
   border-radius: 3px;
   background: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--primary-color-suppl);
+  box-shadow: 0 0 0 2px rgba(193, 95, 60, 0.1);
   pointer-events: none;
 }
 
@@ -565,13 +571,13 @@ function handleDragEnd() {
 
 :root.dark .group-item.drop-before::before,
 :root.dark .group-item.drop-after::after {
-  box-shadow: 0 0 0 2px rgba(193, 95, 60, 0.28);
+  box-shadow: 0 0 0 2px rgba(193, 95, 60, 0.22);
 }
 
 /* 聚合分组样式 */
 .group-item.aggregate {
   border-style: dashed;
-  background: rgba(193, 95, 60, 0.04);
+  background: rgba(193, 95, 60, 0.035);
 }
 
 :root.dark .group-item.aggregate {
@@ -581,12 +587,12 @@ function handleDragEnd() {
 
 .group-item:hover,
 .group-item.aggregate:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--primary-color);
+  background: rgba(251, 250, 247, 0.96);
+  border-color: rgba(193, 95, 60, 0.2);
 }
 
 .group-item.aggregate:hover {
-  background: rgba(193, 95, 60, 0.08);
+  background: rgba(193, 95, 60, 0.07);
   border-style: dashed;
 }
 
@@ -601,17 +607,17 @@ function handleDragEnd() {
 }
 
 .group-item.aggregate.active {
-  background: var(--primary-gradient);
+  background: rgba(193, 95, 60, 0.1);
   border-style: solid;
 }
 
 .group-item.active,
 :root.dark .group-item.active,
 :root.dark .group-item.aggregate.active {
-  background: var(--primary-gradient);
-  color: white;
-  border-color: transparent;
-  box-shadow: var(--shadow-md);
+  background: rgba(193, 95, 60, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(193, 95, 60, 0.24);
+  box-shadow: inset 3px 0 0 var(--primary-color);
   border-style: solid;
 }
 
@@ -631,7 +637,7 @@ function handleDragEnd() {
 }
 
 .drag-handle:hover {
-  background: var(--primary-color-suppl);
+  background: rgba(193, 95, 60, 0.08);
   color: var(--primary-color);
 }
 
@@ -645,12 +651,12 @@ function handleDragEnd() {
 }
 
 .group-item.active .drag-handle {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--primary-color);
 }
 
 .group-item.active .drag-handle:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  background: rgba(193, 95, 60, 0.12);
+  color: var(--primary-color-hover);
 }
 
 .group-icon {
@@ -660,7 +666,8 @@ function handleDragEnd() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: #f7f5ef;
+  border: 1px solid rgba(25, 25, 25, 0.06);
   border-radius: 6px;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -668,13 +675,14 @@ function handleDragEnd() {
 }
 
 .provider-icon {
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
   display: block;
 }
 
 .group-item.active .group-icon {
-  background: rgba(255, 255, 255, 0.2);
+  background: #fffefa;
+  border-color: rgba(193, 95, 60, 0.18);
 }
 
 .group-content {
@@ -707,7 +715,7 @@ function handleDragEnd() {
 
 .group-item.active .group-id {
   opacity: 0.9;
-  color: white;
+  color: var(--text-secondary);
 }
 
 .sr-only {
@@ -730,6 +738,18 @@ function handleDragEnd() {
   gap: 8px;
 }
 
+.add-section :deep(.n-button) {
+  background: #ffffff;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.add-section :deep(.n-button:hover) {
+  background: var(--hover-bg);
+  border-color: var(--primary-border);
+  color: var(--primary-color);
+}
+
 /* 滚动条样式 */
 .groups-list::-webkit-scrollbar {
   width: 4px;
@@ -750,7 +770,8 @@ function handleDragEnd() {
 
 /* 暗黑模式特殊样式 */
 :root.dark .group-item {
-  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(25, 25, 25, 0.48);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 :root.dark .group-icon {
@@ -772,7 +793,7 @@ function handleDragEnd() {
 }
 
 :root.dark .group-item.active .group-meta :deep(.n-tag) {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(193, 95, 60, 0.14);
+  border-color: rgba(193, 95, 60, 0.26);
 }
 </style>

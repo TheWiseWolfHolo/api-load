@@ -29,6 +29,8 @@ const tooltipData = ref<{
 } | null>(null);
 const tooltipPosition = ref({ x: 0, y: 0 });
 const chartSvg = ref<SVGElement>();
+const successLineColor = "#6b8f78";
+const failureLineColor = "#b76d64";
 
 // 图表尺寸和边距
 const chartWidth = 800;
@@ -217,6 +219,10 @@ const isErrorDataset = (label: string) => {
   return label.includes("失败") || label.includes("Error") || label.includes("エラー");
 };
 
+const getDatasetColor = (label: string) => {
+  return isErrorDataset(label) ? failureLineColor : successLineColor;
+};
+
 // 动画相关
 const animatedStroke = ref("0");
 const animatedOffset = ref("0");
@@ -345,7 +351,13 @@ const fetchChartData = async () => {
   try {
     loading.value = true;
     const response = await getDashboardChart(selectedGroup.value || undefined);
-    chartData.value = response.data;
+    chartData.value = {
+      ...response.data,
+      datasets: response.data.datasets.map(dataset => ({
+        ...dataset,
+        color: getDatasetColor(dataset.label),
+      })),
+    };
 
     // 延迟启动动画，确保DOM更新完成
     setTimeout(() => {
@@ -569,19 +581,22 @@ onMounted(() => {
   border-radius: var(--border-radius-lg);
   backdrop-filter: blur(4px);
   border: 1px solid var(--border-color-light);
+  background: var(--card-bg-solid);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
 }
 
 /* 浅色主题 */
 :root:not(.dark) .chart-container {
-  background: var(--primary-gradient);
-  color: white;
+  background: #fffefa;
+  color: var(--text-primary);
 }
 
 /* 暗黑主题 */
 :root.dark .chart-container {
-  background: linear-gradient(135deg, #3a342d 0%, #24211d 100%);
+  background: var(--card-bg-solid);
   box-shadow: var(--shadow-md);
-  border: 1px solid rgba(222, 115, 86, 0.2);
+  border: 1px solid var(--border-color-light);
   color: var(--text-primary);
 }
 
@@ -602,23 +617,7 @@ onMounted(() => {
   font-size: 24px;
   line-height: 28px;
   font-weight: 600;
-}
-
-/* 浅色主题 - 白色渐变文字 */
-:root:not(.dark) .chart-title {
-  background: linear-gradient(45deg, #fff, #f0f0f0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* 暗黑主题 - 白色文字 */
-:root.dark .chart-title {
-  color: white;
-  background: none;
-  -webkit-background-clip: unset;
-  -webkit-text-fill-color: unset;
-  background-clip: unset;
+  color: var(--text-primary);
 }
 
 .chart-subtitle {
@@ -629,7 +628,7 @@ onMounted(() => {
 
 /* 浅色主题 */
 :root:not(.dark) .chart-subtitle {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
 }
 
 /* 暗黑主题 */
@@ -660,8 +659,8 @@ onMounted(() => {
 
 /* 浅色主题 */
 :root:not(.dark) .chart-legend {
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: var(--chart-legend-bg);
+  border: 1px solid var(--border-color-light);
 }
 
 /* 暗黑主题 */
@@ -683,9 +682,9 @@ onMounted(() => {
 
 /* 浅色主题 */
 :root:not(.dark) .legend-item {
-  color: #334155;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
+  background: rgba(251, 250, 247, 0.86);
+  border: 1px solid var(--border-color-light);
 }
 
 /* 暗黑主题 */
@@ -697,17 +696,14 @@ onMounted(() => {
 
 /* 浅色主题悬停效果 */
 :root:not(.dark) .legend-item:hover {
-  background: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 /* 暗黑主题悬停效果 */
 :root.dark .legend-item:hover {
-  background: var(--primary-color);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-lg);
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 .legend-indicator {
@@ -719,15 +715,7 @@ onMounted(() => {
 }
 
 .legend-indicator::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 6px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
+  content: none;
 }
 
 .legend-label {
@@ -749,9 +737,9 @@ onMounted(() => {
 
 /* 浅色主题 - 白色背景 */
 :root:not(.dark) .chart-svg {
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e0e0e0;
+  background: var(--chart-bg);
+  box-shadow: inset 0 0 0 1px rgba(25, 25, 25, 0.03);
+  border: 1px solid var(--border-color-light);
 }
 
 /* 暗黑主题 - 深色背景 */
@@ -764,7 +752,7 @@ onMounted(() => {
 .axis-label {
   fill: var(--chart-text);
   font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .line-path {
@@ -798,8 +786,8 @@ onMounted(() => {
 
 .chart-tooltip {
   position: absolute;
-  background: rgba(0, 0, 0, 0.9);
-  color: white;
+  background: rgba(25, 25, 25, 0.92);
+  color: #fbfaf7;
   padding: 12px 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -817,7 +805,7 @@ onMounted(() => {
   font-weight: 700;
   margin-bottom: 8px;
   text-align: center;
-  color: #e2e8f0;
+  color: #f4f3ee;
   font-size: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   padding-bottom: 6px;
@@ -848,7 +836,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 260px;
-  color: white;
+  color: var(--text-secondary);
 }
 
 .chart-loading p {
@@ -897,9 +885,9 @@ onMounted(() => {
   .legend-item {
     padding: 4px 10px;
     font-size: 12px;
-    color: #333;
-    background: white;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: var(--text-secondary);
+    background: var(--card-bg-solid);
+    border: 1px solid var(--border-color-light);
     gap: 6px;
   }
 
