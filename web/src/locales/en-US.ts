@@ -183,6 +183,7 @@ export default {
     searchGroupPlaceholder: "Search group name...",
     noMatchingGroups: "No matching groups found",
     dragSortHint: "Clear search to enable drag sorting",
+    dragSortSaving: "Saving group order...",
     dragSortSaved: "Group order saved",
     dragSortSaveFailed: "Failed to save group order, restored",
     dragHandle: "Drag to reorder",

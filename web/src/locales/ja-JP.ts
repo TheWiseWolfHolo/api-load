@@ -182,6 +182,7 @@ export default {
     searchGroupPlaceholder: "グループ名を検索...",
     noMatchingGroups: "一致するグループが見つかりません",
     dragSortHint: "検索をクリアするとドラッグで並べ替えできます",
+    dragSortSaving: "グループの並び順を保存しています...",
     dragSortSaved: "グループの並び順を保存しました",
     dragSortSaveFailed: "グループの並び順の保存に失敗しました。元に戻しました",
     dragHandle: "ドラッグして並べ替え",

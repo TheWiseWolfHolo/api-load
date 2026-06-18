@@ -138,6 +138,7 @@ const toggleMenu = () => {
 }
 
 .brand-title {
+  font-family: var(--font-display);
   font-size: 1.4rem;
   font-weight: 700;
   background: var(--primary-gradient);
@@ -145,7 +146,7 @@ const toggleMenu = () => {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
 }
 
 .header-actions {

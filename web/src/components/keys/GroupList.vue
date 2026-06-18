@@ -2,9 +2,11 @@
 import { keysApi } from "@/api/keys";
 import type { Group } from "@/types/models";
 import { getGroupDisplayName } from "@/utils/display";
+import { buildGroupReorderItems } from "@/utils/groupOrder";
+import { hasPrimaryCoarsePointer } from "@/utils/pointerMode";
 import { getProviderMeta } from "@/utils/providerMeta";
-import { Add, LinkOutline, Search } from "@vicons/ionicons5";
-import { NButton, NCard, NEmpty, NInput, NSpin, NTag } from "naive-ui";
+import { Add, LinkOutline, MenuOutline, Search } from "@vicons/ionicons5";
+import { NButton, NCard, NEmpty, NIcon, NInput, NSpin, NTag, NTooltip } from "naive-ui";
 import { computed, onBeforeUpdate, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AggregateGroupModal from "./AggregateGroupModal.vue";
@@ -45,7 +47,7 @@ const isTouchDevice = computed(() => {
   if (typeof window === "undefined") {
     return false;
   }
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  return hasPrimaryCoarsePointer(window);
 });
 
 const hasSearchFilter = computed(() => Boolean(searchText.value.trim()));
@@ -215,24 +217,8 @@ function reorderInMemory(
 }
 
 async function persistGroupOrder(previousOrder: Group[]) {
-  const previousSortMap = new Map<number, number>();
-  previousOrder.forEach(group => {
-    if (group.id) {
-      previousSortMap.set(group.id, group.sort);
-    }
-  });
-
-  const items: { id: number; sort: number }[] = [];
-  displayGroups.value.forEach((group, index) => {
-    if (!group.id) {
-      return;
-    }
-    const targetSort = (index + 1) * 10;
-    if (previousSortMap.get(group.id) !== targetSort) {
-      items.push({ id: group.id, sort: targetSort });
-    }
-    group.sort = targetSort;
-  });
+  const { groups, items } = buildGroupReorderItems(displayGroups.value);
+  displayGroups.value = groups;
 
   if (items.length === 0) {
     suspendAutoScroll.value = false;
@@ -370,6 +356,9 @@ function handleDragEnd() {
             />
           </div>
           <div v-else class="groups-list">
+            <div v-if="savingOrder" class="sort-saving-indicator">
+              {{ t("keys.dragSortSaving") }}
+            </div>
             <div
               v-for="group in filteredGroups"
               :key="group.id"
@@ -396,16 +385,25 @@ function handleDragEnd() {
                 }
               "
             >
-              <div
-                class="group-icon"
-                :class="{ 'drag-disabled': !canDrag }"
-                :draggable="canDrag"
-                :role="'button'"
-                :aria-label="t('keys.dragHandle')"
-                :aria-describedby="dragDisabledHint ? `drag-hint-${group.id}` : undefined"
-                @dragstart="handleDragStart($event, group.id)"
-                @dragend="handleDragEnd"
-              >
+              <n-tooltip :disabled="!dragDisabledHint" trigger="hover">
+                <template #trigger>
+                  <div
+                    class="drag-handle"
+                    :class="{ 'drag-disabled': !canDrag }"
+                    :draggable="canDrag"
+                    :role="'button'"
+                    :aria-label="t('keys.dragHandle')"
+                    :aria-describedby="dragDisabledHint ? `drag-hint-${group.id}` : undefined"
+                    @dragstart="handleDragStart($event, group.id)"
+                    @dragend="handleDragEnd"
+                    @click.stop
+                  >
+                    <n-icon :component="MenuOutline" />
+                  </div>
+                </template>
+                {{ dragDisabledHint }}
+              </n-tooltip>
+              <div class="group-icon">
                 <img
                   class="provider-icon"
                   :src="getGroupProviderMeta(group).icon"
@@ -503,17 +501,32 @@ function handleDragEnd() {
 .groups-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   max-height: 100%;
   overflow-y: auto;
   width: 100%;
 }
 
+.sort-saving-indicator {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--primary-color-suppl);
+  border-radius: 6px;
+  background: var(--primary-color-suppl);
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .group-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
+  gap: 7px;
+  min-height: 48px;
+  padding: 7px 8px 7px 6px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -538,7 +551,7 @@ function handleDragEnd() {
   height: 3px;
   border-radius: 3px;
   background: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 0 0 2px var(--primary-color-suppl);
   pointer-events: none;
 }
 
@@ -552,18 +565,18 @@ function handleDragEnd() {
 
 :root.dark .group-item.drop-before::before,
 :root.dark .group-item.drop-after::after {
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 0 0 2px rgba(193, 95, 60, 0.28);
 }
 
 /* 聚合分组样式 */
 .group-item.aggregate {
   border-style: dashed;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(102, 126, 234, 0.05) 100%);
+  background: rgba(193, 95, 60, 0.04);
 }
 
 :root.dark .group-item.aggregate {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(102, 126, 234, 0.1) 100%);
-  border-color: rgba(102, 126, 234, 0.2);
+  background: rgba(222, 115, 86, 0.08);
+  border-color: rgba(222, 115, 86, 0.2);
 }
 
 .group-item:hover,
@@ -573,18 +586,18 @@ function handleDragEnd() {
 }
 
 .group-item.aggregate:hover {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(102, 126, 234, 0.1) 100%);
+  background: rgba(193, 95, 60, 0.08);
   border-style: dashed;
 }
 
 :root.dark .group-item:hover {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(222, 115, 86, 0.1);
+  border-color: rgba(222, 115, 86, 0.3);
 }
 
 :root.dark .group-item.aggregate:hover {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.15) 100%);
-  border-color: rgba(102, 126, 234, 0.4);
+  background: rgba(222, 115, 86, 0.14);
+  border-color: rgba(222, 115, 86, 0.4);
 }
 
 .group-item.aggregate.active {
@@ -602,6 +615,44 @@ function handleDragEnd() {
   border-style: solid;
 }
 
+.drag-handle {
+  width: 18px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  cursor: grab;
+  border-radius: 5px;
+  user-select: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.drag-handle:hover {
+  background: var(--primary-color-suppl);
+  color: var(--primary-color);
+}
+
+.group-item.dragging .drag-handle {
+  cursor: grabbing;
+}
+
+.drag-handle.drag-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.group-item.active .drag-handle {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.group-item.active .drag-handle:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 .group-icon {
   font-size: 16px;
   width: 28px;
@@ -613,7 +664,6 @@ function handleDragEnd() {
   border-radius: 6px;
   flex-shrink: 0;
   box-sizing: border-box;
-  cursor: grab;
   user-select: none;
 }
 
@@ -625,15 +675,6 @@ function handleDragEnd() {
 
 .group-item.active .group-icon {
   background: rgba(255, 255, 255, 0.2);
-}
-
-.group-item.dragging .group-icon {
-  cursor: grabbing;
-}
-
-.group-icon.drag-disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
 }
 
 .group-content {
@@ -719,15 +760,15 @@ function handleDragEnd() {
 
 :root.dark .search-section :deep(.n-input) {
   --n-border: 1px solid rgba(255, 255, 255, 0.08);
-  --n-border-hover: 1px solid rgba(102, 126, 234, 0.4);
+  --n-border-hover: 1px solid rgba(222, 115, 86, 0.4);
   --n-border-focus: 1px solid var(--primary-color);
   background: rgba(255, 255, 255, 0.03);
 }
 
 /* 标签样式优化 */
 :root.dark .group-meta :deep(.n-tag) {
-  background: rgba(102, 126, 234, 0.15);
-  border: 1px solid rgba(102, 126, 234, 0.3);
+  background: rgba(222, 115, 86, 0.15);
+  border: 1px solid rgba(222, 115, 86, 0.3);
 }
 
 :root.dark .group-item.active .group-meta :deep(.n-tag) {

@@ -181,6 +181,7 @@ export default {
     searchGroupPlaceholder: "搜索分组名称...",
     noMatchingGroups: "未找到匹配的分组",
     dragSortHint: "请清空搜索后再拖拽排序",
+    dragSortSaving: "正在保存分组排序...",
     dragSortSaved: "分组排序已保存",
     dragSortSaveFailed: "分组排序保存失败，已恢复原顺序",
     dragHandle: "拖拽排序",
