@@ -100,9 +100,9 @@ onMounted(() => {
       <div class="footer-main">
         <span class="project-info">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noopener noreferrer">
-            <b>GPT-Load</b>
+            <b>API-Load</b>
           </a>
-          <b v-else>GPT-Load</b>
+          <b v-else>API-Load</b>
         </span>
 
         <n-divider vertical />
@@ -194,7 +194,7 @@ onMounted(() => {
         <!-- 版权信息 -->
         <div class="copyright-container">
           <span class="copyright-text">
-            © 2025 GPT-Load
+            © 2025 API-Load
           </span>
           <span class="license-text">MIT License</span>
         </div>

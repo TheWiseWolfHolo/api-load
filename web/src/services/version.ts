@@ -19,7 +19,7 @@ export interface VersionInfo {
   releaseRepository: string | null;
 }
 
-const CACHE_KEY = "gpt-load-version-info";
+const CACHE_KEY = "api-load-version-info";
 const CACHE_DURATION = 30 * 60 * 1000;
 
 class VersionService {

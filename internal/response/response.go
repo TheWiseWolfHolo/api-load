@@ -2,8 +2,8 @@
 package response
 
 import (
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/i18n"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/i18n"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

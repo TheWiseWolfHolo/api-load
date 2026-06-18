@@ -1,8 +1,8 @@
 package httpclient
 
 import (
+	"api-load/internal/utils"
 	"fmt"
-	"gpt-load/internal/utils"
 	"net"
 	"net/http"
 	"net/url"

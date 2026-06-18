@@ -1,10 +1,10 @@
 package services
 
 import (
+	"api-load/internal/models"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gpt-load/internal/models"
 	"net/http"
 	"strings"
 )

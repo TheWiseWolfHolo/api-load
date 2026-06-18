@@ -3,7 +3,7 @@ package keypool
 import (
 	"testing"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 )
 
 func TestSCH001DefaultRoundRobinBehaviorIsUnchanged(t *testing.T) {

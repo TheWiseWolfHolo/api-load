@@ -1,4 +1,4 @@
-module gpt-load
+module api-load
 
 go 1.25.0
 

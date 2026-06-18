@@ -3,7 +3,7 @@ package services
 import (
 	"testing"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 )
 
 func TestLOG001RequestLogsFlushInBatches(t *testing.T) {

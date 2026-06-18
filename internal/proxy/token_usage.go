@@ -3,7 +3,7 @@ package proxy
 import (
 	"encoding/json"
 
-	"gpt-load/internal/services"
+	"api-load/internal/services"
 )
 
 const upstreamTokenUsageContextKey = "upstream_token_usage"

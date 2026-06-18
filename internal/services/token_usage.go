@@ -1,6 +1,6 @@
 package services
 
-import "gpt-load/internal/models"
+import "api-load/internal/models"
 
 type TokenUsage struct {
 	InputTokens      int64

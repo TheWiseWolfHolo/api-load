@@ -1,9 +1,9 @@
 package utils
 
 import (
+	"api-load/internal/models"
+	"api-load/internal/types"
 	"fmt"
-	"gpt-load/internal/models"
-	"gpt-load/internal/types"
 	"os"
 	"reflect"
 	"strconv"

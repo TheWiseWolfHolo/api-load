@@ -1,11 +1,11 @@
 package services
 
 import (
+	"api-load/internal/models"
+	"api-load/internal/utils"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/models"
-	"gpt-load/internal/utils"
 	"regexp"
 	"strings"
 	"unicode/utf8"

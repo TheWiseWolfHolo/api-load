@@ -1,12 +1,12 @@
 package keypool
 
 import (
+	"api-load/internal/encryption"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/models"
+	"api-load/internal/store"
 	"errors"
 	"fmt"
-	"gpt-load/internal/encryption"
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"testing"
 	"time"
 

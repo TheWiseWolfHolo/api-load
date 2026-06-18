@@ -1,8 +1,8 @@
-# GPT-Load Refactor TDD Spec
+# API-Load Refactor TDD Spec
 
 > **For agentic workers:** REQUIRED SUB-SKILL before production changes: use `superpowers:test-driven-development`. Implementation plans should use `superpowers:subagent-driven-development` or `superpowers:executing-plans` task-by-task. Every behavior change below starts with a failing test, verifies the failure reason, then adds minimal production code.
 
-**Goal:** Turn GPT-Load from a round-robin key proxy into a model-aware, cache-friendly, proxy-controllable, migration-ready AI API scheduler without rewriting the existing Go backend or Vue 3 / Naive UI frontend.
+**Goal:** Turn API-Load from a round-robin key proxy into a model-aware, cache-friendly, proxy-controllable, migration-ready AI API scheduler without rewriting the existing Go backend or Vue 3 / Naive UI frontend.
 
 **Architecture:** Keep the current Go service boundaries, but add explicit services for key import/export, key selection strategies, model discovery, model mapping, proxy policies, and system migration. Keep the current proxy request path and group cache model intact, adding narrow interfaces where new behavior needs to plug in. Frontend work should extend the existing `Keys.vue` page and `web/src/components/keys/*` components before introducing new top-level routes.
 
@@ -10,8 +10,8 @@
 
 ## Source Evidence
 
-- Original requirement file: `E:/Script/gpt-load/gptload重构需求.md`.
-- Local checkout: `E:/Script/gpt-load/repo`.
+- Original requirement file: `E:/Script/api-load/apiload重构需求.md`.
+- Local checkout: `E:/Script/api-load/repo`.
 - Current upstream HEAD observed on 2026-06-18: `5579930 docs: blacklist_threshold (#419)`.
 - Current key status constants are only `active` and `invalid` in `internal/models/types.go`.
 - Current key selection rotates `group:{id}:active_keys` in `internal/keypool/provider.go`.
@@ -916,3 +916,5 @@ For UI-heavy phases, also run browser verification against desktop and mobile vi
 - Run the phase verification commands before marking the phase complete.
 - Do not merge Phase 2 scheduler changes until Phase 1 disabled status and import/export tests are green.
 - Do not merge Phase 4 proxy or migration changes until masking tests are green.
+
+

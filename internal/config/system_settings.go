@@ -1,16 +1,16 @@
 package config
 
 import (
+	"api-load/internal/db"
+	"api-load/internal/failover"
+	"api-load/internal/models"
+	"api-load/internal/store"
+	"api-load/internal/syncer"
+	"api-load/internal/types"
+	"api-load/internal/utils"
 	"context"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/db"
-	"gpt-load/internal/failover"
-	"gpt-load/internal/models"
-	"gpt-load/internal/store"
-	"gpt-load/internal/syncer"
-	"gpt-load/internal/types"
-	"gpt-load/internal/utils"
 	"os"
 	"reflect"
 	"strconv"

@@ -1,15 +1,15 @@
 package services
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/failover"
+	"api-load/internal/models"
+	"api-load/internal/store"
+	"api-load/internal/syncer"
+	"api-load/internal/utils"
 	"context"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/config"
-	"gpt-load/internal/failover"
-	"gpt-load/internal/models"
-	"gpt-load/internal/store"
-	"gpt-load/internal/syncer"
-	"gpt-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"

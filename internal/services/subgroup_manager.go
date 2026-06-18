@@ -1,9 +1,9 @@
 package services
 
 import (
+	"api-load/internal/models"
+	"api-load/internal/store"
 	"fmt"
-	"gpt-load/internal/models"
-	"gpt-load/internal/store"
 	"sync"
 
 	"github.com/sirupsen/logrus"

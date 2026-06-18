@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"api-load/internal/encryption"
+	app_errors "api-load/internal/errors"
+	"api-load/internal/i18n"
+	"api-load/internal/models"
+	"api-load/internal/response"
 	"fmt"
-	"gpt-load/internal/encryption"
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/i18n"
-	"gpt-load/internal/models"
-	"gpt-load/internal/response"
 	"strings"
 	"time"
 

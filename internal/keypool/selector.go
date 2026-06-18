@@ -1,11 +1,11 @@
 package keypool
 
 import (
+	app_errors "api-load/internal/errors"
+	"api-load/internal/models"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	app_errors "gpt-load/internal/errors"
-	"gpt-load/internal/models"
 	"strconv"
 	"strings"
 	"time"

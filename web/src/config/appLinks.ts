@@ -1,4 +1,5 @@
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, "");
+const defaultRepositoryUrl = "https://github.com/TheWiseWolfHolo/api-load";
 
 function optionalEnvUrl(value: string | undefined): string | null {
   const trimmed = value?.trim();
@@ -6,7 +7,7 @@ function optionalEnvUrl(value: string | undefined): string | null {
 }
 
 export const appLinks = {
-  repositoryUrl: optionalEnvUrl(import.meta.env.VITE_REPOSITORY_URL),
+  repositoryUrl: optionalEnvUrl(import.meta.env.VITE_REPOSITORY_URL) ?? defaultRepositoryUrl,
   docsUrl: optionalEnvUrl(import.meta.env.VITE_DOCS_URL),
 };
 
@@ -16,10 +17,5 @@ export function getConfiguredReleaseRepository(): string | null {
     return explicitRepo;
   }
 
-  if (!appLinks.repositoryUrl) {
-    return null;
-  }
-
-  const match = appLinks.repositoryUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)$/);
-  return match?.[1] ?? null;
+  return null;
 }

@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"api-load/internal/utils"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -8,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"gpt-load/internal/utils"
 	"io"
 )
 

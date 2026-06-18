@@ -1,9 +1,9 @@
 package services
 
 import (
+	"api-load/internal/models"
 	"encoding/json"
 	"errors"
-	"gpt-load/internal/models"
 	"net/http"
 	"net/http/httptest"
 	"strings"

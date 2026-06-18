@@ -1,10 +1,10 @@
-# GPT-Load Refactor Progress
+# API-Load Refactor Progress
 
-Source spec: `docs/superpowers/specs/2026-06-18-gpt-load-refactor-tdd-spec.md`
+Source spec: `docs/superpowers/specs/2026-06-18-api-load-refactor-tdd-spec.md`
 
 ## Baseline Verification
 
-Branch: `refactor-gpt-load-tdd`
+Branch: `refactor-api-load-tdd`
 
 Environment setup:
 
@@ -118,3 +118,4 @@ Verification:
 - `npm run type-check`: PASS.
 - `npm run lint:check`: PASS with existing CRLF Prettier warnings.
 - `npm run build`: PASS with existing Vite chunk-size warning.
+

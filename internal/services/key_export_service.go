@@ -1,9 +1,9 @@
 package services
 
 import (
+	"api-load/internal/models"
 	"encoding/json"
 	"fmt"
-	"gpt-load/internal/models"
 	"io"
 
 	"github.com/sirupsen/logrus"

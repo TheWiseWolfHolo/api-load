@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"gpt-load/internal/config"
-	db "gpt-load/internal/db/migrations"
-	"gpt-load/internal/i18n"
-	"gpt-load/internal/keypool"
-	"gpt-load/internal/models"
-	"gpt-load/internal/proxy"
-	"gpt-load/internal/services"
-	"gpt-load/internal/store"
-	"gpt-load/internal/types"
-	"gpt-load/internal/version"
+	"api-load/internal/config"
+	db "api-load/internal/db/migrations"
+	"api-load/internal/i18n"
+	"api-load/internal/keypool"
+	"api-load/internal/models"
+	"api-load/internal/proxy"
+	"api-load/internal/services"
+	"api-load/internal/store"
+	"api-load/internal/types"
+	"api-load/internal/version"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -81,7 +81,7 @@ func (a *App) Start() error {
 		return fmt.Errorf("failed to initialize i18n: %w", err)
 	}
 	logrus.Info("i18n initialized successfully.")
-	
+
 	// Master 节点执行初始化
 	if a.configManager.IsMaster() {
 		logrus.Info("Starting as Master Node.")
@@ -149,7 +149,7 @@ func (a *App) Start() error {
 
 	// Start HTTP server in a new goroutine
 	go func() {
-		logrus.Infof("GPT-Load proxy server started successfully on Version: %s", version.Version)
+		logrus.Infof("API-Load proxy server started successfully on Version: %s", version.Version)
 		logrus.Infof("Server address: http://%s:%d", serverConfig.Host, serverConfig.Port)
 		logrus.Info("")
 		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

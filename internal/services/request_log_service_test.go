@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"gpt-load/internal/models"
+	"api-load/internal/models"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"

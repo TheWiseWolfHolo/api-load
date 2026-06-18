@@ -1,10 +1,10 @@
 package keypool
 
 import (
+	"api-load/internal/config"
+	"api-load/internal/encryption"
+	"api-load/internal/models"
 	"context"
-	"gpt-load/internal/config"
-	"gpt-load/internal/encryption"
-	"gpt-load/internal/models"
 	"sync"
 	"sync/atomic"
 	"time"
