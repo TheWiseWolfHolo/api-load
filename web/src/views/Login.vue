@@ -116,27 +116,11 @@ const handleLogin = async () => {
 }
 
 .login-decoration {
-  position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 800px;
-  height: 800px;
-  background: var(--primary-gradient);
-  border-radius: 50%;
-  opacity: 0.1;
-  animation: float 6s ease-in-out infinite;
+  display: none;
 }
 
 .login-decoration-2 {
-  position: absolute;
-  bottom: -50%;
-  left: -20%;
-  width: 600px;
-  height: 600px;
-  background: var(--secondary-gradient);
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 8s ease-in-out infinite reverse;
+  display: none;
 }
 
 @keyframes float {
@@ -163,6 +147,7 @@ const handleLogin = async () => {
 }
 
 .login-title {
+  font-family: var(--font-display);
   font-size: 2.5rem;
   font-weight: 700;
   background: var(--primary-gradient);
@@ -170,7 +155,7 @@ const handleLogin = async () => {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: 8px;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .login-subtitle {
@@ -207,19 +192,19 @@ const handleLogin = async () => {
   background: var(--primary-gradient);
   border: none;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   height: 48px;
   font-size: 1rem;
 }
 
 .login-btn:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  background: linear-gradient(135deg, var(--primary-color-hover) 0%, var(--primary-color) 100%);
   transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 25px rgba(193, 95, 60, 0.28);
 }
 
 :deep(.n-input) {
-  --n-border-radius: 12px;
+  --n-border-radius: 8px;
   --n-height: 48px;
 }
 
@@ -254,7 +239,7 @@ const handleLogin = async () => {
 }
 
 :root.dark .login-btn:hover {
-  background: linear-gradient(135deg, #7c8aac 0%, #8b94c0 100%);
-  box-shadow: 0 8px 25px rgba(139, 157, 245, 0.2);
+  background: linear-gradient(135deg, #de7356 0%, #c15f3c 100%);
+  box-shadow: 0 8px 25px rgba(222, 115, 86, 0.22);
 }
 </style>

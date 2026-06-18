@@ -566,23 +566,23 @@ onMounted(() => {
 <style scoped>
 .chart-container {
   padding: 20px;
-  border-radius: 16px;
+  border-radius: var(--border-radius-lg);
   backdrop-filter: blur(4px);
   border: 1px solid var(--border-color-light);
 }
 
-/* 浅色主题 - 保持原有的紫色渐变设计 */
+/* 浅色主题 */
 :root:not(.dark) .chart-container {
   background: var(--primary-gradient);
   color: white;
 }
 
-/* 暗黑主题 - 使用深蓝紫渐变外层背景 */
+/* 暗黑主题 */
 :root.dark .chart-container {
-  background: linear-gradient(135deg, #525a7a 0%, #424964 100%);
+  background: linear-gradient(135deg, #3a342d 0%, #24211d 100%);
   box-shadow: var(--shadow-md);
-  border: 1px solid rgba(139, 157, 245, 0.2);
-  color: #e8e8e8;
+  border: 1px solid rgba(222, 115, 86, 0.2);
+  color: var(--text-primary);
 }
 
 .chart-header {
@@ -639,7 +639,7 @@ onMounted(() => {
 
 /* .chart-content {
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: var(--border-radius-md);
   padding: 12px;
   color: #333;
 } */
@@ -655,7 +655,7 @@ onMounted(() => {
   gap: 12px;
   padding: 2px;
   backdrop-filter: blur(8px);
-  border-radius: 24px;
+  border-radius: var(--border-radius-md);
 }
 
 /* 浅色主题 */
@@ -677,7 +677,7 @@ onMounted(() => {
   font-weight: 600;
   font-size: 13px;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: var(--border-radius-sm);
   transition: all 0.2s ease;
 }
 

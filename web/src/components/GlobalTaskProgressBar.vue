@@ -223,8 +223,8 @@ function getTaskTitle(): string {
 
 /* 暗黑模式特殊样式 */
 :root.dark .global-task-progress {
-  background: #323841; /* 浅灰色背景，比内容区域浅 */
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #2d2924; /* 比内容区域略浅 */
+  border: 1px solid rgba(244, 243, 238, 0.1);
 }
 
 :root.dark .progress-title {
@@ -236,7 +236,7 @@ function getTaskTitle(): string {
 }
 
 :root.dark .progress-message {
-  background: rgba(102, 126, 234, 0.15);
+  background: rgba(222, 115, 86, 0.15);
   color: var(--text-primary);
 }
 

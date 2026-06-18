@@ -90,7 +90,7 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
 }
 
 :deep(.n-menu-item:hover) {
-  background: rgba(102, 126, 234, 0.1);
+  background: var(--primary-color-suppl);
   transform: translateY(-1px);
   border-radius: var(--border-radius-md);
 }
@@ -104,7 +104,7 @@ function renderMenuItem(key: string, label: string, icon: string): MenuOption {
 }
 
 :deep(.n-menu-item--selected:hover) {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  background: linear-gradient(135deg, var(--primary-color-hover) 0%, var(--primary-color) 100%);
   transform: translateY(-1px);
 }
 </style>
