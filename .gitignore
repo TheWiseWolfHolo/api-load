@@ -85,6 +85,9 @@ node_modules/
 # Gatsby files
 .cache/
 public
+!web/public/
+!web/public/provider-icons/
+!web/public/provider-icons/*.svg
 
 # Temporary folders
 tmp/
