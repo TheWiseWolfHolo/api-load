@@ -45,7 +45,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       borderRadius: "8px",
       borderRadiusSmall: "6px",
       fontFamily:
-        "'Anthropic Sans Text', 'Tiempos Text', 'Noto Serif SC', 'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', serif",
+        "'Anthropic Serif Display', 'Tiempos Text', 'Anthropic Sans Text', 'Noto Serif SC', 'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', serif",
     },
     Card: {
       paddingMedium: "24px",
