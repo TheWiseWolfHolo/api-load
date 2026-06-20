@@ -98,7 +98,7 @@ onMounted(() => {
                   padding: 10px;
                   border-radius: 4px;
                   overflow-x: auto;
-                  font-family: monospace;
+                  font-family: var(--font-mono);
                   font-size: 12px;
                 "
               >
@@ -124,7 +124,7 @@ docker compose run --rm api-load migrate-keys --to "your-encryption-key"</pre
                     padding: 10px;
                     border-radius: 4px;
                     overflow-x: auto;
-                    font-family: monospace;
+                    font-family: var(--font-mono);
                     font-size: 12px;
                   "
                 >
@@ -151,7 +151,7 @@ ENCRYPTION_KEY=your-correct-encryption-key</pre
                     padding: 10px;
                     border-radius: 4px;
                     overflow-x: auto;
-                    font-family: monospace;
+                    font-family: var(--font-mono);
                     font-size: 12px;
                   "
                 >
@@ -181,7 +181,7 @@ docker compose run --rm api-load migrate-keys --from "old-key" --to "new-key"</p
                     padding: 10px;
                     border-radius: 4px;
                     overflow-x: auto;
-                    font-family: monospace;
+                    font-family: var(--font-mono);
                     font-size: 12px;
                   "
                 >
@@ -208,7 +208,7 @@ ENCRYPTION_KEY=your-original-encryption-key</pre
                     padding: 10px;
                     border-radius: 4px;
                     overflow-x: auto;
-                    font-family: monospace;
+                    font-family: var(--font-mono);
                     font-size: 12px;
                   "
                 >

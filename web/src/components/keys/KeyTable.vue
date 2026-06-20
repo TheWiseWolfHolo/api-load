@@ -1229,7 +1229,7 @@ function resetPage() {
 }
 
 .key-text {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   font-weight: 500;
   flex: 1;
   min-width: 0;
@@ -1250,7 +1250,7 @@ function resetPage() {
 }
 
 :deep(.n-input__input-el) {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 

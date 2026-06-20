@@ -152,11 +152,19 @@
 /* 通用颜色（不受主题影响） */
 :root {
   --font-ui:
-    "Tiempos Text", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    "Anthropic Sans Text", "Noto Serif SC", "Tiempos Text", "Microsoft YaHei UI", "PingFang SC",
+    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display:
-    "Tiempos Text", "Noto Serif SC", "Noto Sans SC", "Microsoft YaHei", Georgia, serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    "Anthropic Sans Display", "Anthropic Sans Text", "Noto Serif SC", "Tiempos Text",
+    "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-brand:
+    "Anthropic Serif Display", "Noto Serif SC", "Tiempos Text", "Songti SC", "SimSun", serif;
+  --font-serif:
+    "Anthropic Serif Text", "Noto Serif SC", "Tiempos Text", "Songti SC", "SimSun", serif;
+  --font-mono:
+    "Anthropic Mono Web", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    Courier, monospace;
 
   /* 主题色 */
   --primary-color: #9b5f46;

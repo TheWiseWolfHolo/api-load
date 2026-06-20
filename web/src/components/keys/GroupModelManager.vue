@@ -258,7 +258,7 @@ async function saveModels() {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   color: var(--text-primary);
-  font-family: monospace;
+  font-family: var(--font-mono);
   word-break: break-all;
 }
 

@@ -844,7 +844,7 @@ function resetPage() {
   font-size: 0.8rem;
   color: var(--primary-color);
   margin-left: 8px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   background: var(--bg-secondary);
   border-radius: 4px;
   padding: 2px 6px;
@@ -909,7 +909,7 @@ function resetPage() {
 }
 
 .upstream-url {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.9rem;
   color: var(--text-primary);
   margin-left: 5px;
@@ -958,7 +958,7 @@ function resetPage() {
 }
 
 .aggregate-name {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.9rem;
   color: var(--text-primary);
   width: 200px;
@@ -974,7 +974,7 @@ function resetPage() {
 
 .key-text {
   flex-grow: 1;
-  font-family: monospace;
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.5;
@@ -1025,7 +1025,7 @@ function resetPage() {
 .tooltip-key {
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.75rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   background: rgba(255, 255, 255, 0.15);
   padding: 2px 6px;
   border-radius: 4px;
@@ -1056,7 +1056,7 @@ function resetPage() {
 
 .header-value {
   color: var(--text-primary);
-  font-family: monospace;
+  font-family: var(--font-mono);
   background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 3px;
