@@ -1123,7 +1123,7 @@ const deselectAllColumns = () => {
 }
 
 .key-value-compact {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-primary);
   background: var(--bg-tertiary);
@@ -1189,7 +1189,7 @@ const deselectAllColumns = () => {
 }
 
 .compact-field-content {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   line-height: 1.3;
   word-break: break-all;
@@ -1226,7 +1226,7 @@ const deselectAllColumns = () => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 12px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.5;
   word-break: break-all;
@@ -1240,7 +1240,7 @@ const deselectAllColumns = () => {
 }
 
 .key-value {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: #856404;
   background: #fff3cd;

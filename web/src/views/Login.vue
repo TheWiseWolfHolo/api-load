@@ -147,7 +147,7 @@ const handleLogin = async () => {
 }
 
 .login-title {
-  font-family: var(--font-display);
+  font-family: var(--font-brand);
   font-size: 2.5rem;
   font-weight: 600;
   color: var(--primary-color);

@@ -535,7 +535,7 @@ function formatNumber(num: number): string {
   font-size: 13px;
   font-weight: 500;
   color: #2080f0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   background: #e6f4ff;
   padding: 2px 6px;
   border-radius: 4px;
@@ -622,7 +622,7 @@ function formatNumber(num: number): string {
 }
 
 .key-text {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   font-weight: 500;
   flex: 1;
   min-width: 0;
@@ -641,7 +641,7 @@ function formatNumber(num: number): string {
 }
 
 :deep(.n-input__input-el) {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
@@ -906,7 +906,7 @@ function formatNumber(num: number): string {
 .upstream-input {
   width: 100%;
   font-size: 12px;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-family: var(--font-mono);
   padding: 4px 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 3px;
