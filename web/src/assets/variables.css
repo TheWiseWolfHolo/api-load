@@ -155,9 +155,9 @@
     "Anthropic Sans Text", "Tiempos Text", "Noto Serif SC", "Microsoft YaHei UI", "PingFang SC",
     "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", serif;
   --font-display:
-    "Anthropic Sans Display", "Anthropic Sans Text", "Tiempos Text", "Noto Serif SC",
-    "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", serif;
+    "Anthropic Serif Display", "Tiempos Text", "Anthropic Sans Display", "Anthropic Sans Text",
+    "Noto Serif SC", "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", serif;
   --font-brand:
     "Anthropic Serif Display", "Tiempos Text", "Noto Serif SC", "Songti SC", "SimSun", serif;
   --font-serif:
