@@ -297,7 +297,7 @@ onMounted(() => {
 .stat-value {
   font-family: var(--font-display);
   font-size: 1.9rem;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
   color: var(--text-primary);
