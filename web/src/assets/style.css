@@ -7,6 +7,7 @@
   line-height: 1.6;
   font-weight: 400;
 
+  font-optical-sizing: auto;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
