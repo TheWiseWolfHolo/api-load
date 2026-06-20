@@ -14,9 +14,10 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
+const currentVersion = import.meta.env.VITE_VERSION || "1.0.0";
 
 const versionInfo = ref<VersionInfo>({
-  currentVersion: "0.1.0",
+  currentVersion,
   latestVersion: null,
   isLatest: false,
   hasUpdate: false,

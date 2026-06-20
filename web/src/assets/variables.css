@@ -152,16 +152,16 @@
 /* 通用颜色（不受主题影响） */
 :root {
   --font-ui:
-    "Anthropic Sans Text", "Noto Serif SC", "Tiempos Text", "Microsoft YaHei UI", "PingFang SC",
-    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Noto Serif SC", "Anthropic Sans Text", "Tiempos Text", "Microsoft YaHei UI", "PingFang SC",
+    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", serif;
   --font-display:
-    "Anthropic Sans Display", "Anthropic Sans Text", "Noto Serif SC", "Tiempos Text",
+    "Noto Serif SC", "Anthropic Serif Display", "Anthropic Sans Display", "Tiempos Text",
     "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    "Segoe UI", serif;
   --font-brand:
-    "Anthropic Serif Display", "Noto Serif SC", "Tiempos Text", "Songti SC", "SimSun", serif;
+    "Noto Serif SC", "Anthropic Serif Display", "Tiempos Text", "Songti SC", "SimSun", serif;
   --font-serif:
-    "Anthropic Serif Text", "Noto Serif SC", "Tiempos Text", "Songti SC", "SimSun", serif;
+    "Noto Serif SC", "Anthropic Serif Text", "Tiempos Text", "Songti SC", "SimSun", serif;
   --font-mono:
     "Anthropic Mono Web", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
     Courier, monospace;
