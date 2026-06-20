@@ -258,7 +258,9 @@ onMounted(() => {
 }
 
 .version-text {
+  font-family: var(--font-display);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--text-secondary);
   white-space: nowrap;

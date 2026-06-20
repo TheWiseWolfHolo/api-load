@@ -609,8 +609,10 @@ function formatNumber(num: number): string {
 }
 
 .stat-item strong {
+  font-family: var(--font-display);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .key-actions {
@@ -706,7 +708,9 @@ function formatNumber(num: number): string {
 }
 
 .weight-text {
+  font-family: var(--font-display);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   font-size: 14px;
   min-width: 40px;
@@ -739,8 +743,10 @@ function formatNumber(num: number): string {
 }
 
 .stat-value {
+  font-family: var(--font-display);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-divider {

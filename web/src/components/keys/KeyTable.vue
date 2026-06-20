@@ -1217,8 +1217,10 @@ function resetPage() {
 }
 
 .stat-item strong {
+  font-family: var(--font-display);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .key-actions {
