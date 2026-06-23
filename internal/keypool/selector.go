@@ -3,8 +3,10 @@ package keypool
 import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/models"
+	"api-load/internal/store"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -29,8 +31,9 @@ type SelectionRNG interface {
 
 // SelectionRequest carries request attributes that strategy selectors may use.
 type SelectionRequest struct {
-	Model    string
-	ProxyKey string
+	Model         string
+	ProxyKey      string
+	ExcludeKeyIDs []uint
 }
 
 // SelectionResult reports scheduler-relevant outcome data for the selected key.
@@ -53,15 +56,16 @@ func (p *KeyProvider) SelectKeyForRequest(group *models.Group, req SelectionRequ
 	if group == nil {
 		return nil, app_errors.ErrNoActiveKeys
 	}
+	excluded := excludedKeySet(req.ExcludeKeyIDs)
 	switch groupSchedulerStrategy(group) {
 	case KeySelectionStrategyRandom:
-		return p.selectRandomKey(group.ID)
+		return p.selectRandomKey(group.ID, excluded)
 	case KeySelectionStrategySticky:
-		return p.selectStickyKey(group, req)
+		return p.selectStickyKey(group, req, excluded)
 	case KeySelectionStrategyFillFirst:
-		return p.selectFillFirstKey(group)
+		return p.selectFillFirstKey(group, excluded)
 	default:
-		return p.SelectKey(group.ID)
+		return p.selectKeyExcluding(group.ID, excluded)
 	}
 }
 
@@ -85,7 +89,7 @@ func groupAffinityScope(group *models.Group) string {
 	return KeyAffinityScopeGroup
 }
 
-func (p *KeyProvider) selectRandomKey(groupID uint) (*models.APIKey, error) {
+func (p *KeyProvider) selectRandomKey(groupID uint, excluded map[uint]struct{}) (*models.APIKey, error) {
 	var keyIDs []uint
 	if err := p.db.Model(&models.APIKey{}).
 		Where("group_id = ? AND status = ?", groupID, models.KeyStatusActive).
@@ -93,20 +97,29 @@ func (p *KeyProvider) selectRandomKey(groupID uint) (*models.APIKey, error) {
 		Pluck("id", &keyIDs).Error; err != nil {
 		return nil, err
 	}
-	if len(keyIDs) == 0 {
+	candidates := make([]uint, 0, len(keyIDs))
+	for _, keyID := range keyIDs {
+		if !isExcludedKey(keyID, excluded) {
+			candidates = append(candidates, keyID)
+		}
+	}
+	if len(candidates) == 0 {
 		return nil, app_errors.ErrNoActiveKeys
 	}
 	index := 0
 	if p.selectionRNG != nil {
-		index = p.selectionRNG.Intn(len(keyIDs))
+		index = p.selectionRNG.Intn(len(candidates))
 	}
-	return p.keyFromStore(groupID, keyIDs[index])
+	return p.keyFromStore(groupID, candidates[index])
 }
 
-func (p *KeyProvider) selectStickyKey(group *models.Group, req SelectionRequest) (*models.APIKey, error) {
+func (p *KeyProvider) selectStickyKey(group *models.Group, req SelectionRequest, excluded map[uint]struct{}) (*models.APIKey, error) {
 	affinityKey := stickyAffinityKey(group.ID, groupAffinityScope(group), req)
 	if rawID, err := p.store.Get(affinityKey); err == nil {
 		if keyID, parseErr := strconv.ParseUint(string(rawID), 10, 64); parseErr == nil {
+			if isExcludedKey(uint(keyID), excluded) {
+				return p.selectKeyExcluding(group.ID, excluded)
+			}
 			apiKey, keyErr := p.keyFromStore(group.ID, uint(keyID))
 			if keyErr == nil {
 				return apiKey, nil
@@ -115,20 +128,84 @@ func (p *KeyProvider) selectStickyKey(group *models.Group, req SelectionRequest)
 		_ = p.store.Delete(affinityKey)
 	}
 
-	apiKey, err := p.SelectKey(group.ID)
+	apiKey, err := p.selectKeyExcluding(group.ID, excluded)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.store.Set(affinityKey, []byte(strconv.FormatUint(uint64(apiKey.ID), 10)), 0); err != nil {
-		return nil, err
+	if len(excluded) == 0 {
+		if err := p.store.Set(affinityKey, []byte(strconv.FormatUint(uint64(apiKey.ID), 10)), 0); err != nil {
+			return nil, err
+		}
 	}
 	return apiKey, nil
 }
 
-func (p *KeyProvider) selectFillFirstKey(group *models.Group) (*models.APIKey, error) {
+func (p *KeyProvider) selectKeyExcluding(groupID uint, excluded map[uint]struct{}) (*models.APIKey, error) {
+	if len(excluded) == 0 {
+		return p.SelectKey(groupID)
+	}
+
+	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
+	listLen, err := p.store.LLen(activeKeysListKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read active key list length: %w", err)
+	}
+	if listLen == 0 {
+		return nil, app_errors.ErrNoActiveKeys
+	}
+
+	for range listLen {
+		keyIDStr, err := p.store.Rotate(activeKeysListKey)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil, app_errors.ErrNoActiveKeys
+			}
+			return nil, fmt.Errorf("failed to rotate key from store: %w", err)
+		}
+
+		keyID, err := strconv.ParseUint(keyIDStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse key ID '%s': %w", keyIDStr, err)
+		}
+		if isExcludedKey(uint(keyID), excluded) {
+			continue
+		}
+
+		apiKey, err := p.keyFromStore(groupID, uint(keyID))
+		if err == nil {
+			return apiKey, nil
+		}
+	}
+
+	return nil, app_errors.ErrNoActiveKeys
+}
+
+func excludedKeySet(keyIDs []uint) map[uint]struct{} {
+	if len(keyIDs) == 0 {
+		return nil
+	}
+	excluded := make(map[uint]struct{}, len(keyIDs))
+	for _, keyID := range keyIDs {
+		excluded[keyID] = struct{}{}
+	}
+	return excluded
+}
+
+func isExcludedKey(keyID uint, excluded map[uint]struct{}) bool {
+	if len(excluded) == 0 {
+		return false
+	}
+	_, ok := excluded[keyID]
+	return ok
+}
+
+func (p *KeyProvider) selectFillFirstKey(group *models.Group, excluded map[uint]struct{}) (*models.APIKey, error) {
 	currentKey := fillFirstCurrentKey(group.ID)
 	if rawID, err := p.store.Get(currentKey); err == nil {
 		if keyID, parseErr := strconv.ParseUint(string(rawID), 10, 64); parseErr == nil {
+			if isExcludedKey(uint(keyID), excluded) {
+				return p.selectNextNonCooldownKey(group.ID, excluded)
+			}
 			if onCooldown, _ := p.store.Exists(fillFirstCooldownKey(uint(keyID))); !onCooldown {
 				apiKey, keyErr := p.keyFromStore(group.ID, uint(keyID))
 				if keyErr == nil {
@@ -139,9 +216,12 @@ func (p *KeyProvider) selectFillFirstKey(group *models.Group) (*models.APIKey, e
 		_ = p.clearFillFirstCurrent(group.ID)
 	}
 
-	apiKey, err := p.selectNextNonCooldownKey(group.ID)
+	apiKey, err := p.selectNextNonCooldownKey(group.ID, excluded)
 	if err != nil {
 		return nil, err
+	}
+	if len(excluded) > 0 {
+		return apiKey, nil
 	}
 	if err := p.store.Set(currentKey, []byte(strconv.FormatUint(uint64(apiKey.ID), 10)), 0); err != nil {
 		return nil, err
@@ -152,7 +232,7 @@ func (p *KeyProvider) selectFillFirstKey(group *models.Group) (*models.APIKey, e
 	return apiKey, nil
 }
 
-func (p *KeyProvider) selectNextNonCooldownKey(groupID uint) (*models.APIKey, error) {
+func (p *KeyProvider) selectNextNonCooldownKey(groupID uint, excluded map[uint]struct{}) (*models.APIKey, error) {
 	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
 	listLen, err := p.store.LLen(activeKeysListKey)
 	if err != nil {
@@ -162,7 +242,7 @@ func (p *KeyProvider) selectNextNonCooldownKey(groupID uint) (*models.APIKey, er
 		return nil, app_errors.ErrNoActiveKeys
 	}
 	for range listLen {
-		apiKey, err := p.SelectKey(groupID)
+		apiKey, err := p.selectKeyExcluding(groupID, excluded)
 		if err != nil {
 			return nil, err
 		}
