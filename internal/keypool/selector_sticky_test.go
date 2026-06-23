@@ -145,3 +145,43 @@ func TestSCH005StickyByModelAndProxyKeyIsolatesProxyEntrypoints(t *testing.T) {
 		t.Fatal("sticky store key included raw proxy key")
 	}
 }
+
+func TestSCH009StickyRetryExcludesFailedKeyForSameRequest(t *testing.T) {
+	provider, db, _ := newTestProvider(t)
+	group := createTestGroup(t, db)
+	group.Config = datatypes.JSONMap{
+		"key_selection_strategy": "sticky",
+		"key_affinity_scope":     "model+proxy_key",
+	}
+
+	keys := []models.APIKey{
+		{GroupID: group.ID, KeyValue: "sk-test-sticky-retry-a", KeyHash: "hash-sticky-retry-a", Status: models.KeyStatusActive},
+		{GroupID: group.ID, KeyValue: "sk-test-sticky-retry-b", KeyHash: "hash-sticky-retry-b", Status: models.KeyStatusActive},
+	}
+	if err := provider.AddKeys(group.ID, keys); err != nil {
+		t.Fatalf("add keys: %v", err)
+	}
+
+	req := SelectionRequest{Model: "gpt-a", ProxyKey: "proxy-secret-a"}
+	first, err := provider.SelectKeyForRequest(&group, req)
+	if err != nil {
+		t.Fatalf("select first sticky key: %v", err)
+	}
+
+	req.ExcludeKeyIDs = []uint{first.ID}
+	retry, err := provider.SelectKeyForRequest(&group, req)
+	if err != nil {
+		t.Fatalf("select retry sticky key: %v", err)
+	}
+	if retry.ID == first.ID {
+		t.Fatalf("expected retry selection to bypass failed sticky key %d", first.ID)
+	}
+
+	afterRetry, err := provider.SelectKeyForRequest(&group, SelectionRequest{Model: "gpt-a", ProxyKey: "proxy-secret-a"})
+	if err != nil {
+		t.Fatalf("select sticky key after retry: %v", err)
+	}
+	if afterRetry.ID != first.ID {
+		t.Fatalf("expected request-local exclusion not to rewrite sticky affinity, got %d want %d", afterRetry.ID, first.ID)
+	}
+}

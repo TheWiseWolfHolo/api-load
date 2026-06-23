@@ -110,7 +110,7 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 
 	isStream := channelHandler.IsStreamRequest(c, bodyBytes)
 
-	ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, finalBodyBytes, isStream, startTime, 0)
+	ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, finalBodyBytes, isStream, startTime, 0, nil)
 }
 
 // executeRequestWithRetry is the core recursive function for handling requests and retries.
@@ -123,12 +123,14 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	isStream bool,
 	startTime time.Time,
 	retryCount int,
+	excludedKeyIDs []uint,
 ) {
 	cfg := group.EffectiveConfig
 
 	selectionReq := keypool.SelectionRequest{
-		Model:    channelHandler.ExtractModel(c, bodyBytes),
-		ProxyKey: extractProxyKeyForAffinity(c),
+		Model:         channelHandler.ExtractModel(c, bodyBytes),
+		ProxyKey:      extractProxyKeyForAffinity(c),
+		ExcludeKeyIDs: excludedKeyIDs,
 	}
 	apiKey, err := ps.keyProvider.SelectKeyForRequest(group, selectionReq)
 	if err != nil {
@@ -265,7 +267,8 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			return
 		}
 
-		ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, bodyBytes, isStream, startTime, retryCount+1)
+		nextExcludedKeyIDs := append(append([]uint(nil), excludedKeyIDs...), apiKey.ID)
+		ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, bodyBytes, isStream, startTime, retryCount+1, nextExcludedKeyIDs)
 		return
 	}
 
