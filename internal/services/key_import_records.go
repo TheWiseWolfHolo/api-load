@@ -77,6 +77,8 @@ func (s *KeyService) ImportKeyRecords(groupID uint, records []KeyImportRecord, o
 			}
 			if updated {
 				result.UpdatedCount++
+			} else {
+				result.IgnoredCount++
 			}
 			continue
 		}
