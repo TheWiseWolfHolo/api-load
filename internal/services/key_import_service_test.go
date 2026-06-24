@@ -89,6 +89,9 @@ func TestIMP005DuplicatePolicyKeepPreservesExistingRecord(t *testing.T) {
 	if result.DuplicateCount != 1 || result.AddedCount != 0 {
 		t.Fatalf("unexpected result: %#v", result)
 	}
+	if result.IgnoredCount != 1 {
+		t.Fatalf("expected kept duplicate to be counted as ignored, got %#v", result)
+	}
 
 	var stored models.APIKey
 	if err := db.Where("key_hash = ?", svc.EncryptionSvc.Hash("sk-test-existing")).First(&stored).Error; err != nil {

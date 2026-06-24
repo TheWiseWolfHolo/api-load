@@ -179,6 +179,8 @@ export interface KeyValidationResult {
 export interface KeyImportResult {
   added_count: number;
   ignored_count: number;
+  duplicate_count: number;
+  updated_count: number;
 }
 
 export interface KeyDeleteResult {
