@@ -11,6 +11,7 @@ import (
 	"api-load/internal/httpclient"
 	"api-load/internal/keypool"
 	"api-load/internal/proxy"
+	"api-load/internal/resourcepool"
 	"api-load/internal/router"
 	"api-load/internal/services"
 	"api-load/internal/store"
@@ -86,6 +87,12 @@ func BuildContainer() (*dig.Container, error) {
 		return nil, err
 	}
 	if err := container.Provide(keypool.NewProvider); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(resourcepool.NewProvider); err != nil {
+		return nil, err
+	}
+	if err := container.Provide(services.NewResourcePoolService); err != nil {
 		return nil, err
 	}
 	if err := container.Provide(keypool.NewKeyValidator); err != nil {

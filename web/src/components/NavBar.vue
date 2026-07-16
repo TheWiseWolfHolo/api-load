@@ -3,6 +3,7 @@ import {
   BarChartOutline,
   DocumentTextOutline,
   KeyOutline,
+  ServerOutline,
   SettingsOutline,
 } from "@vicons/ionicons5";
 import { NIcon, type MenuOption } from "naive-ui";
@@ -25,6 +26,7 @@ const menuOptions = computed<MenuOption[]>(() => {
   const options: MenuOption[] = [
     renderMenuItem("dashboard", t("nav.dashboard"), BarChartOutline),
     renderMenuItem("keys", t("nav.keys"), KeyOutline),
+    renderMenuItem("resource-pools", t("nav.resourcePools"), ServerOutline),
     renderMenuItem("logs", t("nav.logs"), DocumentTextOutline),
     renderMenuItem("settings", t("nav.settings"), SettingsOutline),
   ];

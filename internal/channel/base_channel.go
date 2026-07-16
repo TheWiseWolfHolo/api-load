@@ -81,7 +81,21 @@ func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, groupName string) (
 	if base == nil {
 		return "", fmt.Errorf("no upstream URL configured for channel %s", b.Name)
 	}
+	return buildUpstreamURLFromBase(originalURL, groupName, base)
+}
 
+func (b *BaseChannel) BuildUpstreamURLWithBase(originalURL *url.URL, groupName, baseURL string) (string, error) {
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return "", fmt.Errorf("invalid upstream URL for channel %s", b.Name)
+	}
+	return buildUpstreamURLFromBase(originalURL, groupName, base)
+}
+
+func buildUpstreamURLFromBase(originalURL *url.URL, groupName string, base *url.URL) (string, error) {
+	if originalURL == nil || base == nil {
+		return "", fmt.Errorf("request and upstream URLs are required")
+	}
 	finalURL := *base
 	proxyPrefix := "/proxy/" + groupName
 	requestPath := originalURL.Path

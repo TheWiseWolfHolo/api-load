@@ -14,6 +14,10 @@ type ChannelProxy interface {
 	// BuildUpstreamURL constructs the target URL for the upstream service.
 	BuildUpstreamURL(originalURL *url.URL, groupName string) (string, error)
 
+	// BuildUpstreamURLWithBase constructs the target URL for an atomically
+	// selected physical resource instead of the legacy independent URL pool.
+	BuildUpstreamURLWithBase(originalURL *url.URL, groupName, baseURL string) (string, error)
+
 	// IsConfigStale checks if the channel's configuration is stale compared to the provided group.
 	IsConfigStale(group *models.Group) bool
 

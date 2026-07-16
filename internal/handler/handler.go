@@ -9,6 +9,7 @@ import (
 	"api-load/internal/config"
 	"api-load/internal/encryption"
 	"api-load/internal/i18n"
+	"api-load/internal/resourcepool"
 	"api-load/internal/services"
 	"api-load/internal/types"
 
@@ -24,6 +25,8 @@ type Server struct {
 	SettingsManager            *config.SystemSettingsManager
 	GroupManager               *services.GroupManager
 	GroupService               *services.GroupService
+	ResourcePoolService        *services.ResourcePoolService
+	ResourcePoolProvider       *resourcepool.Provider
 	AggregateGroupService      *services.AggregateGroupService
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
@@ -43,6 +46,8 @@ type NewServerParams struct {
 	SettingsManager            *config.SystemSettingsManager
 	GroupManager               *services.GroupManager
 	GroupService               *services.GroupService
+	ResourcePoolService        *services.ResourcePoolService
+	ResourcePoolProvider       *resourcepool.Provider
 	AggregateGroupService      *services.AggregateGroupService
 	KeyManualValidationService *services.KeyManualValidationService
 	TaskService                *services.TaskService
@@ -62,6 +67,8 @@ func NewServer(params NewServerParams) *Server {
 		SettingsManager:            params.SettingsManager,
 		GroupManager:               params.GroupManager,
 		GroupService:               params.GroupService,
+		ResourcePoolService:        params.ResourcePoolService,
+		ResourcePoolProvider:       params.ResourcePoolProvider,
 		AggregateGroupService:      params.AggregateGroupService,
 		KeyManualValidationService: params.KeyManualValidationService,
 		TaskService:                params.TaskService,

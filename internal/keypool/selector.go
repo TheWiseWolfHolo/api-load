@@ -361,6 +361,13 @@ func IsQuotaOrBillingFailure(message string, patterns []string) bool {
 		"insufficient_quota",
 		"quota_exceeded",
 		"billing_hard_limit",
+		"quota exhausted",
+		"exceeded your current quota",
+		"credit balance is too low",
+		"insufficient credits",
+		"usage limit exceeded",
+		"spending limit",
+		"payment required",
 	}
 	for _, pattern := range append(defaultPatterns, patterns...) {
 		pattern = strings.ToLower(strings.TrimSpace(pattern))

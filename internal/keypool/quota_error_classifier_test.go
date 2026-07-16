@@ -7,6 +7,8 @@ func TestSCH008QuotaErrorClassifierOnlyMatchesExplicitQuotaOrBillingFailures(t *
 		`{"error":{"code":"insufficient_quota"}}`,
 		"quota_exceeded: monthly limit reached",
 		"billing_hard_limit reached",
+		"Your credit balance is too low to access the Anthropic API",
+		"You exceeded your current quota, please check your plan and billing details",
 		"custom vendor says balance exhausted",
 	}
 	for _, message := range quotaMessages {

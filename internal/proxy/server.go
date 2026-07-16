@@ -17,6 +17,7 @@ import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/keypool"
 	"api-load/internal/models"
+	"api-load/internal/resourcepool"
 	"api-load/internal/response"
 	"api-load/internal/services"
 	"api-load/internal/utils"
@@ -28,6 +29,7 @@ import (
 // ProxyServer represents the proxy server
 type ProxyServer struct {
 	keyProvider       *keypool.KeyProvider
+	resourceProvider  *resourcepool.Provider
 	groupManager      *services.GroupManager
 	subGroupManager   *services.SubGroupManager
 	settingsManager   *config.SystemSettingsManager
@@ -39,6 +41,7 @@ type ProxyServer struct {
 // NewProxyServer creates a new proxy server
 func NewProxyServer(
 	keyProvider *keypool.KeyProvider,
+	resourceProvider *resourcepool.Provider,
 	groupManager *services.GroupManager,
 	subGroupManager *services.SubGroupManager,
 	settingsManager *config.SystemSettingsManager,
@@ -48,6 +51,7 @@ func NewProxyServer(
 ) (*ProxyServer, error) {
 	return &ProxyServer{
 		keyProvider:       keyProvider,
+		resourceProvider:  resourceProvider,
 		groupManager:      groupManager,
 		subGroupManager:   subGroupManager,
 		settingsManager:   settingsManager,
@@ -109,6 +113,19 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	}
 
 	isStream := channelHandler.IsStreamRequest(c, bodyBytes)
+	objectRouting, objectRoutingErr := ps.resolveUpstreamObjectRouting(c, originalGroup, group, finalBodyBytes)
+	if objectRoutingErr != nil {
+		response.Error(c, objectRoutingErr)
+		return
+	}
+	c.Set(upstreamObjectRoutingContextKey, objectRouting)
+	affinity := deriveRequestAffinity(c, finalBodyBytes, extractProxyKeyForAffinity(c), ps.encryptionSvc)
+	c.Set(requestAffinityContextKey, affinity)
+	if affinity.Source != "" {
+		c.Header("X-Api-Load-Affinity-Status", affinity.Source)
+	} else {
+		c.Header("X-Api-Load-Affinity-Status", "missing")
+	}
 
 	ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, finalBodyBytes, isStream, startTime, 0, nil)
 }
@@ -132,15 +149,60 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		ProxyKey:      extractProxyKeyForAffinity(c),
 		ExcludeKeyIDs: excludedKeyIDs,
 	}
-	apiKey, err := ps.keyProvider.SelectKeyForRequest(group, selectionReq)
+	var selectedResource *models.UpstreamResource
+	var selectedPoolConfig resourcepool.PoolConfig
+	var apiKey *models.APIKey
+	var err error
+	if group.ResourcePoolID != nil && *group.ResourcePoolID > 0 {
+		c.Set(upstreamResourceIDContextKey, uint(0))
+		affinity, _ := c.Get(requestAffinityContextKey)
+		affinityInfo, _ := affinity.(requestAffinity)
+		selectedPoolConfig, err = ps.resourceProvider.GetPoolConfig(*group.ResourcePoolID)
+		objectRouting := objectRoutingFromContext(c)
+		if err == nil && objectRouting.ForcedResourceID > 0 {
+			selectedResource, err = ps.resourceProvider.SelectBoundResource(
+				objectRouting.ForcedPoolID,
+				objectRouting.ForcedResourceID,
+				group.ChannelType,
+			)
+		} else if err == nil {
+			selectedResource, err = ps.resourceProvider.SelectResource(*group.ResourcePoolID, resourcepool.SelectionRequest{
+				Route:              group.ChannelType,
+				Affinity:           affinityInfo.Hash,
+				ExcludeResourceIDs: excludedKeyIDs,
+				AffinityTTL:        selectedPoolConfig.AffinityTTL,
+			})
+		}
+		if err == nil {
+			apiKey = &models.APIKey{
+				ID:       selectedResource.ID,
+				GroupID:  group.ID,
+				KeyValue: selectedResource.KeyValue,
+				KeyHash:  selectedResource.KeyHash,
+				Status:   selectedResource.Status,
+			}
+			c.Set(upstreamResourceIDContextKey, selectedResource.ID)
+		}
+	} else {
+		apiKey, err = ps.keyProvider.SelectKeyForRequest(group, selectionReq)
+	}
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
-		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
+		message := err.Error()
+		if objectRoutingFromContext(c).ForcedResourceID > 0 {
+			message = "the physical resource that owns this upstream object is unavailable; cross-key migration was refused"
+		}
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, message))
 		ps.logRequest(c, originalGroup, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, models.RequestTypeFinal)
 		return
 	}
 
-	upstreamURL, err := channelHandler.BuildUpstreamURL(c.Request.URL, originalGroup.Name)
+	var upstreamURL string
+	if selectedResource != nil {
+		upstreamURL, err = channelHandler.BuildUpstreamURLWithBase(c.Request.URL, originalGroup.Name, selectedResource.UpstreamURL)
+	} else {
+		upstreamURL, err = channelHandler.BuildUpstreamURL(c.Request.URL, originalGroup.Name)
+	}
 	if err != nil {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, fmt.Sprintf("Failed to build upstream URL: %v", err)))
 		return
@@ -170,6 +232,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	req.Header.Del("Authorization")
 	req.Header.Del("X-Api-Key")
 	req.Header.Del("X-Goog-Api-Key")
+	req.Header.Del(affinityHeader)
 
 	// Apply model redirection
 	finalBodyBytes, err := channelHandler.ApplyModelRedirect(req, bodyBytes, group)
@@ -208,7 +271,8 @@ func (ps *ProxyServer) executeRequestWithRetry(
 
 	// Unified error handling for retries.
 	// Retry policy is fully defined by group.FailoverStatusCodeMatcher (derived from EffectiveConfig).
-	shouldRetryByStatus := resp != nil && shouldFailoverOnStatusCode(resp.StatusCode, group)
+	shouldRetryByStatus := resp != nil && (shouldFailoverOnStatusCode(resp.StatusCode, group) ||
+		(selectedResource != nil && shouldResourceFailoverOnStatusCode(resp.StatusCode)))
 	if err != nil || shouldRetryByStatus {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
@@ -225,6 +289,11 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			errorMessage = err.Error()
 			parsedError = errorMessage
 			logrus.Debugf("Request failed (attempt %d/%d) for key %s: %v", retryCount+1, cfg.MaxRetries, utils.MaskAPIKey(apiKey.KeyValue), err)
+			if selectedResource != nil {
+				if stateErr := ps.resourceProvider.HandleFailure(selectedResource, group.ChannelType, 0, parsedError, nil); stateErr != nil {
+					logrus.WithError(stateErr).WithField("resourceID", selectedResource.ID).Warn("failed to update resource failure state")
+				}
+			}
 		} else {
 			// Retryable upstream response (HTTP status code matched failover policy)
 			statusCode = resp.StatusCode
@@ -238,17 +307,26 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			errorMessage = string(errorBody)
 			parsedError = app_errors.ParseUpstreamError(errorBody)
 			logrus.Debugf("Request failed with status %d (attempt %d/%d) for key %s. Parsed Error: %s", statusCode, retryCount+1, cfg.MaxRetries, utils.MaskAPIKey(apiKey.KeyValue), parsedError)
+			if selectedResource != nil {
+				if stateErr := ps.resourceProvider.HandleFailure(selectedResource, group.ChannelType, statusCode, parsedError, resp.Header); stateErr != nil {
+					logrus.WithError(stateErr).WithField("resourceID", selectedResource.ID).Warn("failed to update resource failure state")
+				}
+			}
 		}
 
-		if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: statusCode, ErrorMessage: parsedError}); err != nil {
-			logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
-		}
+		if selectedResource == nil {
+			if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: statusCode, ErrorMessage: parsedError}); err != nil {
+				logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
+			}
 
-		// 使用解析后的错误信息更新密钥状态
-		ps.keyProvider.UpdateStatus(apiKey, group, false, parsedError)
+			// 使用解析后的错误信息更新密钥状态
+			ps.keyProvider.UpdateStatus(apiKey, group, false, parsedError)
+		}
 
 		// 判断是否为最后一次尝试
-		isLastAttempt := retryCount >= cfg.MaxRetries
+		objectRouting := objectRoutingFromContext(c)
+		uncertainNonReplayableCreation := objectRouting.NonReplayableOnUncertain && (err != nil || statusCode >= http.StatusInternalServerError)
+		isLastAttempt := retryCount >= cfg.MaxRetries || objectRouting.ForcedResourceID > 0 || uncertainNonReplayableCreation
 		requestType := models.RequestTypeRetry
 		if isLastAttempt {
 			requestType = models.RequestTypeFinal
@@ -266,15 +344,62 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			}
 			return
 		}
+		if selectedResource != nil && statusCode == http.StatusTooManyRequests &&
+			!keypool.IsQuotaOrBillingFailure(parsedError, nil) && requestHasAffinity(c) {
+			if waitErr := waitBeforeResourceMigration(c.Request.Context(), resp, selectedPoolConfig.BusyWait); waitErr != nil {
+				return
+			}
+		}
 
 		nextExcludedKeyIDs := append(append([]uint(nil), excludedKeyIDs...), apiKey.ID)
 		ps.executeRequestWithRetry(c, channelHandler, originalGroup, group, bodyBytes, isStream, startTime, retryCount+1, nextExcludedKeyIDs)
 		return
 	}
 
+	if selectedResource != nil && resp.StatusCode >= http.StatusBadRequest {
+		errorBody, readErr := io.ReadAll(resp.Body)
+		if readErr == nil {
+			errorBody = handleGzipCompression(resp, errorBody)
+			resp.Body = io.NopCloser(bytes.NewReader(errorBody))
+			parsedError := app_errors.ParseUpstreamError(errorBody)
+			if stateErr := ps.resourceProvider.HandleFailure(selectedResource, group.ChannelType, resp.StatusCode, parsedError, resp.Header); stateErr != nil {
+				logrus.WithError(stateErr).WithField("resourceID", selectedResource.ID).Warn("failed to update resource failure state")
+			}
+		}
+	}
+
 	// ps.keyProvider.UpdateStatus(apiKey, group, true) // 请求成功不再重置成功次数，减少IO消耗
-	if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: resp.StatusCode}); err != nil {
-		logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
+	if selectedResource == nil {
+		if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: resp.StatusCode}); err != nil {
+			logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
+		}
+	} else if resp.StatusCode < http.StatusBadRequest {
+		if affinityValue, ok := c.Get(requestAffinityContextKey); ok {
+			if affinityInfo, ok := affinityValue.(requestAffinity); ok && affinityInfo.Hash != "" {
+				if refreshErr := ps.resourceProvider.RefreshAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedPoolConfig.AffinityTTL); refreshErr != nil {
+					logrus.WithError(refreshErr).WithField("resourceID", selectedResource.ID).Warn("failed to refresh resource affinity")
+				}
+			}
+		}
+	}
+	objectRouting := objectRoutingFromContext(c)
+	if !isStream && selectedResource != nil && objectRouting.ResponseObjectType != "" &&
+		resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		responseBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			logrus.WithError(readErr).Error("failed to read account-scoped object response")
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrBadGateway, "failed to read upstream object response"))
+			ps.logRequest(c, originalGroup, group, apiKey, startTime, http.StatusBadGateway, readErr, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+			return
+		}
+		bindingBody := handleGzipCompression(resp, responseBody)
+		if bindErr := ps.persistUpstreamObjectBindings(c.Request.Context(), originalGroup.ID, objectRouting, selectedResource, bindingBody); bindErr != nil {
+			logrus.WithError(bindErr).WithField("resourceID", selectedResource.ID).Error("failed to persist upstream object ownership")
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, "failed to persist upstream object ownership; response was withheld to prevent unsafe cross-key routing"))
+			ps.logRequest(c, originalGroup, group, apiKey, startTime, http.StatusInternalServerError, bindErr, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+			return
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(responseBody))
 	}
 	logrus.Debugf("Request for group %s succeeded on attempt %d with key %s", group.Name, retryCount+1, utils.MaskAPIKey(apiKey.KeyValue))
 
@@ -309,6 +434,45 @@ func shouldFailoverOnStatusCode(statusCode int, group *models.Group) bool {
 	return group.FailoverStatusCodeMatcher.Match(statusCode)
 }
 
+func shouldResourceFailoverOnStatusCode(statusCode int) bool {
+	return statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden ||
+		statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
+}
+
+func requestHasAffinity(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	value, ok := c.Get(requestAffinityContextKey)
+	if !ok {
+		return false
+	}
+	affinity, ok := value.(requestAffinity)
+	return ok && affinity.Hash != ""
+}
+
+func waitBeforeResourceMigration(ctx context.Context, resp *http.Response, maximum time.Duration) error {
+	wait := maximum
+	if resp != nil {
+		if raw := resp.Header.Get("Retry-After"); raw != "" {
+			if seconds, parseErr := time.ParseDuration(raw + "s"); parseErr == nil && seconds < wait {
+				wait = seconds
+			}
+		}
+	}
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 func extractProxyKeyForAffinity(c *gin.Context) string {
 	if value := c.GetHeader("Authorization"); value != "" {
 		return value
@@ -318,6 +482,12 @@ func extractProxyKeyForAffinity(c *gin.Context) string {
 	}
 	return c.GetHeader("X-Goog-Api-Key")
 }
+
+const (
+	requestAffinityContextKey       = "api_load_request_affinity"
+	upstreamResourceIDContextKey    = "api_load_upstream_resource_id"
+	upstreamObjectRoutingContextKey = "api_load_upstream_object_routing"
+)
 
 // logRequest is a helper function to create and record a request log.
 func (ps *ProxyServer) logRequest(
@@ -360,6 +530,11 @@ func (ps *ProxyServer) logRequest(
 		IsStream:     isStream,
 		UpstreamAddr: utils.TruncateString(upstreamAddr, 500),
 		RequestBody:  requestBodyToLog,
+	}
+	if value, ok := c.Get(upstreamResourceIDContextKey); ok {
+		if resourceID, ok := value.(uint); ok {
+			logEntry.ResourceID = resourceID
+		}
 	}
 
 	// Set parent group

@@ -13,6 +13,8 @@ API-Load is a high-performance, enterprise-grade AI API transparent proxy servic
 
 ## Features
 
+> For shared Chat/Coding credentials and gateway topology, see [Resource Pools, Sub2API, and Claude Code integration](docs/resource-pools-and-sub2api.md) (Chinese).
+
 - **Transparent Proxy**: Complete preservation of native API formats, supporting OpenAI, Google Gemini, and Anthropic Claude among other formats
 - **Intelligent Key Management**: High-performance key pool with group-based management, disabled status workflows, notes-aware import/export, automatic rotation, and failure recovery
 - **Model-Aware Scheduling**: Model discovery, enabled model management, alias mapping, and selectable key strategies including round-robin, random, sticky, and fill-first
