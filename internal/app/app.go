@@ -14,6 +14,7 @@ import (
 	"api-load/internal/keypool"
 	"api-load/internal/models"
 	"api-load/internal/proxy"
+	"api-load/internal/resourcepool"
 	"api-load/internal/services"
 	"api-load/internal/store"
 	"api-load/internal/types"
@@ -35,6 +36,7 @@ type App struct {
 	requestLogService *services.RequestLogService
 	cronChecker       *keypool.CronChecker
 	keyPoolProvider   *keypool.KeyProvider
+	resourceProvider  *resourcepool.Provider
 	proxyServer       *proxy.ProxyServer
 	storage           store.Store
 	db                *gorm.DB
@@ -52,6 +54,7 @@ type AppParams struct {
 	RequestLogService *services.RequestLogService
 	CronChecker       *keypool.CronChecker
 	KeyPoolProvider   *keypool.KeyProvider
+	ResourceProvider  *resourcepool.Provider
 	ProxyServer       *proxy.ProxyServer
 	Storage           store.Store
 	DB                *gorm.DB
@@ -68,6 +71,7 @@ func NewApp(params AppParams) *App {
 		requestLogService: params.RequestLogService,
 		cronChecker:       params.CronChecker,
 		keyPoolProvider:   params.KeyPoolProvider,
+		resourceProvider:  params.ResourceProvider,
 		proxyServer:       params.ProxyServer,
 		storage:           params.Storage,
 		db:                params.DB,
@@ -97,6 +101,9 @@ func (a *App) Start() error {
 			&models.Group{},
 			&models.GroupSubGroup{},
 			&models.APIKey{},
+			&models.ResourcePool{},
+			&models.UpstreamResource{},
+			&models.UpstreamObjectBinding{},
 			&models.RequestLog{},
 			&models.GroupHourlyStat{},
 		); err != nil {
@@ -121,6 +128,10 @@ func (a *App) Start() error {
 			return fmt.Errorf("failed to load keys into key pool: %w", err)
 		}
 		logrus.Debug("API keys loaded into Redis cache by master.")
+		if err := a.resourceProvider.LoadResourcesFromDB(); err != nil {
+			return fmt.Errorf("failed to load upstream resources into resource pool: %w", err)
+		}
+		logrus.Debug("Upstream resources loaded into cache by master.")
 
 		// 仅 Master 节点启动的服务
 		a.requestLogService.Start()

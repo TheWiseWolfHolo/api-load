@@ -13,6 +13,7 @@ import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/i18n"
 	"api-load/internal/models"
+	"api-load/internal/resourcepool"
 	"api-load/internal/response"
 	"api-load/internal/services"
 
@@ -54,6 +55,7 @@ type GroupCreateRequest struct {
 	DisplayName         string              `json:"display_name"`
 	Description         string              `json:"description"`
 	GroupType           string              `json:"group_type"` // 'standard' or 'aggregate'
+	ResourcePoolID      *uint               `json:"resource_pool_id"`
 	Upstreams           json.RawMessage     `json:"upstreams"`
 	ChannelType         string              `json:"channel_type"`
 	Sort                int                 `json:"sort"`
@@ -80,6 +82,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		DisplayName:         req.DisplayName,
 		Description:         req.Description,
 		GroupType:           req.GroupType,
+		ResourcePoolID:      req.ResourcePoolID,
 		Upstreams:           req.Upstreams,
 		ChannelType:         req.ChannelType,
 		Sort:                req.Sort,
@@ -123,6 +126,8 @@ type GroupUpdateRequest struct {
 	DisplayName         *string             `json:"display_name,omitempty"`
 	Description         *string             `json:"description,omitempty"`
 	GroupType           *string             `json:"group_type,omitempty"`
+	ResourcePoolID      *uint               `json:"resource_pool_id,omitempty"`
+	HasResourcePoolID   bool                `json:"-"`
 	Upstreams           json.RawMessage     `json:"upstreams"`
 	ChannelType         *string             `json:"channel_type,omitempty"`
 	Sort                *int                `json:"sort"`
@@ -134,6 +139,21 @@ type GroupUpdateRequest struct {
 	Config              map[string]any      `json:"config"`
 	HeaderRules         []models.HeaderRule `json:"header_rules"`
 	ProxyKeys           *string             `json:"proxy_keys,omitempty"`
+}
+
+func (r *GroupUpdateRequest) UnmarshalJSON(data []byte) error {
+	type requestAlias GroupUpdateRequest
+	var decoded requestAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*r = GroupUpdateRequest(decoded)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	_, r.HasResourcePoolID = fields["resource_pool_id"]
+	return nil
 }
 
 type GroupReorderItemRequest struct {
@@ -186,6 +206,8 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		DisplayName:         req.DisplayName,
 		Description:         req.Description,
 		GroupType:           req.GroupType,
+		ResourcePoolID:      req.ResourcePoolID,
+		HasResourcePoolID:   req.HasResourcePoolID,
 		ChannelType:         req.ChannelType,
 		Sort:                req.Sort,
 		ValidationEndpoint:  req.ValidationEndpoint,
@@ -254,6 +276,7 @@ type GroupResponse struct {
 	DisplayName         string              `json:"display_name"`
 	Description         string              `json:"description"`
 	GroupType           string              `json:"group_type"`
+	ResourcePoolID      *uint               `json:"resource_pool_id,omitempty"`
 	Upstreams           datatypes.JSON      `json:"upstreams"`
 	ChannelType         string              `json:"channel_type"`
 	Sort                int                 `json:"sort"`
@@ -300,6 +323,7 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		DisplayName:         group.DisplayName,
 		Description:         group.Description,
 		GroupType:           group.GroupType,
+		ResourcePoolID:      group.ResourcePoolID,
 		Upstreams:           group.Upstreams,
 		ChannelType:         group.ChannelType,
 		Sort:                group.Sort,
@@ -380,12 +404,30 @@ func (s *Server) DiscoverGroupModels(c *gin.Context) {
 	}
 
 	var keys []models.APIKey
-	if err := s.DB.WithContext(c.Request.Context()).
-		Where("group_id = ? AND status = ?", group.ID, models.KeyStatusActive).
-		Order("id asc").
-		Find(&keys).Error; err != nil {
-		response.Error(c, app_errors.ParseDBError(err))
-		return
+	if group.ResourcePoolID != nil && *group.ResourcePoolID > 0 {
+		resource, selectErr := s.ResourcePoolProvider.SelectResource(*group.ResourcePoolID, resourcepool.SelectionRequest{Route: group.ChannelType})
+		if selectErr != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, selectErr.Error()))
+			return
+		}
+		keys = []models.APIKey{{
+			ID: resource.ID, GroupID: group.ID, KeyValue: resource.KeyValue,
+			KeyHash: resource.KeyHash, Status: resource.Status,
+		}}
+		upstreams, marshalErr := json.Marshal([]map[string]any{{"url": resource.UpstreamURL, "weight": 1}})
+		if marshalErr != nil {
+			response.Error(c, app_errors.ErrInternalServer)
+			return
+		}
+		group.Upstreams = upstreams
+	} else {
+		if err := s.DB.WithContext(c.Request.Context()).
+			Where("group_id = ? AND status = ?", group.ID, models.KeyStatusActive).
+			Order("id asc").
+			Find(&keys).Error; err != nil {
+			response.Error(c, app_errors.ParseDBError(err))
+			return
+		}
 	}
 	for i := range keys {
 		if s.EncryptionSvc == nil {

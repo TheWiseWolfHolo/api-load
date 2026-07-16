@@ -23,6 +23,11 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("@/views/Logs.vue"),
       },
       {
+        path: "resource-pools",
+        name: "resource-pools",
+        component: () => import("@/views/ResourcePools.vue"),
+      },
+      {
         path: "settings",
         name: "settings",
         component: () => import("@/views/Settings.vue"),

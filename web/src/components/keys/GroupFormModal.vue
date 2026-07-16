@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { keysApi } from "@/api/keys";
+import { resourcePoolsApi } from "@/api/resourcePools";
 import { settingsApi } from "@/api/settings";
 import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
-import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
+import type { Group, GroupConfigOption, ResourcePool, UpstreamInfo } from "@/types/models";
 import {
   Add,
   AlertCircleOutline,
@@ -13,6 +14,7 @@ import {
 } from "@vicons/ionicons5";
 import {
   NButton,
+  NAlert,
   NCard,
   NForm,
   NFormItem,
@@ -94,6 +96,7 @@ interface GroupFormData {
   header_rules: HeaderRuleItem[];
   proxy_keys: string;
   group_type?: string;
+  resource_pool_id: number | null;
 }
 
 // 表单数据
@@ -127,12 +130,21 @@ const formData = reactive<GroupFormData>({
   header_rules: [] as HeaderRuleItem[],
   proxy_keys: "",
   group_type: "standard",
+  resource_pool_id: null,
 });
 
 const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
+const resourcePools = ref<ResourcePool[]>([]);
+const resourcePoolOptions = computed(() => [
+  { label: t("resourcePools.legacyRouting"), value: 0 },
+  ...resourcePools.value.map(pool => ({
+    label: `${pool.name} · ${pool.resource_count}`,
+    value: pool.id,
+  })),
+]);
 const schedulerConfigKeys = new Set([
   "key_selection_strategy",
   "key_affinity_scope",
@@ -258,6 +270,7 @@ watch(
       if (!configOptionsFetched.value) {
         fetchGroupConfigOptions();
       }
+      fetchResourcePools();
       resetForm();
       if (props.group) {
         loadGroupData();
@@ -361,6 +374,7 @@ function resetForm() {
     header_rules: [],
     proxy_keys: "",
     group_type: "standard",
+    resource_pool_id: null,
   });
 
   // 重置用户修改状态追踪
@@ -441,7 +455,12 @@ function loadGroupData() {
     })),
     proxy_keys: props.group.proxy_keys || "",
     group_type: props.group.group_type || "standard",
+    resource_pool_id: props.group.resource_pool_id ?? null,
   });
+}
+
+async function fetchResourcePools() {
+  resourcePools.value = await resourcePoolsApi.listPools();
 }
 
 async function fetchChannelTypes() {
@@ -612,11 +631,10 @@ async function handleSubmit() {
     Object.assign(config, buildSchedulerConfig());
 
     // 构建提交数据
-    const submitData = {
+    const submitData: Partial<Group> = {
       name: formData.name,
       display_name: formData.display_name,
       description: formData.description,
-      upstreams: formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim()),
       channel_type: formData.channel_type,
       sort: formData.sort,
       test_model: formData.test_model,
@@ -633,7 +651,17 @@ async function handleSubmit() {
           action: rule.action,
         })),
       proxy_keys: formData.proxy_keys,
+      resource_pool_id: formData.resource_pool_id || null,
     };
+
+    if (!formData.resource_pool_id) {
+      const upstreams = formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim());
+      if (upstreams.length === 0) {
+        message.error(t("keys.atLeastOneUpstream"));
+        return;
+      }
+      submitData.upstreams = upstreams;
+    }
 
     let res: Group;
     if (props.group?.id) {
@@ -898,8 +926,24 @@ function buildSchedulerConfig(): Record<string, number | string> {
           </n-form-item>
         </div>
 
+        <div v-if="formData.group_type !== 'aggregate'" class="form-section routing-source-section">
+          <h4 class="section-title">{{ t("resourcePools.groupRoutingSource") }}</h4>
+          <n-form-item :label="t('resourcePools.boundPool')" path="resource_pool_id">
+            <n-select
+              v-model:value="formData.resource_pool_id"
+              :options="resourcePoolOptions"
+              :placeholder="t('resourcePools.selectPool')"
+              clearable
+            />
+          </n-form-item>
+          <n-alert v-if="formData.resource_pool_id" type="info" :bordered="false">
+            {{ t("resourcePools.boundPoolHelp") }}
+          </n-alert>
+          <p v-else class="routing-source-help">{{ t("resourcePools.legacyRoutingHelp") }}</p>
+        </div>
+
         <!-- Upstream addresses -->
-        <div class="form-section" style="margin-top: 10px">
+        <div v-if="!formData.resource_pool_id" class="form-section" style="margin-top: 10px">
           <h4 class="section-title">{{ t("keys.upstreamAddresses") }}</h4>
           <n-form-item
             v-for="(upstream, index) in formData.upstreams"
@@ -977,7 +1021,10 @@ function buildSchedulerConfig(): Record<string, number | string> {
           <n-collapse>
             <n-collapse-item name="advanced">
               <template #header>{{ t("keys.advancedConfig") }}</template>
-              <div v-if="formData.group_type !== 'aggregate'" class="config-section">
+              <div
+                v-if="formData.group_type !== 'aggregate' && !formData.resource_pool_id"
+                class="config-section"
+              >
                 <h5 class="config-title-with-tooltip">
                   {{ t("keys.schedulerConfig") }}
                   <n-tooltip trigger="hover" placement="top">
@@ -1410,6 +1457,13 @@ function buildSchedulerConfig(): Record<string, number | string> {
   border-bottom: 2px solid var(--border-color);
 }
 
+.routing-source-help {
+  margin: -4px 0 0 120px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 :deep(.n-form-item-label) {
   font-weight: 500;
 }
@@ -1508,6 +1562,12 @@ function buildSchedulerConfig(): Record<string, number | string> {
   align-items: center;
   gap: 6px;
   font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .routing-source-help {
+    margin-left: 0;
+  }
 }
 
 .collapse-help {

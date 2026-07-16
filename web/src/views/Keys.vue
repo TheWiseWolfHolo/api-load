@@ -6,7 +6,9 @@ import GroupList from "@/components/keys/GroupList.vue";
 import KeyTable from "@/components/keys/KeyTable.vue";
 import SubGroupTable from "@/components/keys/SubGroupTable.vue";
 import type { Group, SubGroupInfo } from "@/types/models";
+import { NAlert, NButton } from "naive-ui";
 import { onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 const groups = ref<Group[]>([]);
@@ -16,6 +18,7 @@ const subGroups = ref<SubGroupInfo[]>([]);
 const loadingSubGroups = ref(false);
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 
 onMounted(async () => {
   await loadGroups();
@@ -155,9 +158,23 @@ function handleNavigateToGroup(groupId: number) {
 
         <!-- 密钥表格区域 / 子分组列表区域 -->
         <div class="key-table-section">
+          <n-alert
+            v-if="selectedGroup?.resource_pool_id"
+            type="info"
+            :bordered="false"
+            class="pool-bound-note"
+          >
+            <div class="pool-note-content">
+              <span>{{ t("resourcePools.poolBoundKeys") }}</span>
+              <n-button size="small" @click="router.push({ name: 'resource-pools' })">
+                {{ t("resourcePools.managePool") }}
+              </n-button>
+            </div>
+          </n-alert>
+
           <!-- 标准分组显示密钥列表 -->
           <key-table
-            v-if="!selectedGroup || selectedGroup.group_type !== 'aggregate'"
+            v-else-if="!selectedGroup || selectedGroup.group_type !== 'aggregate'"
             :selected-group="selectedGroup"
           />
 
@@ -206,6 +223,26 @@ function handleNavigateToGroup(groupId: number) {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.pool-bound-note {
+  margin-top: 4px;
+  background: var(--primary-color-suppl);
+}
+
+.pool-note-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .pool-note-content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (min-width: 768px) {

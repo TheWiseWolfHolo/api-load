@@ -133,6 +133,19 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		groups.GET("/:id/parent-aggregate-groups", serverHandler.GetParentAggregateGroups)
 	}
 
+	resourcePools := api.Group("/resource-pools")
+	{
+		resourcePools.POST("", serverHandler.CreateResourcePool)
+		resourcePools.GET("", serverHandler.ListResourcePools)
+		resourcePools.GET("/:id", serverHandler.GetResourcePool)
+		resourcePools.PUT("/:id", serverHandler.UpdateResourcePool)
+		resourcePools.DELETE("/:id", serverHandler.DeleteResourcePool)
+		resourcePools.POST("/:id/resources", serverHandler.AddResourcePoolResources)
+		resourcePools.GET("/:id/resources", serverHandler.ListResourcePoolResources)
+		resourcePools.PUT("/:id/resources/:resourceId/status", serverHandler.UpdateResourcePoolResourceStatus)
+		resourcePools.DELETE("/:id/resources/:resourceId", serverHandler.DeleteResourcePoolResource)
+	}
+
 	// Key Management Routes
 	keys := api.Group("/keys")
 	{

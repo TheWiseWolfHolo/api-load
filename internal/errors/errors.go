@@ -28,6 +28,8 @@ var (
 	ErrInvalidJSON        = &APIError{HTTPStatus: http.StatusBadRequest, Code: "INVALID_JSON", Message: "Invalid JSON format"}
 	ErrValidation         = &APIError{HTTPStatus: http.StatusBadRequest, Code: "VALIDATION_FAILED", Message: "Input validation failed"}
 	ErrDuplicateResource  = &APIError{HTTPStatus: http.StatusConflict, Code: "DUPLICATE_RESOURCE", Message: "Resource already exists"}
+	ErrResourceInUse      = &APIError{HTTPStatus: http.StatusConflict, Code: "RESOURCE_IN_USE", Message: "Resource is still in use"}
+	ErrObjectOwnerUnknown = &APIError{HTTPStatus: http.StatusConflict, Code: "OBJECT_OWNER_UNKNOWN", Message: "The upstream owner of this object is unknown"}
 	ErrResourceNotFound   = &APIError{HTTPStatus: http.StatusNotFound, Code: "NOT_FOUND", Message: "Resource not found"}
 	ErrInternalServer     = &APIError{HTTPStatus: http.StatusInternalServerError, Code: "INTERNAL_SERVER_ERROR", Message: "An unexpected error occurred"}
 	ErrDatabase           = &APIError{HTTPStatus: http.StatusInternalServerError, Code: "DATABASE_ERROR", Message: "Database operation failed"}

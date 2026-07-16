@@ -13,6 +13,10 @@ const (
 	KeyStatusActive   = "active"
 	KeyStatusInvalid  = "invalid"
 	KeyStatusDisabled = "disabled"
+
+	ResourceStatusActive   = "active"
+	ResourceStatusInvalid  = "invalid"
+	ResourceStatusDisabled = "disabled"
 )
 
 // SystemSetting 对应 system_settings 表
@@ -98,6 +102,7 @@ type Group struct {
 	ProxyKeys           string               `gorm:"type:text" json:"proxy_keys"`
 	Description         string               `gorm:"type:varchar(512)" json:"description"`
 	GroupType           string               `gorm:"type:varchar(50);default:'standard'" json:"group_type"` // 'standard' or 'aggregate'
+	ResourcePoolID      *uint                `gorm:"index" json:"resource_pool_id,omitempty"`
 	Upstreams           datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
 	ValidationEndpoint  string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
 	ChannelType         string               `gorm:"type:varchar(50);not null" json:"channel_type"`
@@ -121,6 +126,58 @@ type Group struct {
 	HeaderRuleList            []HeaderRule               `gorm:"-" json:"-"`
 	ModelRedirectMap          map[string]string          `gorm:"-" json:"-"`
 	FailoverStatusCodeMatcher failover.StatusCodeMatcher `gorm:"-" json:"-"`
+}
+
+// ResourcePool groups physical upstream resources that can be shared by multiple
+// protocol-specific Groups. Groups remain request routes; the pool owns scheduling.
+type ResourcePool struct {
+	ID                   uint               `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name                 string             `gorm:"type:varchar(255);not null;unique" json:"name"`
+	Description          string             `gorm:"type:varchar(512)" json:"description"`
+	Strategy             string             `gorm:"type:varchar(50);not null;default:'round_robin'" json:"strategy"`
+	AffinityTTLSeconds   int                `gorm:"not null;default:3600" json:"affinity_ttl_seconds"`
+	BusyWaitMilliseconds int                `gorm:"not null;default:2000" json:"busy_wait_milliseconds"`
+	Resources            []UpstreamResource `gorm:"foreignKey:ResourcePoolID" json:"resources,omitempty"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
+}
+
+// UpstreamResource is the atomic scheduling unit: one upstream URL paired with
+// one official credential. Its status and quota state are shared across routes.
+type UpstreamResource struct {
+	ID                  uint       `gorm:"primaryKey;autoIncrement" json:"id"`
+	ResourcePoolID      uint       `gorm:"not null;index;uniqueIndex:idx_resource_pool_identity" json:"resource_pool_id"`
+	Name                string     `gorm:"type:varchar(255)" json:"name"`
+	UpstreamURL         string     `gorm:"type:varchar(1000);not null" json:"upstream_url"`
+	KeyValue            string     `gorm:"type:text;not null" json:"key_value"`
+	KeyHash             string     `gorm:"type:varchar(128);not null;index" json:"key_hash"`
+	IdentityHash        string     `gorm:"type:varchar(128);not null;uniqueIndex:idx_resource_pool_identity" json:"identity_hash"`
+	Status              string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
+	FailureCount        int64      `gorm:"not null;default:0" json:"failure_count"`
+	GlobalCooldownUntil *time.Time `gorm:"index" json:"global_cooldown_until,omitempty"`
+	DisabledReason      string     `gorm:"type:varchar(512)" json:"disabled_reason,omitempty"`
+	LastUsedAt          *time.Time `gorm:"index" json:"last_used_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
+const (
+	UpstreamObjectTypeBatch = "batch"
+	UpstreamObjectTypeFile  = "file"
+)
+
+// UpstreamObjectBinding keeps account-scoped OpenAI objects on the physical
+// resource that created them. Batch and file identifiers are not portable
+// across official upstream credentials.
+type UpstreamObjectBinding struct {
+	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	GroupID        uint      `gorm:"not null;index;uniqueIndex:idx_upstream_object_owner" json:"group_id"`
+	ResourcePoolID uint      `gorm:"not null;index" json:"resource_pool_id"`
+	ResourceID     uint      `gorm:"not null;index" json:"resource_id"`
+	ObjectType     string    `gorm:"type:varchar(32);not null;uniqueIndex:idx_upstream_object_owner" json:"object_type"`
+	ObjectID       string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_upstream_object_owner" json:"object_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // APIKey 对应 api_keys 表
@@ -149,6 +206,7 @@ type RequestLog struct {
 	ID                string    `gorm:"type:varchar(36);primaryKey" json:"id"`
 	Timestamp         time.Time `gorm:"not null;index" json:"timestamp"`
 	GroupID           uint      `gorm:"not null;index" json:"group_id"`
+	ResourceID        uint      `gorm:"index" json:"resource_id,omitempty"`
 	GroupName         string    `gorm:"type:varchar(255);index" json:"group_name"`
 	ParentGroupID     uint      `gorm:"index" json:"parent_group_id"`
 	ParentGroupName   string    `gorm:"type:varchar(255);index" json:"parent_group_name"`

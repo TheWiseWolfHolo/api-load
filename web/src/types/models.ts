@@ -132,6 +132,7 @@ export interface Group {
   header_rules?: HeaderRule[];
   proxy_keys: string;
   group_type?: GroupType;
+  resource_pool_id?: number | null;
   sub_groups?: SubGroupInfo[]; // 子分组列表（仅聚合分组）
   sub_group_ids?: number[]; // 子分组ID列表
   created_at?: string;
@@ -181,6 +182,50 @@ export interface KeyImportResult {
   ignored_count: number;
   duplicate_count: number;
   updated_count: number;
+}
+
+export type ResourceStatus = "active" | "invalid" | "disabled";
+
+export interface UpstreamResource {
+  id: number;
+  resource_pool_id: number;
+  name: string;
+  upstream_url: string;
+  masked_key: string;
+  status: ResourceStatus;
+  failure_count: number;
+  global_cooldown_until?: string;
+  disabled_reason?: string;
+  last_used_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResourcePool {
+  id: number;
+  name: string;
+  description: string;
+  strategy: "round_robin";
+  affinity_ttl_seconds: number;
+  busy_wait_milliseconds: number;
+  resource_count: number;
+  resources?: UpstreamResource[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResourcePoolInput {
+  name: string;
+  description?: string;
+  strategy?: "round_robin";
+  affinity_ttl_seconds?: number;
+  busy_wait_milliseconds?: number;
+}
+
+export interface UpstreamResourceInput {
+  name?: string;
+  upstream_url: string;
+  key: string;
 }
 
 export interface KeyDeleteResult {

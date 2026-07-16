@@ -91,6 +91,7 @@ type GroupCreateParams struct {
 	DisplayName         string
 	Description         string
 	GroupType           string
+	ResourcePoolID      *uint
 	Upstreams           json.RawMessage
 	ChannelType         string
 	Sort                int
@@ -111,6 +112,8 @@ type GroupUpdateParams struct {
 	DisplayName         *string
 	Description         *string
 	GroupType           *string
+	ResourcePoolID      *uint
+	HasResourcePoolID   bool
 	Upstreams           json.RawMessage
 	HasUpstreams        bool
 	ChannelType         *string
@@ -188,9 +191,16 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 	var cleanedUpstreams datatypes.JSON
 	var testModel string
 	var validationEndpoint string
+	resourcePoolID, err := s.validateResourcePoolID(ctx, params.ResourcePoolID)
+	if err != nil {
+		return nil, err
+	}
 
 	switch groupType {
 	case "aggregate":
+		if resourcePoolID != nil {
+			return nil, NewI18nError(app_errors.ErrValidation, "validation.aggregate_no_resource_pool", nil)
+		}
 		validationEndpoint = ""
 		cleanedUpstreams = datatypes.JSON("[]")
 		testModel = "-"
@@ -199,11 +209,15 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 		if testModel == "" {
 			return nil, NewI18nError(app_errors.ErrValidation, "validation.test_model_required", nil)
 		}
-		cleaned, err := s.validateAndCleanUpstreams(params.Upstreams)
-		if err != nil {
-			return nil, err
+		if resourcePoolID == nil {
+			cleaned, err := s.validateAndCleanUpstreams(params.Upstreams)
+			if err != nil {
+				return nil, err
+			}
+			cleanedUpstreams = cleaned
+		} else {
+			cleanedUpstreams = datatypes.JSON("[]")
 		}
-		cleanedUpstreams = cleaned
 
 		validationEndpoint = strings.TrimSpace(params.ValidationEndpoint)
 		if !isValidValidationEndpoint(validationEndpoint) {
@@ -239,6 +253,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 		DisplayName:         strings.TrimSpace(params.DisplayName),
 		Description:         strings.TrimSpace(params.Description),
 		GroupType:           groupType,
+		ResourcePoolID:      resourcePoolID,
 		Upstreams:           cleanedUpstreams,
 		ChannelType:         channelType,
 		Sort:                params.Sort,
@@ -283,6 +298,21 @@ func (s *GroupService) ListGroups(ctx context.Context) ([]models.Group, error) {
 	}
 
 	return groups, nil
+}
+
+func (s *GroupService) validateResourcePoolID(ctx context.Context, requested *uint) (*uint, error) {
+	if requested == nil || *requested == 0 {
+		return nil, nil
+	}
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&models.ResourcePool{}).Where("id = ?", *requested).Count(&count).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if count != 1 {
+		return nil, NewI18nError(app_errors.ErrValidation, "validation.resource_pool_not_found", map[string]any{"id": *requested})
+	}
+	id := *requested
+	return &id, nil
 }
 
 // ReorderGroups updates sort values in a single transaction.
@@ -380,12 +410,34 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 		group.Description = strings.TrimSpace(*params.Description)
 	}
 
+	if params.HasResourcePoolID {
+		if group.GroupType == "aggregate" && params.ResourcePoolID != nil && *params.ResourcePoolID > 0 {
+			return nil, NewI18nError(app_errors.ErrValidation, "validation.aggregate_no_resource_pool", nil)
+		}
+		resourcePoolID, err := s.validateResourcePoolID(ctx, params.ResourcePoolID)
+		if err != nil {
+			return nil, err
+		}
+		group.ResourcePoolID = resourcePoolID
+		if resourcePoolID != nil {
+			group.Upstreams = datatypes.JSON("[]")
+		}
+	}
+
 	if params.HasUpstreams {
+		if group.ResourcePoolID != nil {
+			return nil, NewI18nError(app_errors.ErrValidation, "validation.resource_pool_no_upstreams", nil)
+		}
 		cleanedUpstreams, err := s.validateAndCleanUpstreams(params.Upstreams)
 		if err != nil {
 			return nil, err
 		}
 		group.Upstreams = cleanedUpstreams
+	}
+	if group.GroupType != "aggregate" && group.ResourcePoolID == nil {
+		if _, err := s.validateAndCleanUpstreams(json.RawMessage(group.Upstreams)); err != nil {
+			return nil, NewI18nError(app_errors.ErrValidation, "validation.upstreams_required_without_resource_pool", nil)
+		}
 	}
 
 	// Check if this group is used as a sub-group in aggregate groups before allowing critical changes
