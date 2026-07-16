@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -83,7 +84,7 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 		t.Fatalf("create encryption service: %v", err)
 	}
 	provider := resourcepool.NewProvider(db, store.NewMemoryStore(), crypto)
-	if err := provider.AddResources(pool.ID, []models.UpstreamResource{
+	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{
 		{Name: "a", UpstreamURL: serverA.URL, KeyValue: "key-a"},
 		{Name: "b", UpstreamURL: serverB.URL, KeyValue: "key-b"},
 	}); err != nil {
@@ -243,7 +244,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 		t.Fatalf("create encryption service: %v", err)
 	}
 	provider := resourcepool.NewProvider(db, store.NewMemoryStore(), crypto)
-	if err := provider.AddResources(pool.ID, []models.UpstreamResource{
+	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{
 		{Name: "a", UpstreamURL: serverA.URL, KeyValue: "key-a"},
 		{Name: "b", UpstreamURL: serverB.URL, KeyValue: "key-b"},
 	}); err != nil {
@@ -271,6 +272,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 		Name:                      "shared-route",
 		ChannelType:               "anthropic",
 		ResourcePoolID:            &pool.ID,
+		Upstreams:                 datatypes.JSON(`[{"url":"http://127.0.0.1:1","weight":1}]`),
 		FailoverStatusCodeMatcher: matcher,
 		EffectiveConfig: types.SystemSettings{
 			MaxRetries:     1,

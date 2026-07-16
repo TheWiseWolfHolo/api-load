@@ -45,6 +45,23 @@ func TestRES009ResourcePoolHandlerNeverReturnsRawCredential(t *testing.T) {
 	if !strings.Contains(responseBody, `"masked_key":"****9876"`) {
 		t.Fatalf("handler did not return masked identity: %s", responseBody)
 	}
+
+	listRecorder := httptest.NewRecorder()
+	listCtx, _ := gin.CreateTestContext(listRecorder)
+	listCtx.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/resource-pools/1/resources?page=1&page_size=1&search=sk-handler-secret-9876",
+		nil,
+	)
+	listCtx.Params = gin.Params{{Key: "id", Value: strconv.FormatUint(uint64(pool.ID), 10)}}
+	server.ListResourcePoolResources(listCtx)
+	if listRecorder.Code != http.StatusOK {
+		t.Fatalf("expected paginated list status 200, got %d body=%s", listRecorder.Code, listRecorder.Body.String())
+	}
+	listBody := listRecorder.Body.String()
+	if strings.Contains(listBody, "sk-handler-secret") || !strings.Contains(listBody, `"total_items":1`) || !strings.Contains(listBody, `"masked_key":"****9876"`) {
+		t.Fatalf("paginated handler response is unsafe or malformed: %s", listBody)
+	}
 }
 
 func TestRES010GroupUpdateRequestTracksExplicitPoolUnbind(t *testing.T) {

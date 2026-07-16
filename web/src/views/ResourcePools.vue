@@ -1,16 +1,12 @@
 <script setup lang="ts">
 import { resourcePoolsApi } from "@/api/resourcePools";
-import type {
-  ResourcePool,
-  ResourcePoolInput,
-  ResourceStatus,
-  UpstreamResourceInput,
-} from "@/types/models";
+import ResourceManager from "@/components/resource-pools/ResourceManager.vue";
+import type { ResourcePool, ResourcePoolInput, UpstreamResourceInput } from "@/types/models";
 import {
   AddOutline,
+  ChevronDownOutline,
+  ChevronForwardOutline,
   CreateOutline,
-  PauseOutline,
-  PlayOutline,
   RefreshOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
@@ -44,6 +40,8 @@ const savingPool = ref(false);
 const savingResources = ref(false);
 const editingPoolID = ref<number | null>(null);
 const targetPool = ref<ResourcePool | null>(null);
+const expandedPoolIDs = ref(new Set<number>());
+const managerRefreshTokens = reactive<Record<number, number>>({});
 const poolFormRef = ref();
 const resourceUpstreamURL = ref("");
 const resourceKeysText = ref("");
@@ -135,8 +133,7 @@ async function savePool() {
 
 function openResourceImporter(pool: ResourcePool) {
   targetPool.value = pool;
-  const existingURLs = [...new Set((pool.resources ?? []).map(resource => resource.upstream_url))];
-  resourceUpstreamURL.value = existingURLs.length === 1 ? existingURLs[0] : "";
+  resourceUpstreamURL.value = "";
   resourceKeysText.value = "";
   resourcesModalVisible.value = true;
 }
@@ -173,28 +170,17 @@ async function addResources() {
   }
   savingResources.value = true;
   try {
-    await resourcePoolsApi.addResources(targetPool.value.id, resources);
+    const poolID = targetPool.value.id;
+    await resourcePoolsApi.addResources(poolID, resources);
     resourcesModalVisible.value = false;
     resourceUpstreamURL.value = "";
     resourceKeysText.value = "";
     await loadPools();
+    expandedPoolIDs.value = new Set([...expandedPoolIDs.value, poolID]);
+    managerRefreshTokens[poolID] = (managerRefreshTokens[poolID] ?? 0) + 1;
   } finally {
     savingResources.value = false;
   }
-}
-
-async function setResourceStatus(
-  pool: ResourcePool,
-  resourceId: number,
-  status: "active" | "disabled"
-) {
-  await resourcePoolsApi.updateResourceStatus(pool.id, resourceId, status);
-  await loadPools();
-}
-
-async function deleteResource(pool: ResourcePool, resourceId: number) {
-  await resourcePoolsApi.deleteResource(pool.id, resourceId);
-  await loadPools();
 }
 
 async function deletePool(pool: ResourcePool) {
@@ -202,17 +188,18 @@ async function deletePool(pool: ResourcePool) {
   await loadPools();
 }
 
-function statusType(status: ResourceStatus): "success" | "warning" | "error" | "default" {
-  if (status === "active") {
-    return "success";
+function toggleResourceManager(poolID: number) {
+  const next = new Set(expandedPoolIDs.value);
+  if (next.has(poolID)) {
+    next.delete(poolID);
+  } else {
+    next.add(poolID);
   }
-  if (status === "invalid") {
-    return "error";
-  }
-  if (status === "disabled") {
-    return "warning";
-  }
-  return "default";
+  expandedPoolIDs.value = next;
+}
+
+function handleResourcesDeleted(pool: ResourcePool, count: number) {
+  pool.resource_count = Math.max(0, pool.resource_count - count);
 }
 
 function formatTTL(seconds: number): string {
@@ -223,15 +210,6 @@ function formatTTL(seconds: number): string {
     return t("resourcePools.minutes", { value: seconds / 60 });
   }
   return t("resourcePools.seconds", { value: seconds });
-}
-
-function formatDate(value?: string): string {
-  if (!value) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value)
-  );
 }
 </script>
 
@@ -286,6 +264,25 @@ function formatDate(value?: string): string {
             <p v-else class="muted">{{ t("resourcePools.noDescription") }}</p>
           </div>
           <div class="pool-actions">
+            <n-button
+              v-if="pool.resource_count > 0"
+              size="small"
+              secondary
+              @click="toggleResourceManager(pool.id)"
+            >
+              <template #icon>
+                <n-icon
+                  :component="
+                    expandedPoolIDs.has(pool.id) ? ChevronDownOutline : ChevronForwardOutline
+                  "
+                />
+              </template>
+              {{
+                expandedPoolIDs.has(pool.id)
+                  ? t("resourcePools.hideResources")
+                  : t("resourcePools.manageResources")
+              }}
+            </n-button>
             <n-button size="small" @click="openResourceImporter(pool)">
               <template #icon><n-icon :component="AddOutline" /></template>
               {{ t("resourcePools.addResources") }}
@@ -325,74 +322,14 @@ function formatDate(value?: string): string {
           </div>
         </dl>
 
-        <div v-if="pool.resources?.length" class="resource-table" role="table">
-          <div class="resource-row resource-heading" role="row">
-            <span>{{ t("resourcePools.resource") }}</span>
-            <span>{{ t("resourcePools.upstream") }}</span>
-            <span>{{ t("resourcePools.status") }}</span>
-            <span>{{ t("resourcePools.lastUsed") }}</span>
-            <span class="actions-heading">{{ t("common.actions") }}</span>
-          </div>
-          <div
-            v-for="resource in pool.resources"
-            :key="resource.id"
-            class="resource-row"
-            role="row"
-          >
-            <div class="resource-name" role="cell">
-              <strong>{{ resource.name || `#${resource.id}` }}</strong>
-              <code>{{ resource.masked_key }}</code>
-            </div>
-            <div class="resource-url" role="cell" :title="resource.upstream_url">
-              {{ resource.upstream_url }}
-            </div>
-            <div class="resource-status" role="cell">
-              <n-tag size="small" :type="statusType(resource.status)">
-                {{ t(`resourcePools.status_${resource.status}`) }}
-              </n-tag>
-              <small v-if="resource.global_cooldown_until">
-                {{
-                  t("resourcePools.cooldownUntil", {
-                    value: formatDate(resource.global_cooldown_until),
-                  })
-                }}
-              </small>
-              <small v-else-if="resource.disabled_reason">{{ resource.disabled_reason }}</small>
-            </div>
-            <time role="cell">{{ formatDate(resource.last_used_at) }}</time>
-            <div class="resource-actions" role="cell">
-              <n-button
-                v-if="resource.status === 'active'"
-                size="tiny"
-                secondary
-                @click="setResourceStatus(pool, resource.id, 'disabled')"
-              >
-                <template #icon><n-icon :component="PauseOutline" /></template>
-                {{ t("resourcePools.disable") }}
-              </n-button>
-              <n-button
-                v-else
-                size="tiny"
-                secondary
-                type="success"
-                @click="setResourceStatus(pool, resource.id, 'active')"
-              >
-                <template #icon><n-icon :component="PlayOutline" /></template>
-                {{ t("resourcePools.restore") }}
-              </n-button>
-              <n-popconfirm @positive-click="deleteResource(pool, resource.id)">
-                <template #trigger>
-                  <n-button size="tiny" quaternary type="error" :aria-label="t('common.delete')">
-                    <template #icon><n-icon :component="TrashOutline" /></template>
-                  </n-button>
-                </template>
-                {{ t("resourcePools.deleteResourceConfirm") }}
-              </n-popconfirm>
-            </div>
-          </div>
-        </div>
+        <resource-manager
+          v-if="expandedPoolIDs.has(pool.id)"
+          :pool-id="pool.id"
+          :refresh-token="managerRefreshTokens[pool.id] ?? 0"
+          @resources-deleted="count => handleResourcesDeleted(pool, count)"
+        />
         <n-empty
-          v-else
+          v-else-if="pool.resource_count === 0"
           size="small"
           class="pool-empty"
           :description="t('resourcePools.noResources')"
@@ -641,69 +578,6 @@ function formatDate(value?: string): string {
   color: var(--text-primary);
   font-size: 0.84rem;
   font-weight: 600;
-}
-
-.resource-table {
-  overflow-x: auto;
-}
-
-.resource-row {
-  display: grid;
-  grid-template-columns:
-    minmax(150px, 1fr) minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(150px, 0.8fr)
-    minmax(170px, auto);
-  gap: 16px;
-  align-items: center;
-  min-width: 880px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border-color-light);
-}
-
-.resource-row:last-child {
-  border-bottom: 0;
-}
-
-.resource-heading {
-  color: var(--text-tertiary);
-  background: var(--bg-primary);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.resource-name,
-.resource-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-}
-
-.resource-name code,
-.resource-url,
-.resource-row time,
-.resource-status small {
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-}
-
-.resource-name code {
-  font-family: var(--font-mono);
-}
-
-.resource-url {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resource-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 5px;
-}
-
-.actions-heading {
-  text-align: right;
 }
 
 .pool-empty {

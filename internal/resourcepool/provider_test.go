@@ -36,7 +36,7 @@ func newTestProvider(t *testing.T) (*Provider, *gorm.DB, *models.ResourcePool) {
 		{Name: "a", UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"},
 		{Name: "b", UpstreamURL: "https://b.example.invalid", KeyValue: "key-b"},
 	}
-	if err := provider.AddResources(pool.ID, resources); err != nil {
+	if _, err := provider.AddResources(pool.ID, resources); err != nil {
 		t.Fatalf("create resources: %v", err)
 	}
 	if err := provider.LoadResourcesFromDB(); err != nil {
@@ -73,10 +73,10 @@ func TestBAT000UpstreamObjectOwnerCannotMoveBetweenResources(t *testing.T) {
 
 func TestRES000ResourceIdentityIsURLAndKeyPair(t *testing.T) {
 	provider, db, pool := newTestProvider(t)
-	if err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://other.example.invalid", KeyValue: "key-a"}}); err != nil {
+	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://other.example.invalid", KeyValue: "key-a"}}); err != nil {
 		t.Fatalf("same key at different URL should be accepted: %v", err)
 	}
-	if err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"}}); err == nil {
+	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"}}); err == nil {
 		t.Fatal("duplicate URL+key pair should be rejected")
 	}
 	var count int64

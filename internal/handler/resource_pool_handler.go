@@ -30,6 +30,22 @@ type ResourceStatusUpdateRequest struct {
 	Status string `json:"status" binding:"required"`
 }
 
+type ResourceUpdateRequest struct {
+	Name        string  `json:"name"`
+	UpstreamURL string  `json:"upstream_url" binding:"required"`
+	Key         *string `json:"key,omitempty"`
+}
+
+type BulkResourceStatusUpdateRequest struct {
+	ResourceIDs []uint `json:"resource_ids" binding:"required"`
+	Status      string `json:"status" binding:"required"`
+}
+
+type BulkResourceDeleteRequest struct {
+	ResourceIDs []uint   `json:"resource_ids"`
+	Keys        []string `json:"keys"`
+}
+
 func (s *Server) handleResourcePoolError(c *gin.Context, err error) bool {
 	if err == nil {
 		return false
@@ -137,11 +153,77 @@ func (s *Server) ListResourcePoolResources(c *gin.Context) {
 	if !ok {
 		return
 	}
-	resources, err := s.ResourcePoolService.ListResources(c.Request.Context(), id)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	resources, err := s.ResourcePoolService.ListResources(c.Request.Context(), id, services.ResourceListParams{
+		Page:     page,
+		PageSize: pageSize,
+		Search:   c.Query("search"),
+		Status:   c.Query("status"),
+	})
 	if s.handleResourcePoolError(c, err) {
 		return
 	}
 	response.Success(c, resources)
+}
+
+func (s *Server) UpdateResourcePoolResource(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	resourceID, ok := parseResourceID(c, "resourceId")
+	if !ok {
+		return
+	}
+	var req ResourceUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	resource, err := s.ResourcePoolService.UpdateResource(c.Request.Context(), poolID, resourceID, services.ResourceUpdateParams{
+		Name:        req.Name,
+		UpstreamURL: req.UpstreamURL,
+		Key:         req.Key,
+	})
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, resource)
+}
+
+func (s *Server) BulkUpdateResourcePoolResourceStatus(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	var req BulkResourceStatusUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.ResourcePoolService.BulkUpdateResourceStatus(c.Request.Context(), poolID, req.ResourceIDs, req.Status)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, result)
+}
+
+func (s *Server) BulkDeleteResourcePoolResources(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	var req BulkResourceDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.ResourcePoolService.BulkDeleteResources(c.Request.Context(), poolID, req.ResourceIDs, req.Keys)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, result)
 }
 
 func (s *Server) UpdateResourcePoolResourceStatus(c *gin.Context) {

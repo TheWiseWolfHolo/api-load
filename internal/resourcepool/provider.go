@@ -132,34 +132,20 @@ func (p *Provider) GetPoolConfig(poolID uint) (PoolConfig, error) {
 
 // AddResources persists atomic URL+credential resources. Credentials are
 // encrypted at rest and the URL+credential identity is HMACed for deduplication.
-func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource) error {
+func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource) ([]models.UpstreamResource, error) {
 	if poolID == 0 {
-		return errors.New("resource pool ID is required")
+		return nil, errors.New("resource pool ID is required")
 	}
 	if len(resources) == 0 {
-		return nil
+		return []models.UpstreamResource{}, nil
 	}
 	prepared := make([]models.UpstreamResource, len(resources))
 	for i := range resources {
 		resource := resources[i]
 		resource.ResourcePoolID = poolID
-		resource.UpstreamURL = strings.TrimSpace(resource.UpstreamURL)
-		resource.KeyValue = strings.TrimSpace(resource.KeyValue)
-		if resource.UpstreamURL == "" || resource.KeyValue == "" {
-			return fmt.Errorf("resource %d requires upstream URL and key", i)
+		if err := p.prepareResource(&resource, resource.KeyValue); err != nil {
+			return nil, fmt.Errorf("resource %d: %w", i, err)
 		}
-		parsedURL, err := url.ParseRequestURI(resource.UpstreamURL)
-		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-			return fmt.Errorf("resource %d has invalid upstream URL", i)
-		}
-		normalizedURL := strings.TrimRight(resource.UpstreamURL, "/")
-		resource.KeyHash = p.encryptionSvc.Hash(resource.KeyValue)
-		resource.IdentityHash = p.encryptionSvc.Hash(normalizedURL + "\x00" + resource.KeyValue)
-		encryptedKey, err := p.encryptionSvc.Encrypt(resource.KeyValue)
-		if err != nil {
-			return fmt.Errorf("encrypt resource %d key: %w", i, err)
-		}
-		resource.KeyValue = encryptedKey
 		if resource.Status == "" {
 			resource.Status = models.ResourceStatusActive
 		}
@@ -167,13 +153,68 @@ func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource
 	}
 
 	if err := p.db.Create(&prepared).Error; err != nil {
-		return fmt.Errorf("persist upstream resources: %w", err)
+		return nil, fmt.Errorf("persist upstream resources: %w", err)
 	}
 	for i := range prepared {
 		if err := p.SyncResourceToStore(&prepared[i]); err != nil {
-			return err
+			return nil, err
 		}
 	}
+	return prepared, nil
+}
+
+// UpdateResource changes the user-managed fields of one physical resource.
+// A nil key keeps the existing credential while still recomputing the atomic
+// URL+credential identity when the upstream URL changes.
+func (p *Provider) UpdateResource(resource *models.UpstreamResource, name, upstreamURL string, key *string) error {
+	if resource == nil || resource.ID == 0 || resource.ResourcePoolID == 0 {
+		return errors.New("resource and pool IDs are required")
+	}
+	plainKey := ""
+	if key == nil {
+		decrypted, err := p.encryptionSvc.Decrypt(resource.KeyValue)
+		if err != nil {
+			return fmt.Errorf("decrypt existing resource key: %w", err)
+		}
+		plainKey = decrypted
+	} else {
+		plainKey = *key
+	}
+
+	updated := *resource
+	updated.Name = strings.TrimSpace(name)
+	updated.UpstreamURL = upstreamURL
+	if err := p.prepareResource(&updated, plainKey); err != nil {
+		return err
+	}
+	if err := p.db.Save(&updated).Error; err != nil {
+		return fmt.Errorf("persist upstream resource: %w", err)
+	}
+	if err := p.SyncResourceToStore(&updated); err != nil {
+		return err
+	}
+	*resource = updated
+	return nil
+}
+
+func (p *Provider) prepareResource(resource *models.UpstreamResource, plainKey string) error {
+	resource.UpstreamURL = strings.TrimSpace(resource.UpstreamURL)
+	plainKey = strings.TrimSpace(plainKey)
+	if resource.UpstreamURL == "" || plainKey == "" {
+		return errors.New("upstream URL and key are required")
+	}
+	parsedURL, err := url.ParseRequestURI(resource.UpstreamURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return errors.New("invalid upstream URL")
+	}
+	resource.UpstreamURL = strings.TrimRight(resource.UpstreamURL, "/")
+	resource.KeyHash = p.encryptionSvc.Hash(plainKey)
+	resource.IdentityHash = p.encryptionSvc.Hash(resource.UpstreamURL + "\x00" + plainKey)
+	encryptedKey, err := p.encryptionSvc.Encrypt(plainKey)
+	if err != nil {
+		return fmt.Errorf("encrypt key: %w", err)
+	}
+	resource.KeyValue = encryptedKey
 	return nil
 }
 

@@ -654,12 +654,14 @@ async function handleSubmit() {
       resource_pool_id: formData.resource_pool_id || null,
     };
 
-    if (!formData.resource_pool_id) {
-      const upstreams = formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim());
-      if (upstreams.length === 0) {
-        message.error(t("keys.atLeastOneUpstream"));
-        return;
-      }
+    const upstreams = formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim());
+    if (!formData.resource_pool_id && upstreams.length === 0) {
+      message.error(t("keys.atLeastOneUpstream"));
+      return;
+    }
+    // Keep valid legacy upstreams in the group while a shared pool is active.
+    // They remain dormant and are immediately available if the pool is unbound.
+    if (upstreams.length > 0) {
       submitData.upstreams = upstreams;
     }
 

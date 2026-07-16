@@ -1,9 +1,14 @@
 import type {
+  BulkResourceDeleteResult,
+  BulkResourceStatusResult,
+  ResourceListParams,
+  ResourceListResponse,
   ResourcePool,
   ResourcePoolInput,
   ResourceStatus,
   UpstreamResource,
   UpstreamResourceInput,
+  UpstreamResourceUpdateInput,
 } from "@/types/models";
 import http from "@/utils/http";
 
@@ -32,6 +37,20 @@ export const resourcePoolsApi = {
     return response.data || [];
   },
 
+  async listResources(id: number, params: ResourceListParams): Promise<ResourceListResponse> {
+    const response = await http.get(`/resource-pools/${id}/resources`, { params });
+    return response.data;
+  },
+
+  async updateResource(
+    poolId: number,
+    resourceId: number,
+    payload: UpstreamResourceUpdateInput
+  ): Promise<UpstreamResource> {
+    const response = await http.put(`/resource-pools/${poolId}/resources/${resourceId}`, payload);
+    return response.data;
+  },
+
   async updateResourceStatus(
     poolId: number,
     resourceId: number,
@@ -45,5 +64,25 @@ export const resourcePoolsApi = {
 
   deleteResource(poolId: number, resourceId: number): Promise<void> {
     return http.delete(`/resource-pools/${poolId}/resources/${resourceId}`);
+  },
+
+  async bulkUpdateResourceStatus(
+    poolId: number,
+    resourceIds: number[],
+    status: Extract<ResourceStatus, "active" | "disabled">
+  ): Promise<BulkResourceStatusResult> {
+    const response = await http.post(`/resource-pools/${poolId}/resources/batch-status`, {
+      resource_ids: resourceIds,
+      status,
+    });
+    return response.data;
+  },
+
+  async bulkDeleteResources(
+    poolId: number,
+    payload: { resource_ids?: number[]; keys?: string[] }
+  ): Promise<BulkResourceDeleteResult> {
+    const response = await http.post(`/resource-pools/${poolId}/resources/batch-delete`, payload);
+    return response.data;
   },
 };

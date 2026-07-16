@@ -142,7 +142,10 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		resourcePools.DELETE("/:id", serverHandler.DeleteResourcePool)
 		resourcePools.POST("/:id/resources", serverHandler.AddResourcePoolResources)
 		resourcePools.GET("/:id/resources", serverHandler.ListResourcePoolResources)
+		resourcePools.PUT("/:id/resources/:resourceId", serverHandler.UpdateResourcePoolResource)
 		resourcePools.PUT("/:id/resources/:resourceId/status", serverHandler.UpdateResourcePoolResourceStatus)
+		resourcePools.POST("/:id/resources/batch-status", serverHandler.BulkUpdateResourcePoolResourceStatus)
+		resourcePools.POST("/:id/resources/batch-delete", serverHandler.BulkDeleteResourcePoolResources)
 		resourcePools.DELETE("/:id/resources/:resourceId", serverHandler.DeleteResourcePoolResource)
 	}
 
