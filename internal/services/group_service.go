@@ -209,13 +209,16 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 		if testModel == "" {
 			return nil, NewI18nError(app_errors.ErrValidation, "validation.test_model_required", nil)
 		}
-		if resourcePoolID == nil {
+		if resourcePoolID == nil || hasSubmittedUpstreams(params.Upstreams) {
 			cleaned, err := s.validateAndCleanUpstreams(params.Upstreams)
 			if err != nil {
 				return nil, err
 			}
 			cleanedUpstreams = cleaned
 		} else {
+			// A pool-bound group may be created without legacy upstreams. When
+			// upstreams are supplied, keep them as a dormant fallback so a later
+			// unbind can restore legacy routing without re-entry.
 			cleanedUpstreams = datatypes.JSON("[]")
 		}
 
@@ -419,15 +422,9 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 			return nil, err
 		}
 		group.ResourcePoolID = resourcePoolID
-		if resourcePoolID != nil {
-			group.Upstreams = datatypes.JSON("[]")
-		}
 	}
 
 	if params.HasUpstreams {
-		if group.ResourcePoolID != nil {
-			return nil, NewI18nError(app_errors.ErrValidation, "validation.resource_pool_no_upstreams", nil)
-		}
 		cleanedUpstreams, err := s.validateAndCleanUpstreams(params.Upstreams)
 		if err != nil {
 			return nil, err
@@ -556,6 +553,19 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 	}
 
 	return &group, nil
+}
+
+func hasSubmittedUpstreams(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return false
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err == nil {
+		return len(items) > 0
+	}
+	// Let the regular upstream validator report malformed non-empty JSON.
+	return true
 }
 
 // DeleteGroup removes a group and associated resources.

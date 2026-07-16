@@ -209,7 +209,6 @@ export interface ResourcePool {
   affinity_ttl_seconds: number;
   busy_wait_milliseconds: number;
   resource_count: number;
-  resources?: UpstreamResource[];
   created_at: string;
   updated_at: string;
 }
@@ -226,6 +225,39 @@ export interface UpstreamResourceInput {
   name?: string;
   upstream_url: string;
   key: string;
+}
+
+export interface UpstreamResourceUpdateInput {
+  name: string;
+  upstream_url: string;
+  key?: string;
+}
+
+export interface ResourceListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  status?: ResourceStatus | "";
+}
+
+export interface ResourceListResponse {
+  items: UpstreamResource[];
+  pagination: Pagination;
+}
+
+export interface BulkResourceStatusResult {
+  requested_count: number;
+  matched_count: number;
+  updated_count: number;
+}
+
+export interface BulkResourceDeleteResult {
+  requested_id_count: number;
+  requested_key_count: number;
+  matched_count: number;
+  deleted_count: number;
+  blocked_count: number;
+  missing_key_count: number;
 }
 
 export interface KeyDeleteResult {
