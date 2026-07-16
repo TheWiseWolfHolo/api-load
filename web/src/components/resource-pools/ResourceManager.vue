@@ -280,6 +280,9 @@ function formatDate(value?: string): string {
 <template>
   <div class="resource-manager">
     <div class="manager-toolbar">
+      <n-tag size="small" :bordered="false" class="resource-total">
+        {{ t("resourcePools.totalResources", { count: totalItems }) }}
+      </n-tag>
       <n-input
         v-model:value="search"
         clearable
@@ -414,7 +417,6 @@ function formatDate(value?: string): string {
     </n-spin>
 
     <div class="pagination-row">
-      <span>{{ t("resourcePools.totalResources", { count: totalItems }) }}</span>
       <n-pagination
         :page="page"
         :page-size="pageSize"
@@ -521,6 +523,14 @@ function formatDate(value?: string): string {
   width: 140px;
 }
 
+.resource-total {
+  align-self: center;
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .selection-bar {
   justify-content: space-between;
   padding: 9px 20px;
@@ -601,7 +611,7 @@ function formatDate(value?: string): string {
 }
 
 .pagination-row {
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   min-height: 58px;
   padding: 10px 20px;
