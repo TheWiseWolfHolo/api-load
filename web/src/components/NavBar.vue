@@ -67,22 +67,35 @@ function renderMenuItem(key: string, label: string, icon: Component): MenuOption
 </script>
 
 <template>
-  <div>
-    <n-menu :mode="mode" :options="menuOptions" :value="activeMenu" class="modern-menu" />
+  <div class="nav-shell">
+    <n-menu
+      :mode="mode"
+      :options="menuOptions"
+      :value="activeMenu"
+      :responsive="mode === 'horizontal'"
+      class="modern-menu"
+    />
   </div>
 </template>
 
 <style scoped>
+.nav-shell {
+  width: 100%;
+  min-width: 0;
+}
+
 :deep(.nav-menu-item) {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: max-content;
   text-decoration: none;
   color: inherit;
-  padding: 8px;
+  padding: 8px 6px;
   border-radius: var(--border-radius-md);
   transition: all 0.2s ease;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 :deep(.nav-item-icon) {
@@ -94,6 +107,18 @@ function renderMenuItem(key: string, label: string, icon: Component): MenuOption
 
 :deep(.n-menu-item) {
   border-radius: var(--border-radius-md);
+}
+
+:deep(.n-menu--horizontal) {
+  justify-content: center;
+}
+
+:deep(.n-menu--horizontal .n-menu-item-content-header) {
+  min-width: max-content;
+}
+
+:deep(.nav-item-text) {
+  white-space: nowrap;
 }
 
 :deep(.n-menu--vertical .n-menu-item-content) {

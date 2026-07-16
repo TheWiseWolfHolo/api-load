@@ -103,17 +103,16 @@ const toggleMenu = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 8px 0;
-  overflow-x: auto;
   max-width: 1200px;
   margin: 0 auto;
   position: relative;
 }
 
 .header-nav {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: 1 1 auto;
+  min-width: 0;
   z-index: 1;
 }
 
@@ -185,11 +184,6 @@ const toggleMenu = () => {
 
 /* Mobile specific styles */
 @media (max-width: 768px) {
-  .header-nav {
-    position: static;
-    transform: none;
-  }
-
   .header-content {
     overflow-x: visible;
   }

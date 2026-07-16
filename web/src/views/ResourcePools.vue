@@ -31,7 +31,7 @@ import {
   useMessage,
   type FormRules,
 } from "naive-ui";
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -45,7 +45,19 @@ const savingResources = ref(false);
 const editingPoolID = ref<number | null>(null);
 const targetPool = ref<ResourcePool | null>(null);
 const poolFormRef = ref();
-const resourceText = ref("");
+const resourceUpstreamURL = ref("");
+const resourceKeysText = ref("");
+
+const parsedResourceKeys = computed(() =>
+  resourceKeysText.value
+    .split(/[\r\n,]+/)
+    .map(key => key.trim())
+    .filter(Boolean)
+);
+const uniqueResourceKeys = computed(() => [...new Set(parsedResourceKeys.value)]);
+const duplicateResourceKeyCount = computed(
+  () => parsedResourceKeys.value.length - uniqueResourceKeys.value.length
+);
 
 const poolForm = reactive<ResourcePoolInput>({
   name: "",
@@ -123,55 +135,39 @@ async function savePool() {
 
 function openResourceImporter(pool: ResourcePool) {
   targetPool.value = pool;
-  resourceText.value = "";
+  const existingURLs = [...new Set((pool.resources ?? []).map(resource => resource.upstream_url))];
+  resourceUpstreamURL.value = existingURLs.length === 1 ? existingURLs[0] : "";
+  resourceKeysText.value = "";
   resourcesModalVisible.value = true;
 }
 
-function parseResourceLines(): UpstreamResourceInput[] | null {
-  const resources: UpstreamResourceInput[] = [];
-  const lines = resourceText.value.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
-    if (!line) {
-      continue;
+function parseResources(): UpstreamResourceInput[] | null {
+  const upstreamURL = resourceUpstreamURL.value.trim();
+  try {
+    const parsed = new URL(upstreamURL);
+    if (!/^https?:$/.test(parsed.protocol)) {
+      throw new Error("invalid upstream URL");
     }
-    const parts = line.split("|").map(part => part.trim());
-    let name = "";
-    let upstreamUrl = "";
-    let key = "";
-    if (parts.length === 2) {
-      [upstreamUrl, key] = parts;
-    } else if (parts.length >= 3) {
-      name = parts[0];
-      upstreamUrl = parts[1];
-      key = parts.slice(2).join("|").trim();
-    } else {
-      message.error(t("resourcePools.invalidLine", { line: index + 1 }));
-      return null;
-    }
-    try {
-      const parsed = new URL(upstreamUrl);
-      if (!/^https?:$/.test(parsed.protocol) || !key) {
-        throw new Error("invalid resource");
-      }
-    } catch {
-      message.error(t("resourcePools.invalidLine", { line: index + 1 }));
-      return null;
-    }
-    resources.push({ name, upstream_url: upstreamUrl, key });
+  } catch {
+    message.error(t("resourcePools.invalidUpstream"));
+    return null;
   }
-  if (resources.length === 0) {
+  if (uniqueResourceKeys.value.length === 0) {
     message.warning(t("resourcePools.resourcesRequired"));
     return null;
   }
-  return resources;
+  return uniqueResourceKeys.value.map(key => ({
+    name: "",
+    upstream_url: upstreamURL,
+    key,
+  }));
 }
 
 async function addResources() {
   if (!targetPool.value || savingResources.value) {
     return;
   }
-  const resources = parseResourceLines();
+  const resources = parseResources();
   if (!resources) {
     return;
   }
@@ -179,7 +175,8 @@ async function addResources() {
   try {
     await resourcePoolsApi.addResources(targetPool.value.id, resources);
     resourcesModalVisible.value = false;
-    resourceText.value = "";
+    resourceUpstreamURL.value = "";
+    resourceKeysText.value = "";
     await loadPools();
   } finally {
     savingResources.value = false;
@@ -465,14 +462,39 @@ function formatDate(value?: string): string {
         :title="t('resourcePools.addResources')"
       >
         <p class="import-help">{{ t("resourcePools.importHelp") }}</p>
-        <pre>{{ t("resourcePools.importExample") }}</pre>
-        <n-input
-          v-model:value="resourceText"
-          type="textarea"
-          :rows="9"
-          :placeholder="t('resourcePools.importPlaceholder')"
-          spellcheck="false"
-        />
+        <n-form label-placement="top" class="resource-import-form">
+          <n-form-item :label="t('resourcePools.upstreamURL')" required>
+            <n-input
+              v-model:value="resourceUpstreamURL"
+              :placeholder="t('resourcePools.upstreamPlaceholder')"
+              spellcheck="false"
+            />
+          </n-form-item>
+          <n-form-item :label="t('resourcePools.bulkKeys')" required>
+            <div class="key-input-stack">
+              <n-input
+                v-model:value="resourceKeysText"
+                type="textarea"
+                :rows="9"
+                :placeholder="t('resourcePools.keysPlaceholder')"
+                spellcheck="false"
+              />
+              <div class="key-input-meta" aria-live="polite">
+                <span>{{ t("resourcePools.keySeparatorHelp") }}</span>
+                <strong v-if="uniqueResourceKeys.length">
+                  {{ t("resourcePools.keysDetected", { count: uniqueResourceKeys.length }) }}
+                </strong>
+              </div>
+              <small v-if="duplicateResourceKeyCount" class="duplicate-note">
+                {{
+                  t("resourcePools.duplicateKeysIgnored", {
+                    count: duplicateResourceKeyCount,
+                  })
+                }}
+              </small>
+            </div>
+          </n-form-item>
+        </n-form>
         <n-alert type="warning" :bordered="false" class="secret-note">
           {{ t("resourcePools.secretNote") }}
         </n-alert>
@@ -702,15 +724,34 @@ function formatDate(value?: string): string {
   width: 100%;
 }
 
-.resource-importer pre {
-  margin: 8px 0 12px;
-  padding: 10px 12px;
-  overflow-x: auto;
-  color: var(--text-primary);
-  background: var(--code-bg);
-  border-radius: var(--border-radius-md);
-  font-family: var(--font-mono);
+.resource-import-form {
+  margin-top: 14px;
+}
+
+.key-input-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+}
+
+.key-input-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
   font-size: 0.78rem;
+}
+
+.key-input-meta strong {
+  flex-shrink: 0;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.duplicate-note {
+  color: var(--warning-color);
+  font-size: 0.76rem;
 }
 
 .secret-note {

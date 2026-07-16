@@ -678,15 +678,20 @@ export default {
     restore: "復元",
     deleteResourceConfirm:
       "この物理リソースを完全に削除しますか？Batch/File を所有している場合は拒否されます。",
-    importHelp: "1行ごとに name | upstream URL | key。名前を省略する場合は URL | key。",
-    importExample:
-      "seat-a | https://api.anthropic.com | <ANTHROPIC_KEY>\nseat-b | https://api.openai.com | <OPENAI_KEY>",
-    importPlaceholder: "seat-a | https://api.example.com | <UPSTREAM_KEY>",
+    importHelp: "上流 URL は一度だけ入力し、下にキーをまとめて貼り付けます。",
+    upstreamURL: "upstream URL",
+    upstreamPlaceholder: "https://api.example.com",
+    bulkKeys: "キー一括入力",
+    keysPlaceholder:
+      "1行に1つのキーを入力：\n<KEY_1>\n<KEY_2>\n\n半角カンマ区切りにも対応しています",
+    keySeparatorHelp: "改行または半角カンマで区切ります。空欄と重複は自動的に無視されます。",
+    keysDetected: "{count} 個のキーを検出",
+    duplicateKeysIgnored: "重複した {count} 個のキーを無視しました",
     secretNote:
       "生のキーは今回の送信時のみ使用されます。保存後はマスクのみ表示され、再表示できません。",
     importResources: "リソースをインポート",
-    invalidLine: "{line} 行目の形式、URL、またはキーが無効です",
-    resourcesRequired: "少なくとも1つのリソースを入力してください",
+    invalidUpstream: "有効な HTTP または HTTPS の上流 URL を入力してください",
+    resourcesRequired: "少なくとも1つのキーを入力してください",
     groupRoutingSource: "物理リソースの取得元",
     boundPool: "リソースプール",
     selectPool: "共有リソースプールを選択",

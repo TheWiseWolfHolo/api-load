@@ -677,15 +677,20 @@ export default {
     restore: "Restore",
     deleteResourceConfirm:
       "Permanently delete this resource? The server refuses while it owns Batch/File objects.",
-    importHelp: "One line per name | upstream URL | key. Omit the name with URL | key.",
-    importExample:
-      "seat-a | https://api.anthropic.com | <ANTHROPIC_KEY>\nseat-b | https://api.openai.com | <OPENAI_KEY>",
-    importPlaceholder: "seat-a | https://api.example.com | <UPSTREAM_KEY>",
+    importHelp: "Enter the upstream once, then paste the entire batch of keys below.",
+    upstreamURL: "upstream URL",
+    upstreamPlaceholder: "https://api.example.com",
+    bulkKeys: "Keys",
+    keysPlaceholder:
+      "Enter one key per line, for example:\n<KEY_1>\n<KEY_2>\n\nYou can also separate keys with commas",
+    keySeparatorHelp: "Separate with new lines or commas. Blanks and duplicates are ignored.",
+    keysDetected: "{count} keys detected",
+    duplicateKeysIgnored: "{count} duplicate keys ignored",
     secretNote:
       "Raw keys are sent only with this submission. After saving, the UI receives a mask and cannot reveal the secret again.",
     importResources: "Import resources",
-    invalidLine: "Line {line} has an invalid format, URL, or key",
-    resourcesRequired: "Enter at least one resource",
+    invalidUpstream: "Enter a valid HTTP or HTTPS upstream URL",
+    resourcesRequired: "Enter at least one key",
     groupRoutingSource: "Physical resource source",
     boundPool: "Resource pool",
     selectPool: "Select a shared resource pool",
