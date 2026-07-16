@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"api-load/internal/channel"
+	"api-load/internal/config"
 	"api-load/internal/encryption"
 	"api-load/internal/failover"
+	"api-load/internal/httpclient"
 	"api-load/internal/models"
 	"api-load/internal/resourcepool"
 	"api-load/internal/store"
@@ -272,7 +274,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 		Name:                      "shared-route",
 		ChannelType:               "anthropic",
 		ResourcePoolID:            &pool.ID,
-		Upstreams:                 datatypes.JSON(`[{"url":"http://127.0.0.1:1","weight":1}]`),
+		Upstreams:                 datatypes.JSON(`[]`),
 		FailoverStatusCodeMatcher: matcher,
 		EffectiveConfig: types.SystemSettings{
 			MaxRetries:     1,
@@ -288,11 +290,11 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 	ctx.Set(requestAffinityContextKey, requestAffinity{Hash: affinityHash, Source: "explicit"})
 
 	proxyServer := &ProxyServer{resourceProvider: provider, encryptionSvc: crypto}
-	channelHandler := &resourceRoutingChannel{BaseChannel: &channel.BaseChannel{
-		Name:         "anthropic",
-		HTTPClient:   &http.Client{Timeout: 5 * time.Second},
-		StreamClient: &http.Client{},
-	}}
+	factory := channel.NewFactory(config.NewSystemSettingsManager(), httpclient.NewHTTPClientManager())
+	channelHandler, err := factory.GetChannel(group)
+	if err != nil {
+		t.Fatalf("create real channel: %v", err)
+	}
 	proxyServer.executeRequestWithRetry(ctx, channelHandler, group, group, body, false, time.Now(), 0, nil)
 
 	if recorder.Code != http.StatusOK {

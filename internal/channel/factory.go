@@ -93,7 +93,8 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		return nil, fmt.Errorf("failed to unmarshal upstreams for %s channel: %w", name, err)
 	}
 
-	if len(defs) == 0 {
+	poolBound := group.ResourcePoolID != nil && *group.ResourcePoolID > 0
+	if len(defs) == 0 && !poolBound {
 		return nil, fmt.Errorf("at least one upstream is required for %s channel", name)
 	}
 
