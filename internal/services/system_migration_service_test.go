@@ -120,7 +120,7 @@ func TestMIG004FullSystemImportExportRoundTripPreservesSupportedFields(t *testin
 	if err := targetDB.Where("key_hash = ?", targetEncryption.Hash("sk-test-roundtrip")).First(&imported).Error; err != nil {
 		t.Fatalf("load imported key: %v", err)
 	}
-	if imported.Notes != "paused" || imported.Status != models.KeyStatusDisabled || imported.RequestCount != 42 {
+	if imported.Notes != "paused" || imported.Status != models.KeyStatusActive || models.CredentialEnabled(imported.Enabled) || imported.RequestCount != 42 {
 		t.Fatalf("round trip did not preserve supported key fields: %#v", imported)
 	}
 

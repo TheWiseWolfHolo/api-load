@@ -45,6 +45,22 @@ func (s *KeyService) ImportKeyRecords(groupID uint, records []KeyImportRecord, o
 		if record.Status == "" {
 			record.Status = models.KeyStatusActive
 		}
+		if record.Status == models.KeyStatusDisabled {
+			record.Status = models.KeyStatusActive
+			record.Enabled = models.Bool(false)
+		}
+		if record.Enabled == nil {
+			record.Enabled = models.Bool(true)
+		}
+		if record.Priority == 0 {
+			record.Priority = models.DefaultCredentialPriority
+		}
+		if record.Weight == 0 {
+			record.Weight = models.DefaultCredentialWeight
+		}
+		if record.Priority < 1 || record.Priority > 1000 || record.Weight < 1 || record.Weight > 1000 {
+			return nil, fmt.Errorf("priority and weight must be between 1 and 1000")
+		}
 		hash := s.EncryptionSvc.Hash(record.Key)
 		if _, exists := recordByHash[hash]; exists {
 			result.IgnoredCount++
@@ -93,6 +109,9 @@ func (s *KeyService) ImportKeyRecords(groupID uint, records []KeyImportRecord, o
 			KeyHash:  hash,
 			Notes:    strings.TrimSpace(record.Notes),
 			Status:   record.Status,
+			Enabled:  models.Bool(models.CredentialEnabled(record.Enabled)),
+			Priority: record.Priority,
+			Weight:   record.Weight,
 		})
 	}
 
@@ -120,22 +139,31 @@ func (s *KeyService) applyDuplicatePolicy(existing models.APIKey, record KeyImpo
 		}
 		existing.Notes = notes
 	case DuplicatePolicyUpdateStatus:
-		if existing.Status == record.Status {
+		if existing.Status == record.Status && models.CredentialEnabled(existing.Enabled) == models.CredentialEnabled(record.Enabled) {
 			return false, nil
 		}
 		existing.Status = record.Status
+		existing.Enabled = models.Bool(models.CredentialEnabled(record.Enabled))
 	case DuplicatePolicyOverwrite:
 		notes := strings.TrimSpace(record.Notes)
-		if existing.Notes == notes && existing.Status == record.Status {
+		if existing.Notes == notes && existing.Status == record.Status &&
+			models.CredentialEnabled(existing.Enabled) == models.CredentialEnabled(record.Enabled) &&
+			existing.Priority == record.Priority && existing.Weight == record.Weight {
 			return false, nil
 		}
 		existing.Notes = notes
 		existing.Status = record.Status
+		existing.Enabled = models.Bool(models.CredentialEnabled(record.Enabled))
+		existing.Priority = record.Priority
+		existing.Weight = record.Weight
 	}
 
 	if err := s.DB.Model(&models.APIKey{}).Where("id = ?", existing.ID).Updates(map[string]any{
-		"notes":  existing.Notes,
-		"status": existing.Status,
+		"notes":    existing.Notes,
+		"status":   existing.Status,
+		"enabled":  models.CredentialEnabled(existing.Enabled),
+		"priority": existing.Priority,
+		"weight":   existing.Weight,
 	}).Error; err != nil {
 		return false, err
 	}

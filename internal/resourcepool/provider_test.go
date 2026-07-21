@@ -94,6 +94,9 @@ func TestRES001AffinityUsesAtomicURLKeyResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first select: %v", err)
 	}
+	if err := provider.BindAffinity(pool.ID, "project-a", first.ID, time.Hour); err != nil {
+		t.Fatalf("bind successful selection: %v", err)
+	}
 	second, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: "project-a"})
 	if err != nil {
 		t.Fatalf("second select: %v", err)
@@ -108,6 +111,9 @@ func TestRES002RouteCooldownMigratesOnlyAffectedRoute(t *testing.T) {
 	first, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: "project-a"})
 	if err != nil {
 		t.Fatalf("first select: %v", err)
+	}
+	if err := provider.BindAffinity(pool.ID, "project-a", first.ID, time.Hour); err != nil {
+		t.Fatalf("bind successful selection: %v", err)
 	}
 	if err := provider.SetRouteCooldown(first.ID, "anthropic", time.Minute); err != nil {
 		t.Fatalf("set route cooldown: %v", err)
@@ -170,6 +176,46 @@ func TestRES004FailureClassificationSeparatesRouteAndGlobalState(t *testing.T) {
 	}
 	if selected, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "openai", ExcludeResourceIDs: []uint{otherID}}); err == nil || selected != nil {
 		t.Fatalf("globally cooled resource remained selectable: %#v %v", selected, err)
+	}
+}
+
+func TestRES005AffinityRebindsOnlyAfterSuccessfulFallback(t *testing.T) {
+	provider, _, pool := newTestProvider(t)
+	const affinity = "project-success-only"
+	first, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: affinity})
+	if err != nil {
+		t.Fatalf("select initial resource: %v", err)
+	}
+	if err := provider.BindAffinity(pool.ID, affinity, first.ID, time.Hour); err != nil {
+		t.Fatalf("bind initial resource: %v", err)
+	}
+
+	fallback, err := provider.SelectResource(pool.ID, SelectionRequest{
+		Route: "anthropic", Affinity: affinity, ExcludeResourceIDs: []uint{first.ID},
+	})
+	if err != nil {
+		t.Fatalf("select fallback: %v", err)
+	}
+	if fallback.ID == first.ID {
+		t.Fatal("fallback did not leave the failed resource")
+	}
+	stillBound, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: affinity})
+	if err != nil {
+		t.Fatalf("read affinity before fallback success: %v", err)
+	}
+	if stillBound.ID != first.ID {
+		t.Fatalf("failed fallback rewrote affinity: got %d want %d", stillBound.ID, first.ID)
+	}
+
+	if err := provider.BindAffinity(pool.ID, affinity, fallback.ID, time.Hour); err != nil {
+		t.Fatalf("bind successful fallback: %v", err)
+	}
+	rebound, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: affinity})
+	if err != nil {
+		t.Fatalf("read rebound affinity: %v", err)
+	}
+	if rebound.ID != fallback.ID {
+		t.Fatalf("successful fallback did not rebind affinity: got %d want %d", rebound.ID, fallback.ID)
 	}
 }
 

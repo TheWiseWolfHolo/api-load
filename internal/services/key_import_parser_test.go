@@ -58,7 +58,7 @@ func TestIMP003JSONLImportSupportsNotesAndStatus(t *testing.T) {
 		t.Fatalf("parse JSONL: %v", err)
 	}
 
-	if got := records[1]; got.Key != "sk-test-b" || got.Notes != "paused" || got.Status != models.KeyStatusDisabled {
+	if got := records[1]; got.Key != "sk-test-b" || got.Notes != "paused" || got.Status != models.KeyStatusActive || models.CredentialEnabled(got.Enabled) {
 		t.Fatalf("unexpected second record: %#v", got)
 	}
 }
@@ -87,7 +87,7 @@ func TestIMP004CSVImportSupportsKeyNotesAndStatusHeaders(t *testing.T) {
 	if len(records) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(records))
 	}
-	if got := records[1]; got.Key != "sk-test-b" || got.Notes != "paused" || got.Status != models.KeyStatusDisabled {
+	if got := records[1]; got.Key != "sk-test-b" || got.Notes != "paused" || got.Status != models.KeyStatusActive || models.CredentialEnabled(got.Enabled) {
 		t.Fatalf("unexpected second record: %#v", got)
 	}
 }

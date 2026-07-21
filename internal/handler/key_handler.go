@@ -4,6 +4,7 @@ import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/models"
 	"api-load/internal/response"
+	"api-load/internal/services"
 	"fmt"
 	"io"
 	"log"
@@ -85,6 +86,22 @@ type UpdateKeyStatusRequest struct {
 type BatchUpdateKeyStatusRequest struct {
 	KeyIDs []uint `json:"key_ids" binding:"required"`
 	Status string `json:"status" binding:"required"`
+}
+
+type UpdateKeyRequest struct {
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Status   *string `json:"status,omitempty"`
+	Priority *int    `json:"priority,omitempty"`
+	Weight   *int    `json:"weight,omitempty"`
+	Notes    *string `json:"notes,omitempty"`
+}
+
+type BatchUpdateKeysRequest struct {
+	KeyIDs   []uint  `json:"key_ids" binding:"required"`
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Status   *string `json:"status,omitempty"`
+	Priority *int    `json:"priority,omitempty"`
+	Weight   *int    `json:"weight,omitempty"`
 }
 
 // AddMultipleKeys handles creating new keys from a text block within a specific group.
@@ -227,7 +244,17 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 		searchHash = s.EncryptionSvc.Hash(generalSearch)
 	}
 
-	query := s.KeyService.ListKeysInGroupQuery(groupID, statusFilter, searchHash, notesKeyword, generalSearch)
+	var enabledFilter *bool
+	if raw := strings.TrimSpace(c.Query("enabled")); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "enabled must be true or false"))
+			return
+		}
+		enabledFilter = &parsed
+	}
+
+	query := s.KeyService.ListKeysInGroupQuery(groupID, statusFilter, enabledFilter, searchHash, notesKeyword, generalSearch)
 
 	var keys []models.APIKey
 	paginatedResult, err := response.Paginate(c, query, &keys)
@@ -249,6 +276,43 @@ func (s *Server) ListKeysInGroup(c *gin.Context) {
 	paginatedResult.Items = keys
 
 	response.Success(c, paginatedResult)
+}
+
+func (s *Server) UpdateKey(c *gin.Context) {
+	keyID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || keyID == 0 {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid key ID format"))
+		return
+	}
+	var req UpdateKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.KeyService.UpdateKeys([]uint{uint(keyID)}, services.KeyUpdateParams{
+		Enabled: req.Enabled, Status: req.Status, Priority: req.Priority, Weight: req.Weight, Notes: req.Notes,
+	})
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		return
+	}
+	response.Success(c, result)
+}
+
+func (s *Server) BatchUpdateKeys(c *gin.Context) {
+	var req BatchUpdateKeysRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.KeyService.UpdateKeys(req.KeyIDs, services.KeyUpdateParams{
+		Enabled: req.Enabled, Status: req.Status, Priority: req.Priority, Weight: req.Weight,
+	})
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		return
+	}
+	response.Success(c, result)
 }
 
 func (s *Server) UpdateKeyStatus(c *gin.Context) {
@@ -553,7 +617,7 @@ func (s *Server) ExportKeys(c *gin.Context) {
 	if format == "" {
 		format = "txt"
 	}
-	if format != "txt" && format != "jsonl" {
+	if format != "txt" && format != "jsonl" && format != "csv" {
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "invalid export format"))
 		return
 	}
@@ -567,6 +631,8 @@ func (s *Server) ExportKeys(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	if format == "jsonl" {
 		c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	} else if format == "csv" {
+		c.Header("Content-Type", "text/csv; charset=utf-8")
 	} else {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 	}

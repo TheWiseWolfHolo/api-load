@@ -43,6 +43,14 @@ type KeyStatusUpdateResult struct {
 	IgnoredCount int `json:"ignored_count"`
 }
 
+type KeyUpdateParams struct {
+	Enabled  *bool
+	Status   *string
+	Priority *int
+	Weight   *int
+	Notes    *string
+}
+
 // KeyService provides services related to API keys.
 type KeyService struct {
 	DB            *gorm.DB
@@ -133,6 +141,9 @@ func (s *KeyService) processAndCreateKeys(
 			KeyValue: encryptedKey,
 			KeyHash:  keyHash,
 			Status:   models.KeyStatusActive,
+			Enabled:  models.Bool(true),
+			Priority: models.DefaultCredentialPriority,
+			Weight:   models.DefaultCredentialWeight,
 		})
 	}
 
@@ -305,50 +316,170 @@ func (s *KeyService) SetKeyStatus(keyID uint, status string) (*KeyStatusUpdateRe
 		return nil, fmt.Errorf("invalid key status: %s", status)
 	}
 
-	var key models.APIKey
-	if err := s.DB.First(&key, keyID).Error; err != nil {
-		return nil, err
+	params := KeyUpdateParams{}
+	switch status {
+	case models.KeyStatusDisabled:
+		params.Enabled = models.Bool(false)
+	case models.KeyStatusActive:
+		params.Enabled = models.Bool(true)
+		params.Status = &status
+	case models.KeyStatusInvalid:
+		params.Status = &status
 	}
-	if key.Status == status {
-		return &KeyStatusUpdateResult{IgnoredCount: 1}, nil
-	}
-
-	updates := map[string]any{"status": status}
-	key.Status = status
-	if status == models.KeyStatusActive {
-		updates["failure_count"] = 0
-		key.FailureCount = 0
-	}
-
-	if err := s.DB.Model(&models.APIKey{}).Where("id = ?", key.ID).Updates(updates).Error; err != nil {
-		return nil, err
-	}
-	if err := s.KeyProvider.SyncKeyToStore(&key); err != nil {
-		return nil, err
-	}
-
-	return &KeyStatusUpdateResult{ChangedCount: 1}, nil
+	return s.UpdateKeys([]uint{keyID}, params)
 }
 
 func (s *KeyService) SetKeysStatus(keyIDs []uint, status string) (*KeyStatusUpdateResult, error) {
-	result := &KeyStatusUpdateResult{}
-	for _, keyID := range keyIDs {
-		itemResult, err := s.SetKeyStatus(keyID, status)
-		if err != nil {
-			return nil, err
-		}
-		result.ChangedCount += itemResult.ChangedCount
-		result.IgnoredCount += itemResult.IgnoredCount
+	if !s.IsValidKeyStatusValue(status) {
+		return nil, fmt.Errorf("invalid key status: %s", status)
 	}
+	params := KeyUpdateParams{}
+	switch status {
+	case models.KeyStatusDisabled:
+		params.Enabled = models.Bool(false)
+	case models.KeyStatusActive:
+		params.Enabled = models.Bool(true)
+		params.Status = &status
+	case models.KeyStatusInvalid:
+		params.Status = &status
+	}
+	return s.UpdateKeys(keyIDs, params)
+}
+
+func (s *KeyService) UpdateKeys(keyIDs []uint, params KeyUpdateParams) (*KeyStatusUpdateResult, error) {
+	ids := uniqueKeyIDs(keyIDs)
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("key_ids cannot be empty")
+	}
+	if params.Priority != nil && (*params.Priority < 1 || *params.Priority > 1000) {
+		return nil, fmt.Errorf("priority must be between 1 and 1000")
+	}
+	if params.Weight != nil && (*params.Weight < 1 || *params.Weight > 1000) {
+		return nil, fmt.Errorf("weight must be between 1 and 1000")
+	}
+	if params.Status != nil && *params.Status != models.KeyStatusActive && *params.Status != models.KeyStatusInvalid {
+		return nil, fmt.Errorf("health status must be active or invalid")
+	}
+	if params.Notes != nil && len([]rune(*params.Notes)) > 255 {
+		return nil, fmt.Errorf("notes length must be <= 255 characters")
+	}
+
+	var keys []models.APIKey
+	if err := s.DB.Where("id IN ?", ids).Find(&keys).Error; err != nil {
+		return nil, err
+	}
+	result := &KeyStatusUpdateResult{IgnoredCount: len(ids) - len(keys)}
+	changedIDs := make([]uint, 0, len(keys))
+	for i := range keys {
+		key := &keys[i]
+		changed := false
+		if params.Enabled != nil && models.CredentialEnabled(key.Enabled) != *params.Enabled {
+			key.Enabled = models.Bool(*params.Enabled)
+			changed = true
+		}
+		if params.Status != nil && key.Status != *params.Status {
+			key.Status = *params.Status
+			changed = true
+		}
+		if params.Status != nil && *params.Status == models.KeyStatusActive && key.FailureCount != 0 {
+			key.FailureCount = 0
+			changed = true
+		}
+		if params.Priority != nil && key.Priority != *params.Priority {
+			key.Priority = *params.Priority
+			changed = true
+		}
+		if params.Weight != nil && key.Weight != *params.Weight {
+			key.Weight = *params.Weight
+			changed = true
+		}
+		if params.Notes != nil && key.Notes != strings.TrimSpace(*params.Notes) {
+			key.Notes = strings.TrimSpace(*params.Notes)
+			changed = true
+		}
+		if changed {
+			changedIDs = append(changedIDs, key.ID)
+		} else {
+			result.IgnoredCount++
+		}
+	}
+	if len(changedIDs) == 0 {
+		return result, nil
+	}
+	if err := s.DB.Transaction(func(tx *gorm.DB) error {
+		for i := range keys {
+			if !containsKeyID(changedIDs, keys[i].ID) {
+				continue
+			}
+			if err := tx.Model(&models.APIKey{}).Where("id = ?", keys[i].ID).Updates(map[string]any{
+				"enabled":       models.CredentialEnabled(keys[i].Enabled),
+				"status":        keys[i].Status,
+				"failure_count": keys[i].FailureCount,
+				"priority":      keys[i].Priority,
+				"weight":        keys[i].Weight,
+				"notes":         keys[i].Notes,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	changed := make([]models.APIKey, 0, len(changedIDs))
+	for _, key := range keys {
+		if containsKeyID(changedIDs, key.ID) {
+			changed = append(changed, key)
+		}
+	}
+	if err := s.KeyProvider.SyncKeysToStore(changed); err != nil {
+		return nil, err
+	}
+	result.ChangedCount = len(changed)
 	return result, nil
 }
 
+func uniqueKeyIDs(ids []uint) []uint {
+	seen := make(map[uint]struct{}, len(ids))
+	result := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}
+
+func containsKeyID(ids []uint, id uint) bool {
+	for _, candidate := range ids {
+		if candidate == id {
+			return true
+		}
+	}
+	return false
+}
+
 // ListKeysInGroupQuery builds a query to list all keys within a specific group, filtered by status.
-func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, searchHash string, notesKeyword string, searchKeyword string) *gorm.DB {
+func (s *KeyService) ListKeysInGroupQuery(groupID uint, statusFilter string, enabledFilter *bool, searchHash string, notesKeyword string, searchKeyword string) *gorm.DB {
 	query := s.DB.Model(&models.APIKey{}).Where("group_id = ?", groupID)
 
-	if statusFilter != "" && statusFilter != "all" {
+	if statusFilter == models.KeyStatusDisabled {
+		disabled := false
+		enabledFilter = &disabled
+	} else if statusFilter != "" && statusFilter != "all" {
 		query = query.Where("status = ?", statusFilter)
+		if enabledFilter == nil {
+			enabled := true
+			enabledFilter = &enabled
+		}
+	}
+	if enabledFilter != nil {
+		query = query.Where("enabled = ?", *enabledFilter)
 	}
 
 	notesKeyword = strings.TrimSpace(notesKeyword)

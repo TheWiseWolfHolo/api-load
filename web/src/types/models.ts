@@ -34,9 +34,15 @@ export interface APIKey {
   key_value: string;
   notes?: string;
   status: KeyStatus;
+  enabled: boolean;
+  priority: number;
+  weight: number;
   request_count: number;
+  total_failure_count: number;
   failure_count: number;
   last_used_at?: string;
+  last_success_at?: string;
+  last_failure_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -193,10 +199,17 @@ export interface UpstreamResource {
   upstream_url: string;
   masked_key: string;
   status: ResourceStatus;
+  enabled: boolean;
+  priority: number;
+  weight: number;
+  request_count: number;
+  total_failure_count: number;
   failure_count: number;
   global_cooldown_until?: string;
   disabled_reason?: string;
   last_used_at?: string;
+  last_success_at?: string;
+  last_failure_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -225,12 +238,19 @@ export interface UpstreamResourceInput {
   name?: string;
   upstream_url: string;
   key: string;
+  enabled?: boolean;
+  priority?: number;
+  weight?: number;
 }
 
 export interface UpstreamResourceUpdateInput {
   name: string;
   upstream_url: string;
   key?: string;
+  enabled?: boolean;
+  status?: Extract<ResourceStatus, "active" | "invalid">;
+  priority?: number;
+  weight?: number;
 }
 
 export interface ResourceListParams {
@@ -238,6 +258,14 @@ export interface ResourceListParams {
   page_size?: number;
   search?: string;
   status?: ResourceStatus | "";
+  enabled?: boolean;
+}
+
+export interface CredentialBatchUpdateInput {
+  enabled?: boolean;
+  status?: "active" | "invalid";
+  priority?: number;
+  weight?: number;
 }
 
 export interface ResourceListResponse {

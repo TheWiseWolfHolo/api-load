@@ -1,6 +1,7 @@
 import type {
   BulkResourceDeleteResult,
   BulkResourceStatusResult,
+  CredentialBatchUpdateInput,
   ResourceListParams,
   ResourceListResponse,
   ResourcePool,
@@ -78,11 +79,58 @@ export const resourcePoolsApi = {
     return response.data;
   },
 
+  async bulkUpdateResources(
+    poolId: number,
+    resourceIds: number[],
+    payload: CredentialBatchUpdateInput
+  ): Promise<BulkResourceStatusResult> {
+    const response = await http.post(`/resource-pools/${poolId}/resources/batch-update`, {
+      resource_ids: resourceIds,
+      ...payload,
+    });
+    return response.data;
+  },
+
   async bulkDeleteResources(
     poolId: number,
     payload: { resource_ids?: number[]; keys?: string[] }
   ): Promise<BulkResourceDeleteResult> {
     const response = await http.post(`/resource-pools/${poolId}/resources/batch-delete`, payload);
     return response.data;
+  },
+
+  async importResources(poolId: number, content: string): Promise<UpstreamResource[]> {
+    const response = await http.post(`/resource-pools/${poolId}/resources/import`, { content });
+    return response.data || [];
+  },
+
+  exportResources(
+    poolId: number,
+    options: {
+      content: "full" | "keys";
+      format: "jsonl" | "csv" | "txt";
+      status?: "all" | "active" | "invalid" | "disabled";
+      enabled?: boolean;
+    }
+  ): void {
+    const authKey = localStorage.getItem("authKey");
+    if (!authKey) {
+      return;
+    }
+    const params = new URLSearchParams({
+      key: authKey,
+      content: options.content,
+      format: options.format,
+      status: options.status ?? "all",
+    });
+    if (options.enabled !== undefined) {
+      params.set("enabled", String(options.enabled));
+    }
+    const link = document.createElement("a");
+    link.href = `${http.defaults.baseURL}/resource-pools/${poolId}/resources/export?${params}`;
+    link.download = `resource-pool-${poolId}-${options.content}-${Date.now()}.${options.format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   },
 };

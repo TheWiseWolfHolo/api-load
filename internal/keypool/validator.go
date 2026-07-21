@@ -7,6 +7,7 @@ import (
 	"api-load/internal/models"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -69,7 +70,11 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	if !isValid && validationErr != nil {
 		errorMsg = validationErr.Error()
 	}
-	s.keypoolProvider.UpdateStatus(key, group, isValid, errorMsg)
+	statusCode := 0
+	if strings.HasPrefix(errorMsg, "[status ") {
+		_, _ = fmt.Sscanf(errorMsg, "[status %d]", &statusCode)
+	}
+	s.keypoolProvider.UpdateStatus(key, group, isValid, statusCode, errorMsg)
 
 	if !isValid {
 		logrus.WithFields(logrus.Fields{

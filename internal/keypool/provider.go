@@ -3,10 +3,9 @@ package keypool
 import (
 	"api-load/internal/config"
 	"api-load/internal/encryption"
-	app_errors "api-load/internal/errors"
 	"api-load/internal/models"
+	"api-load/internal/scheduler"
 	"api-load/internal/store"
-	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -23,6 +22,7 @@ type KeyProvider struct {
 	settingsManager *config.SystemSettingsManager
 	encryptionSvc   encryption.Service
 	selectionRNG    SelectionRNG
+	weightedPicker  *scheduler.SmoothPicker
 }
 
 // NewProvider 创建一个新的 KeyProvider 实例。
@@ -33,102 +33,37 @@ func NewProvider(db *gorm.DB, store store.Store, settingsManager *config.SystemS
 		settingsManager: settingsManager,
 		encryptionSvc:   encryptionSvc,
 		selectionRNG:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		weightedPicker:  scheduler.NewSmoothPicker(),
 	}
 }
 
 // SelectKey 为指定的分组原子性地选择并轮换一个可用的 APIKey。
 func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
-	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
-	listLen, err := p.store.LLen(activeKeysListKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read active key list length: %w", err)
-	}
-	if listLen == 0 {
-		return nil, app_errors.ErrNoActiveKeys
-	}
-
-	for range listLen {
-		// 1. Atomically rotate the key ID from the list
-		keyIDStr, err := p.store.Rotate(activeKeysListKey)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return nil, app_errors.ErrNoActiveKeys
-			}
-			return nil, fmt.Errorf("failed to rotate key from store: %w", err)
-		}
-
-		keyID, err := strconv.ParseUint(keyIDStr, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse key ID '%s': %w", keyIDStr, err)
-		}
-
-		// 2. Get key details from HASH
-		keyHashKey := fmt.Sprintf("key:%d", keyID)
-		keyDetails, err := p.store.HGetAll(keyHashKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get key details for key ID %d: %w", keyID, err)
-		}
-		if keyDetails["status"] != models.KeyStatusActive {
-			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
-				return nil, fmt.Errorf("failed to remove inactive key %d from active list: %w", keyID, err)
-			}
-			continue
-		}
-
-		// 3. Manually unmarshal the map into an APIKey struct
-		failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-		createdAt, _ := strconv.ParseInt(keyDetails["created_at"], 10, 64)
-
-		// Decrypt the key value for use by channels
-		encryptedKeyValue := keyDetails["key_string"]
-		decryptedKeyValue, err := p.encryptionSvc.Decrypt(encryptedKeyValue)
-		if err != nil {
-			// If decryption fails, try to use the value as-is (backward compatibility for unencrypted keys)
-			logrus.WithFields(logrus.Fields{
-				"keyID": keyID,
-				"error": err,
-			}).Debug("Failed to decrypt key value, using as-is for backward compatibility")
-			decryptedKeyValue = encryptedKeyValue
-		}
-
-		apiKey := &models.APIKey{
-			ID:           uint(keyID),
-			KeyValue:     decryptedKeyValue,
-			Status:       keyDetails["status"],
-			FailureCount: failureCount,
-			GroupID:      groupID,
-			CreatedAt:    time.Unix(createdAt, 0),
-		}
-
-		return apiKey, nil
-	}
-
-	return nil, app_errors.ErrNoActiveKeys
+	return p.selectWeightedKey(groupID, nil, "round_robin")
 }
 
 // UpdateStatus 异步地提交一个 Key 状态更新任务。
-func (p *KeyProvider) UpdateStatus(apiKey *models.APIKey, group *models.Group, isSuccess bool, errorMessage string) {
+func (p *KeyProvider) UpdateStatus(apiKey *models.APIKey, group *models.Group, isSuccess bool, statusCode int, errorMessage string) {
 	go func() {
-		keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
-		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
-
-		if isSuccess {
-			if err := p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey); err != nil {
-				logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key success")
-			}
-		} else {
-			if app_errors.IsUnCounted(errorMessage) {
-				logrus.WithFields(logrus.Fields{
-					"keyID": apiKey.ID,
-					"error": errorMessage,
-				}).Debug("Uncounted error, skipping failure handling")
-			} else {
-				if err := p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey); err != nil {
-					logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key failure")
-				}
-			}
+		if err := p.updateStatus(apiKey, group, isSuccess, statusCode, errorMessage); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to update key health")
 		}
 	}()
+}
+
+func (p *KeyProvider) updateStatus(apiKey *models.APIKey, group *models.Group, isSuccess bool, statusCode int, errorMessage string) error {
+	if apiKey == nil || group == nil {
+		return nil
+	}
+	keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
+	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
+	if isSuccess {
+		return p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey)
+	}
+	if statusCode == 404 {
+		return nil
+	}
+	return p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey)
 }
 
 // executeTransactionWithRetry wraps a database transaction with a retry mechanism.
@@ -175,7 +110,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 		return nil
 	}
 
-	return p.executeTransactionWithRetry(func(tx *gorm.DB) error {
+	err = p.executeTransactionWithRetry(func(tx *gorm.DB) error {
 		var key models.APIKey
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, keyID).Error; err != nil {
 			return fmt.Errorf("failed to lock key %d for update: %w", keyID, err)
@@ -194,7 +129,7 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 			return fmt.Errorf("failed to update key details in store: %w", err)
 		}
 
-		if !isActive {
+		if !isActive && models.CredentialEnabled(key.Enabled) {
 			logrus.WithField("keyID", keyID).Debug("Key has recovered and is being restored to active pool.")
 			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
 				return fmt.Errorf("failed to LRem key before LPush on recovery: %w", err)
@@ -206,6 +141,11 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 
 		return nil
 	})
+	if err == nil && !isActive {
+		groupID, _ := strconv.ParseUint(keyDetails["group_id"], 10, 64)
+		err = p.syncSchedulerSnapshot(uint(groupID))
+	}
+	return err
 }
 
 func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, keyHashKey, activeKeysListKey string) error {
@@ -223,7 +163,8 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 	// 获取该分组的有效配置
 	blacklistThreshold := group.EffectiveConfig.BlacklistThreshold
 
-	return p.executeTransactionWithRetry(func(tx *gorm.DB) error {
+	shouldBlacklist := false
+	err = p.executeTransactionWithRetry(func(tx *gorm.DB) error {
 		var key models.APIKey
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, apiKey.ID).Error; err != nil {
 			return fmt.Errorf("failed to lock key %d for update: %w", apiKey.ID, err)
@@ -232,7 +173,7 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 		newFailureCount := failureCount + 1
 
 		updates := map[string]any{"failure_count": newFailureCount}
-		shouldBlacklist := blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
+		shouldBlacklist = blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
 		if shouldBlacklist {
 			updates["status"] = models.KeyStatusInvalid
 		}
@@ -257,6 +198,10 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 
 		return nil
 	})
+	if err == nil && shouldBlacklist {
+		err = p.syncSchedulerSnapshot(group.ID)
+	}
+	return err
 }
 
 // LoadKeysFromDB 从数据库加载所有分组和密钥，并填充到 Store 中。
@@ -288,7 +233,7 @@ func (p *KeyProvider) LoadKeysFromDB() error {
 				}
 			}
 
-			if key.Status == models.KeyStatusActive {
+			if models.CredentialEnabled(key.Enabled) && key.Status == models.KeyStatusActive {
 				allActiveKeyIDs[key.GroupID] = append(allActiveKeyIDs[key.GroupID], key.ID)
 			}
 		}
@@ -316,6 +261,11 @@ func (p *KeyProvider) LoadKeysFromDB() error {
 			}
 		}
 	}
+	for groupID := range allActiveKeyIDs {
+		if err := p.syncSchedulerSnapshot(groupID); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -335,7 +285,10 @@ func (p *KeyProvider) AddKeys(groupID uint, keys []models.APIKey) error {
 		return p.addKeysToCacheBatch(groupID, keys)
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+	return p.syncSchedulerSnapshot(groupID)
 }
 
 // RemoveKeys 批量从池和数据库中移除 Key。
@@ -386,6 +339,9 @@ func (p *KeyProvider) RemoveKeys(groupID uint, keyValues []string) (int64, error
 		return nil
 	})
 
+	if err == nil {
+		err = p.syncSchedulerSnapshot(groupID)
+	}
 	return deletedCount, err
 }
 
@@ -424,6 +380,9 @@ func (p *KeyProvider) RestoreKeys(groupID uint) (int64, error) {
 		return nil
 	})
 
+	if err == nil {
+		err = p.syncSchedulerSnapshot(groupID)
+	}
 	return restoredCount, err
 }
 
@@ -481,6 +440,9 @@ func (p *KeyProvider) RestoreMultipleKeys(groupID uint, keyValues []string) (int
 		return nil
 	})
 
+	if err == nil {
+		err = p.syncSchedulerSnapshot(groupID)
+	}
 	return restoredCount, err
 }
 
@@ -533,6 +495,9 @@ func (p *KeyProvider) removeKeysByStatus(groupID uint, status ...string) (int64,
 		return nil
 	})
 
+	if err == nil {
+		err = p.syncSchedulerSnapshot(groupID)
+	}
 	return removedCount, err
 }
 
@@ -583,7 +548,7 @@ func (p *KeyProvider) addKeyToStore(key *models.APIKey) error {
 	}
 
 	// 2. If active, add to the active LIST
-	if key.Status == models.KeyStatusActive {
+	if models.CredentialEnabled(key.Enabled) && key.Status == models.KeyStatusActive {
 		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", key.GroupID)
 		if err := p.store.LRem(activeKeysListKey, 0, key.ID); err != nil {
 			return fmt.Errorf("failed to LRem key %d before LPush for group %d: %w", key.ID, key.GroupID, err)
@@ -596,6 +561,13 @@ func (p *KeyProvider) addKeyToStore(key *models.APIKey) error {
 }
 
 func (p *KeyProvider) SyncKeyToStore(key *models.APIKey) error {
+	if err := p.syncKeyToStore(key); err != nil {
+		return err
+	}
+	return p.syncSchedulerSnapshot(key.GroupID)
+}
+
+func (p *KeyProvider) syncKeyToStore(key *models.APIKey) error {
 	keyHashKey := fmt.Sprintf("key:%d", key.ID)
 	if err := p.store.HSet(keyHashKey, p.apiKeyToMap(key)); err != nil {
 		return fmt.Errorf("failed to HSet key details for key %d: %w", key.ID, err)
@@ -605,9 +577,25 @@ func (p *KeyProvider) SyncKeyToStore(key *models.APIKey) error {
 	if err := p.store.LRem(activeKeysListKey, 0, key.ID); err != nil {
 		return fmt.Errorf("failed to LRem key %d before syncing active list: %w", key.ID, err)
 	}
-	if key.Status == models.KeyStatusActive {
+	if models.CredentialEnabled(key.Enabled) && key.Status == models.KeyStatusActive {
 		if err := p.store.LPush(activeKeysListKey, key.ID); err != nil {
 			return fmt.Errorf("failed to LPush key %d to group %d: %w", key.ID, key.GroupID, err)
+		}
+	}
+	return nil
+}
+
+func (p *KeyProvider) SyncKeysToStore(keys []models.APIKey) error {
+	groupIDs := make(map[uint]struct{})
+	for i := range keys {
+		if err := p.syncKeyToStore(&keys[i]); err != nil {
+			return err
+		}
+		groupIDs[keys[i].GroupID] = struct{}{}
+	}
+	for groupID := range groupIDs {
+		if err := p.syncSchedulerSnapshot(groupID); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -643,7 +631,7 @@ func (p *KeyProvider) addKeysToCacheBatch(groupID uint, keys []models.APIKey) er
 	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", groupID)
 	activeKeyIDs := make([]any, 0, len(keys))
 	for i := range keys {
-		if keys[i].Status == models.KeyStatusActive {
+		if models.CredentialEnabled(keys[i].Enabled) && keys[i].Status == models.KeyStatusActive {
 			activeKeyIDs = append(activeKeyIDs, keys[i].ID)
 		}
 	}
@@ -678,6 +666,9 @@ func (p *KeyProvider) apiKeyToMap(key *models.APIKey) map[string]any {
 		"id":            fmt.Sprint(key.ID),
 		"key_string":    key.KeyValue,
 		"status":        key.Status,
+		"enabled":       models.CredentialEnabled(key.Enabled),
+		"priority":      key.Priority,
+		"weight":        key.Weight,
 		"failure_count": key.FailureCount,
 		"group_id":      key.GroupID,
 		"created_at":    key.CreatedAt.Unix(),

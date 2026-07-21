@@ -23,6 +23,18 @@ const (
 	DefaultLogFlushBatchSize = 200
 )
 
+type credentialUsageStat struct {
+	SuccessCount int64
+	FailureCount int64
+	LastSuccess  time.Time
+	LastFailure  time.Time
+}
+
+type credentialStatCaseItem struct {
+	Key  any
+	Stat credentialUsageStat
+}
+
 // RequestLogService is responsible for managing request logs.
 type RequestLogService struct {
 	db              *gorm.DB
@@ -308,61 +320,63 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 			return fmt.Errorf("failed to batch insert request logs: %w", err)
 		}
 
-		type keyUsageStat struct {
-			Count      int64
-			LastUsedAt time.Time
-		}
-
-		groupedKeyStats := make(map[uint]map[string]keyUsageStat)
+		keyStats := make(map[uint]map[string]credentialUsageStat)
+		resourceStats := make(map[uint]credentialUsageStat)
 		for _, log := range logs {
-			if !log.IsSuccess || log.KeyHash == "" {
+			if log == nil {
 				continue
 			}
-
-			if _, exists := groupedKeyStats[log.GroupID]; !exists {
-				groupedKeyStats[log.GroupID] = make(map[string]keyUsageStat)
+			apply := func(stats credentialUsageStat) credentialUsageStat {
+				if log.IsSuccess {
+					stats.SuccessCount++
+					if stats.LastSuccess.IsZero() || log.Timestamp.After(stats.LastSuccess) {
+						stats.LastSuccess = log.Timestamp
+					}
+				} else if log.StatusCode != 404 {
+					stats.FailureCount++
+					if stats.LastFailure.IsZero() || log.Timestamp.After(stats.LastFailure) {
+						stats.LastFailure = log.Timestamp
+					}
+				}
+				return stats
 			}
-
-			stats := groupedKeyStats[log.GroupID][log.KeyHash]
-			stats.Count++
-			if stats.LastUsedAt.IsZero() || log.Timestamp.After(stats.LastUsedAt) {
-				stats.LastUsedAt = log.Timestamp
+			if log.KeyHash != "" {
+				if keyStats[log.GroupID] == nil {
+					keyStats[log.GroupID] = make(map[string]credentialUsageStat)
+				}
+				keyStats[log.GroupID][log.KeyHash] = apply(keyStats[log.GroupID][log.KeyHash])
 			}
-			groupedKeyStats[log.GroupID][log.KeyHash] = stats
+			if log.ResourceID > 0 {
+				resourceStats[log.ResourceID] = apply(resourceStats[log.ResourceID])
+			}
 		}
 
-		if len(groupedKeyStats) > 0 {
-			for groupID, keyStats := range groupedKeyStats {
-				var requestCountCase strings.Builder
-				requestCountCase.WriteString("CASE key_hash ")
-
-				var lastUsedAtCase strings.Builder
-				lastUsedAtCase.WriteString("CASE key_hash ")
-
-				requestCountArgs := make([]any, 0, len(keyStats)*2)
-				lastUsedAtArgs := make([]any, 0, len(keyStats)*2)
-				keyHashes := make([]string, 0, len(keyStats))
-
-				for keyHash, stats := range keyStats {
-					requestCountCase.WriteString("WHEN ? THEN request_count + ? ")
-					requestCountArgs = append(requestCountArgs, keyHash, stats.Count)
-
-					lastUsedAtCase.WriteString("WHEN ? THEN ? ")
-					lastUsedAtArgs = append(lastUsedAtArgs, keyHash, stats.LastUsedAt)
-
-					keyHashes = append(keyHashes, keyHash)
-				}
-
-				requestCountCase.WriteString("ELSE request_count END")
-				lastUsedAtCase.WriteString("ELSE last_used_at END")
-
-				if err := tx.Model(&models.APIKey{}).
-					Where("group_id = ? AND key_hash IN ?", groupID, keyHashes).
-					Updates(map[string]any{
-						"request_count": gorm.Expr(requestCountCase.String(), requestCountArgs...),
-						"last_used_at":  gorm.Expr(lastUsedAtCase.String(), lastUsedAtArgs...),
-					}).Error; err != nil {
-					return fmt.Errorf("failed to batch update api_key stats: %w", err)
+		for groupID, statsByHash := range keyStats {
+			items := make([]credentialStatCaseItem, 0, len(statsByHash))
+			hashes := make([]string, 0, len(statsByHash))
+			for hash, stats := range statsByHash {
+				items = append(items, credentialStatCaseItem{Key: hash, Stat: stats})
+				hashes = append(hashes, hash)
+			}
+			updates := credentialStatCaseUpdates("key_hash", items)
+			if len(updates) == 0 {
+				continue
+			}
+			if err := tx.Model(&models.APIKey{}).Where("group_id = ? AND key_hash IN ?", groupID, hashes).Updates(updates).Error; err != nil {
+				return fmt.Errorf("update api key stats: %w", err)
+			}
+		}
+		if len(resourceStats) > 0 {
+			items := make([]credentialStatCaseItem, 0, len(resourceStats))
+			ids := make([]uint, 0, len(resourceStats))
+			for resourceID, stats := range resourceStats {
+				items = append(items, credentialStatCaseItem{Key: resourceID, Stat: stats})
+				ids = append(ids, resourceID)
+			}
+			updates := credentialStatCaseUpdates("id", items)
+			if len(updates) > 0 {
+				if err := tx.Model(&models.UpstreamResource{}).Where("id IN ?", ids).Updates(updates).Error; err != nil {
+					return fmt.Errorf("update upstream resource stats: %w", err)
 				}
 			}
 		}
@@ -373,7 +387,13 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 			GroupID uint
 		}]struct{ Success, Failure int64 })
 		for _, log := range logs {
+			if log == nil {
+				continue
+			}
 			if log.RequestType == models.RequestTypeRetry {
+				continue
+			}
+			if !log.IsSuccess && log.StatusCode == 404 {
 				continue
 			}
 			hourlyTime := log.Timestamp.Truncate(time.Hour)
@@ -430,4 +450,58 @@ func (s *RequestLogService) writeLogsToDB(logs []*models.RequestLog) error {
 
 		return nil
 	})
+}
+
+func credentialStatCaseUpdates(keyColumn string, items []credentialStatCaseItem) map[string]any {
+	updates := make(map[string]any, 5)
+	if expr, ok := credentialIncrementCase(keyColumn, "request_count", items, func(item credentialStatCaseItem) int64 { return item.Stat.SuccessCount }); ok {
+		updates["request_count"] = expr
+	}
+	if expr, ok := credentialIncrementCase(keyColumn, "total_failure_count", items, func(item credentialStatCaseItem) int64 { return item.Stat.FailureCount }); ok {
+		updates["total_failure_count"] = expr
+	}
+	if expr, ok := credentialTimeCase(keyColumn, "last_used_at", items, func(item credentialStatCaseItem) time.Time { return item.Stat.LastSuccess }); ok {
+		updates["last_used_at"] = expr
+		updates["last_success_at"] = expr
+	}
+	if expr, ok := credentialTimeCase(keyColumn, "last_failure_at", items, func(item credentialStatCaseItem) time.Time { return item.Stat.LastFailure }); ok {
+		updates["last_failure_at"] = expr
+	}
+	return updates
+}
+
+func credentialIncrementCase(keyColumn, targetColumn string, items []credentialStatCaseItem, value func(credentialStatCaseItem) int64) (clause.Expr, bool) {
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "CASE %s ", keyColumn)
+	args := make([]any, 0, len(items)*2)
+	matched := false
+	for _, item := range items {
+		increment := value(item)
+		if increment <= 0 {
+			continue
+		}
+		builder.WriteString("WHEN ? THEN " + targetColumn + " + ? ")
+		args = append(args, item.Key, increment)
+		matched = true
+	}
+	builder.WriteString("ELSE " + targetColumn + " END")
+	return gorm.Expr(builder.String(), args...), matched
+}
+
+func credentialTimeCase(keyColumn, targetColumn string, items []credentialStatCaseItem, value func(credentialStatCaseItem) time.Time) (clause.Expr, bool) {
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "CASE %s ", keyColumn)
+	args := make([]any, 0, len(items)*2)
+	matched := false
+	for _, item := range items {
+		timestamp := value(item)
+		if timestamp.IsZero() {
+			continue
+		}
+		builder.WriteString("WHEN ? THEN ? ")
+		args = append(args, item.Key, timestamp)
+		matched = true
+	}
+	builder.WriteString("ELSE " + targetColumn + " END")
+	return gorm.Expr(builder.String(), args...), matched
 }

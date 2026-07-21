@@ -315,12 +315,12 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		}
 
 		if selectedResource == nil {
-			if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: statusCode, ErrorMessage: parsedError}); err != nil {
+			if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: statusCode, ErrorMessage: parsedError, Model: selectionReq.Model, ProxyKey: selectionReq.ProxyKey}); err != nil {
 				logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
 			}
 
 			// 使用解析后的错误信息更新密钥状态
-			ps.keyProvider.UpdateStatus(apiKey, group, false, parsedError)
+			ps.keyProvider.UpdateStatus(apiKey, group, false, statusCode, parsedError)
 		}
 
 		// 判断是否为最后一次尝试
@@ -368,16 +368,21 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		}
 	}
 
-	// ps.keyProvider.UpdateStatus(apiKey, group, true) // 请求成功不再重置成功次数，减少IO消耗
+	// Successful request counters are persisted from request logs; health recovery remains validation-driven.
 	if selectedResource == nil {
-		if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: resp.StatusCode}); err != nil {
+		if err := ps.keyProvider.RecordSelectionResult(group, apiKey, keypool.SelectionResult{StatusCode: resp.StatusCode, Model: selectionReq.Model, ProxyKey: selectionReq.ProxyKey}); err != nil {
 			logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
 		}
 	} else if resp.StatusCode < http.StatusBadRequest {
 		if affinityValue, ok := c.Get(requestAffinityContextKey); ok {
 			if affinityInfo, ok := affinityValue.(requestAffinity); ok && affinityInfo.Hash != "" {
-				if refreshErr := ps.resourceProvider.RefreshAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedPoolConfig.AffinityTTL); refreshErr != nil {
-					logrus.WithError(refreshErr).WithField("resourceID", selectedResource.ID).Warn("failed to refresh resource affinity")
+				objectRouting := objectRoutingFromContext(c)
+				if objectRouting.ForcedResourceID == 0 {
+					if bindErr := ps.resourceProvider.BindAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedResource.ID, selectedPoolConfig.AffinityTTL); bindErr != nil {
+						logrus.WithError(bindErr).WithField("resourceID", selectedResource.ID).Warn("failed to bind successful resource affinity")
+					}
+				} else if refreshErr := ps.resourceProvider.RefreshAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedPoolConfig.AffinityTTL); refreshErr != nil {
+					logrus.WithError(refreshErr).WithField("resourceID", selectedResource.ID).Debug("resource affinity did not need refreshing")
 				}
 			}
 		}

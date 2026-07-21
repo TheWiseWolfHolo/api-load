@@ -10,11 +10,13 @@ import {
   AlertCircleOutline,
   CheckmarkCircle,
   CopyOutline,
+  DownloadOutline,
   EyeOffOutline,
   EyeOutline,
   Pencil,
   RemoveCircleOutline,
   Search,
+  SettingsOutline,
 } from "@vicons/ionicons5";
 import {
   NButton,
@@ -23,10 +25,12 @@ import {
   NEmpty,
   NIcon,
   NInput,
+  NInputNumber,
   NModal,
   NSelect,
   NSpace,
   NSpin,
+  NSwitch,
   useDialog,
   type MessageReactive,
 } from "naive-ui";
@@ -66,14 +70,24 @@ const statusOptions = [
   { label: t("keys.disabled"), value: "disabled" },
 ];
 
-// 更多操作下拉菜单选项
-const moreOptions = [
+const exportOptions = [
+  { label: t("keys.exportFullConfig"), key: "exportFull" },
   { label: t("keys.exportAllKeys"), key: "copyAll" },
   { label: t("keys.exportValidKeys"), key: "copyValid" },
   { label: t("keys.exportInvalidKeys"), key: "copyInvalid" },
   { label: t("keys.exportDisabledKeys"), key: "copyDisabled" },
-  { type: "divider" },
+];
+
+const validationOptions = [
+  { label: t("keys.validateAllKeys"), key: "validateAll" },
+  { label: t("keys.validateValidKeys"), key: "validateActive" },
+  { label: t("keys.validateInvalidKeys"), key: "validateInvalid" },
+];
+
+const maintenanceOptions = [
+  { label: t("keys.deleteByKeyList"), key: "deleteByKeys" },
   { label: t("keys.restoreAllInvalidKeys"), key: "restoreAll" },
+  { type: "divider" },
   {
     label: t("keys.clearAllInvalidKeys"),
     key: "clearInvalid",
@@ -82,12 +96,8 @@ const moreOptions = [
   {
     label: t("keys.clearAllKeys"),
     key: "clearAll",
-    props: { style: { color: "red", fontWeight: "bold" } },
+    props: { style: { color: "#d03050" } },
   },
-  { type: "divider" },
-  { label: t("keys.validateAllKeys"), key: "validateAll" },
-  { label: t("keys.validateValidKeys"), key: "validateActive" },
-  { label: t("keys.validateInvalidKeys"), key: "validateInvalid" },
 ];
 
 let testingMsg: MessageReactive | null = null;
@@ -103,6 +113,9 @@ const deleteDialogShow = ref(false);
 const notesDialogShow = ref(false);
 const editingKey = ref<KeyRow | null>(null);
 const editingNotes = ref("");
+const editingPriority = ref(10);
+const editingWeight = ref(1);
+const editingEnabled = ref(true);
 
 watch(
   () => props.selectedGroup,
@@ -166,6 +179,9 @@ function handleSearchInput() {
 // 处理更多操作菜单
 function handleMoreAction(key: string) {
   switch (key) {
+    case "exportFull":
+      exportFullConfig();
+      break;
     case "copyAll":
       copyAllKeys();
       break;
@@ -195,6 +211,9 @@ function handleMoreAction(key: string) {
       break;
     case "clearAll":
       clearAll();
+      break;
+    case "deleteByKeys":
+      deleteDialogShow.value = true;
       break;
   }
 }
@@ -312,6 +331,9 @@ function getDisplayValue(key: KeyRow): string {
 function editKeyNotes(key: KeyRow) {
   editingKey.value = key;
   editingNotes.value = key.notes || "";
+  editingPriority.value = key.priority || 10;
+  editingWeight.value = key.weight || 1;
+  editingEnabled.value = key.enabled !== false;
   notesDialogShow.value = true;
 }
 
@@ -323,8 +345,18 @@ async function saveKeyNotes() {
 
   try {
     const trimmed = editingNotes.value.trim();
-    await keysApi.updateKeyNotes(editingKey.value.id, trimmed);
-    editingKey.value.notes = trimmed;
+    await keysApi.updateKey(editingKey.value.id, {
+      notes: trimmed,
+      priority: editingPriority.value,
+      weight: editingWeight.value,
+      enabled: editingEnabled.value,
+    });
+    Object.assign(editingKey.value, {
+      notes: trimmed,
+      priority: editingPriority.value,
+      weight: editingWeight.value,
+      enabled: editingEnabled.value,
+    });
     window.$message.success(t("keys.notesUpdated"));
     notesDialogShow.value = false;
   } catch (error) {
@@ -351,7 +383,7 @@ async function restoreKey(key: KeyRow) {
       d.loading = true;
 
       try {
-        await keysApi.updateKeyStatus(key.id, "active");
+        await keysApi.updateKey(key.id, { status: "active" });
         await loadKeys();
         // 触发同步操作刷新
         triggerSyncOperationRefresh(props.selectedGroup.name, "RESTORE_SINGLE");
@@ -363,6 +395,20 @@ async function restoreKey(key: KeyRow) {
       }
     },
   });
+}
+
+async function enableKey(key: KeyRow) {
+  if (!props.selectedGroup?.id || isStatusUpdating.value) {
+    return;
+  }
+  isStatusUpdating.value = true;
+  try {
+    await keysApi.updateKey(key.id, { enabled: true });
+    await loadKeys();
+    triggerSyncOperationRefresh(props.selectedGroup.name, "ENABLE_SINGLE");
+  } finally {
+    isStatusUpdating.value = false;
+  }
 }
 
 async function disableKey(key: KeyRow) {
@@ -422,7 +468,7 @@ async function applyDisableKey(key: KeyRow) {
 
   isStatusUpdating.value = true;
   try {
-    await keysApi.updateKeyStatus(key.id, "disabled");
+    await keysApi.updateKey(key.id, { enabled: false });
     await loadKeys();
     // 触发同步操作刷新
     triggerSyncOperationRefresh(props.selectedGroup.name, "DISABLE_SINGLE");
@@ -490,8 +536,11 @@ function formatRelativeTime(date: string) {
   return t("keys.justNow");
 }
 
-function getStatusClass(status: KeyStatus): string {
-  switch (status) {
+function getStatusClass(key: KeyRow): string {
+  if (!key.enabled) {
+    return "status-disabled";
+  }
+  switch (key.status) {
     case "active":
       return "status-valid";
     case "invalid":
@@ -509,6 +558,12 @@ async function copyAllKeys() {
   }
 
   keysApi.exportKeys(props.selectedGroup.id, "all");
+}
+
+function exportFullConfig() {
+  if (props.selectedGroup?.id) {
+    keysApi.exportKeys(props.selectedGroup.id, "all", "jsonl");
+  }
 }
 
 async function copyValidKeys() {
@@ -710,18 +765,27 @@ function resetPage() {
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <n-button type="success" size="small" @click="createDialogShow = true">
+        <n-button type="primary" size="small" @click="createDialogShow = true">
           <template #icon>
             <n-icon :component="AddCircleOutline" />
           </template>
           {{ t("keys.addKey") }}
         </n-button>
-        <n-button type="error" size="small" @click="deleteDialogShow = true">
-          <template #icon>
-            <n-icon :component="RemoveCircleOutline" />
-          </template>
-          {{ t("keys.deleteKey") }}
-        </n-button>
+        <n-dropdown :options="exportOptions" trigger="click" @select="handleMoreAction">
+          <n-button size="small" secondary>
+            <template #icon><n-icon :component="DownloadOutline" /></template>
+            {{ t("keys.exportKeys") }}
+          </n-button>
+        </n-dropdown>
+        <n-dropdown :options="validationOptions" trigger="click" @select="handleMoreAction">
+          <n-button size="small" secondary>{{ t("keys.validate") }}</n-button>
+        </n-dropdown>
+        <n-dropdown :options="maintenanceOptions" trigger="click" @select="handleMoreAction">
+          <n-button size="small" tertiary>
+            <template #icon><n-icon :component="SettingsOutline" /></template>
+            {{ t("keys.batchManagement") }}
+          </n-button>
+        </n-dropdown>
       </div>
       <div class="toolbar-right">
         <n-space :size="12" align="center">
@@ -755,13 +819,6 @@ function resetPage() {
               {{ t("common.search") }}
             </n-button>
           </n-input-group>
-          <n-dropdown :options="moreOptions" trigger="click" @select="handleMoreAction">
-            <n-button size="small" tertiary>
-              <template #icon>
-                <span style="font-size: 16px; font-weight: bold">⋯</span>
-              </template>
-            </n-button>
-          </n-dropdown>
         </n-space>
       </div>
     </div>
@@ -773,26 +830,21 @@ function resetPage() {
           <n-empty :description="t('keys.noMatchingKeys')" />
         </div>
         <div v-else class="keys-grid">
-          <div
-            v-for="key in keys"
-            :key="key.id"
-            class="key-card"
-            :class="getStatusClass(key.status)"
-          >
+          <div v-for="key in keys" :key="key.id" class="key-card" :class="getStatusClass(key)">
             <!-- 主要信息行：Key + 快速操作 -->
             <div class="key-main">
               <div class="key-section">
-                <n-tag v-if="key.status === 'active'" type="success" :bordered="false" round>
-                  <template #icon>
-                    <n-icon :component="CheckmarkCircle" />
-                  </template>
-                  {{ t("keys.validShort") }}
-                </n-tag>
-                <n-tag v-else-if="key.status === 'disabled'" type="default" :bordered="false" round>
+                <n-tag v-if="!key.enabled" type="warning" :bordered="false" round>
                   <template #icon>
                     <n-icon :component="RemoveCircleOutline" />
                   </template>
                   {{ t("keys.disabledShort") }}
+                </n-tag>
+                <n-tag v-else-if="key.status === 'active'" type="success" :bordered="false" round>
+                  <template #icon>
+                    <n-icon :component="CheckmarkCircle" />
+                  </template>
+                  {{ t("keys.validShort") }}
                 </n-tag>
                 <n-tag v-else type="error" :bordered="false" round>
                   <template #icon>
@@ -840,7 +892,15 @@ function resetPage() {
                 </span>
                 <span class="stat-item">
                   {{ t("keys.failuresShort") }}
-                  <strong>{{ key.failure_count }}</strong>
+                  <strong>{{ key.total_failure_count }}</strong>
+                </span>
+                <span class="stat-item">
+                  {{ t("keys.priorityShort") }}
+                  <strong>{{ key.priority }}</strong>
+                </span>
+                <span class="stat-item">
+                  {{ t("keys.weightShort") }}
+                  <strong>{{ key.weight }}</strong>
                 </span>
                 <span class="stat-item">
                   {{ key.last_used_at ? formatRelativeTime(key.last_used_at) : t("keys.unused") }}
@@ -858,7 +918,7 @@ function resetPage() {
                   {{ t("keys.testShort") }}
                 </n-button>
                 <n-button
-                  v-if="key.status === 'active'"
+                  v-if="key.enabled"
                   tertiary
                   size="tiny"
                   type="warning"
@@ -868,7 +928,17 @@ function resetPage() {
                   {{ t("common.disable") }}
                 </n-button>
                 <n-button
-                  v-if="key.status !== 'active'"
+                  v-else
+                  tertiary
+                  size="tiny"
+                  type="success"
+                  @click="enableKey(key)"
+                  :title="t('keys.enableKey')"
+                >
+                  {{ t("keys.enableShort") }}
+                </n-button>
+                <n-button
+                  v-if="key.status === 'invalid'"
                   tertiary
                   size="tiny"
                   @click="restoreKey(key)"
@@ -945,16 +1015,38 @@ function resetPage() {
     />
   </div>
 
-  <!-- 备注编辑对话框 -->
-  <n-modal v-model:show="notesDialogShow" preset="dialog" :title="t('keys.editKeyNotes')">
-    <n-input
-      v-model:value="editingNotes"
-      type="textarea"
-      :placeholder="t('keys.enterNotes')"
-      :rows="3"
-      maxlength="255"
-      show-count
-    />
+  <n-modal v-model:show="notesDialogShow" preset="dialog" :title="t('keys.editKey')">
+    <div class="key-editor-form">
+      <label class="key-editor-toggle">
+        <span>
+          <strong>{{ t("keys.enabledState") }}</strong>
+          <small>{{ t("keys.enabledStateHelp") }}</small>
+        </span>
+        <n-switch v-model:value="editingEnabled" />
+      </label>
+      <div class="key-editor-scheduling">
+        <label>
+          <span>{{ t("keys.priority") }}</span>
+          <n-input-number v-model:value="editingPriority" :min="1" :max="1000" />
+        </label>
+        <label>
+          <span>{{ t("keys.weight") }}</span>
+          <n-input-number v-model:value="editingWeight" :min="1" :max="1000" />
+        </label>
+      </div>
+      <small class="key-editor-help">{{ t("keys.schedulingHelp") }}</small>
+      <label>
+        <span>{{ t("keys.notes") }}</span>
+        <n-input
+          v-model:value="editingNotes"
+          type="textarea"
+          :placeholder="t('keys.enterNotes')"
+          :rows="3"
+          maxlength="255"
+          show-count
+        />
+      </label>
+    </div>
     <template #action>
       <n-button @click="notesDialogShow = false">{{ t("common.cancel") }}</n-button>
       <n-button type="primary" @click="saveKeyNotes">{{ t("common.save") }}</n-button>
@@ -992,6 +1084,7 @@ function resetPage() {
 
 .toolbar-left {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -1132,7 +1225,7 @@ function resetPage() {
 
 .keys-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
 }
 
@@ -1203,9 +1296,10 @@ function resetPage() {
 
 .key-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 12px;
-  overflow: hidden;
+  overflow: visible;
   color: var(--text-secondary);
   flex: 1;
   min-width: 0;
@@ -1221,6 +1315,40 @@ function resetPage() {
   color: var(--text-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.key-editor-form,
+.key-editor-form label,
+.key-editor-toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.key-editor-form {
+  gap: 16px;
+}
+
+.key-editor-toggle {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.key-editor-toggle small,
+.key-editor-help {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.key-editor-scheduling {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.key-editor-scheduling :deep(.n-input-number) {
+  width: 100%;
 }
 
 .key-actions {
@@ -1396,6 +1524,14 @@ function resetPage() {
   .toolbar-right .n-space {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .keys-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .key-editor-scheduling {
+    grid-template-columns: 1fr;
   }
 }
 </style>

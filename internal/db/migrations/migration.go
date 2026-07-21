@@ -11,7 +11,11 @@ func MigrateDatabase(db *gorm.DB) error {
 	}
 
 	// Run v1.1.0 migration
-	return V1_1_0_AddKeyHashColumn(db)
+	if err := V1_1_0_AddKeyHashColumn(db); err != nil {
+		return err
+	}
+
+	return V1_2_0_SplitCredentialEnablement(db)
 }
 
 // HandleLegacyIndexes removes old indexes from previous versions to prevent migration errors

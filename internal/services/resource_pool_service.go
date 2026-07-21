@@ -50,12 +50,26 @@ type ResourceCreateParams struct {
 	Name        string `json:"name"`
 	UpstreamURL string `json:"upstream_url"`
 	Key         string `json:"key"`
+	Enabled     *bool  `json:"enabled,omitempty"`
+	Priority    int    `json:"priority,omitempty"`
+	Weight      int    `json:"weight,omitempty"`
 }
 
 type ResourceUpdateParams struct {
 	Name        string
 	UpstreamURL string
 	Key         *string
+	Enabled     *bool
+	Status      *string
+	Priority    *int
+	Weight      *int
+}
+
+type ResourceBatchUpdateParams struct {
+	Enabled  *bool
+	Status   *string
+	Priority *int
+	Weight   *int
 }
 
 type ResourceListParams struct {
@@ -63,6 +77,7 @@ type ResourceListParams struct {
 	PageSize int
 	Search   string
 	Status   string
+	Enabled  *bool
 }
 
 type ResourcePagination struct {
@@ -111,10 +126,17 @@ type ResourceView struct {
 	UpstreamURL         string     `json:"upstream_url"`
 	MaskedKey           string     `json:"masked_key"`
 	Status              string     `json:"status"`
+	Enabled             bool       `json:"enabled"`
+	Priority            int        `json:"priority"`
+	Weight              int        `json:"weight"`
+	RequestCount        int64      `json:"request_count"`
+	TotalFailureCount   int64      `json:"total_failure_count"`
 	FailureCount        int64      `json:"failure_count"`
 	GlobalCooldownUntil *time.Time `json:"global_cooldown_until,omitempty"`
 	DisabledReason      string     `json:"disabled_reason,omitempty"`
 	LastUsedAt          *time.Time `json:"last_used_at,omitempty"`
+	LastSuccessAt       *time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt       *time.Time `json:"last_failure_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
@@ -288,11 +310,29 @@ func (s *ResourcePoolService) AddResources(ctx context.Context, poolID uint, par
 	}
 	resources := make([]models.UpstreamResource, 0, len(params))
 	for _, item := range params {
+		priority := item.Priority
+		if priority == 0 {
+			priority = models.DefaultCredentialPriority
+		}
+		weight := item.Weight
+		if weight == 0 {
+			weight = models.DefaultCredentialWeight
+		}
+		if priority < 1 || priority > 1000 || weight < 1 || weight > 1000 {
+			return nil, resourcePoolValidationError("priority and weight must be between 1 and 1000")
+		}
+		enabled := item.Enabled
+		if enabled == nil {
+			enabled = models.Bool(true)
+		}
 		resources = append(resources, models.UpstreamResource{
 			Name:        strings.TrimSpace(item.Name),
 			UpstreamURL: item.UpstreamURL,
 			KeyValue:    item.Key,
 			Status:      models.ResourceStatusActive,
+			Enabled:     enabled,
+			Priority:    priority,
+			Weight:      weight,
 		})
 	}
 	created, err := s.provider.AddResources(poolID, resources)
@@ -330,8 +370,19 @@ func (s *ResourcePoolService) ListResources(ctx context.Context, poolID uint, pa
 	}
 
 	query := s.db.WithContext(ctx).Model(&models.UpstreamResource{}).Where("resource_pool_id = ?", poolID)
-	if status != "" {
+	enabledFilter := params.Enabled
+	if status == models.ResourceStatusDisabled {
+		disabled := false
+		enabledFilter = &disabled
+	} else if status != "" {
 		query = query.Where("status = ?", status)
+		if enabledFilter == nil {
+			enabled := true
+			enabledFilter = &enabled
+		}
+	}
+	if enabledFilter != nil {
+		query = query.Where("enabled = ?", *enabledFilter)
 	}
 	if search := strings.TrimSpace(params.Search); search != "" {
 		like := "%" + search + "%"
@@ -368,17 +419,67 @@ func (s *ResourcePoolService) UpdateResource(ctx context.Context, poolID, resour
 	if params.Key != nil && strings.TrimSpace(*params.Key) == "" {
 		return nil, resourcePoolValidationError("replacement key cannot be empty")
 	}
+	if params.Priority != nil && (*params.Priority < 1 || *params.Priority > 1000) {
+		return nil, resourcePoolValidationError("priority must be between 1 and 1000")
+	}
+	if params.Weight != nil && (*params.Weight < 1 || *params.Weight > 1000) {
+		return nil, resourcePoolValidationError("weight must be between 1 and 1000")
+	}
+	if params.Status != nil && *params.Status != models.ResourceStatusActive && *params.Status != models.ResourceStatusInvalid {
+		return nil, resourcePoolValidationError("health status must be active or invalid")
+	}
 	if err := s.provider.UpdateResource(resource, params.Name, params.UpstreamURL, params.Key); err != nil {
 		if strings.Contains(err.Error(), "persist upstream resource") {
 			return nil, app_errors.ParseDBError(err)
 		}
 		return nil, resourcePoolValidationError(err.Error())
 	}
+	updates := make(map[string]any)
+	if params.Enabled != nil {
+		resource.Enabled = models.Bool(*params.Enabled)
+		updates["enabled"] = *params.Enabled
+	}
+	if params.Status != nil {
+		resource.Status = *params.Status
+		updates["status"] = *params.Status
+		if *params.Status == models.ResourceStatusActive {
+			resource.FailureCount = 0
+			updates["failure_count"] = 0
+		}
+	}
+	if params.Priority != nil {
+		resource.Priority = *params.Priority
+		updates["priority"] = *params.Priority
+	}
+	if params.Weight != nil {
+		resource.Weight = *params.Weight
+		updates["weight"] = *params.Weight
+	}
+	if len(updates) > 0 {
+		if err := s.db.WithContext(ctx).Model(resource).Updates(updates).Error; err != nil {
+			return nil, app_errors.ParseDBError(err)
+		}
+		if err := s.provider.SyncResourceToStore(resource); err != nil {
+			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+		}
+	}
 	view := s.resourceView(resource)
 	return &view, nil
 }
 
 func (s *ResourcePoolService) BulkUpdateResourceStatus(ctx context.Context, poolID uint, resourceIDs []uint, status string) (*BulkResourceStatusResult, error) {
+	switch status {
+	case models.ResourceStatusDisabled:
+		return s.BulkUpdateResources(ctx, poolID, resourceIDs, ResourceBatchUpdateParams{Enabled: models.Bool(false)})
+	case models.ResourceStatusActive:
+		active := models.ResourceStatusActive
+		return s.BulkUpdateResources(ctx, poolID, resourceIDs, ResourceBatchUpdateParams{Enabled: models.Bool(true), Status: &active})
+	default:
+		return nil, resourcePoolValidationError("resource status must be active or disabled")
+	}
+}
+
+func (s *ResourcePoolService) BulkUpdateResources(ctx context.Context, poolID uint, resourceIDs []uint, params ResourceBatchUpdateParams) (*BulkResourceStatusResult, error) {
 	if _, err := s.loadPool(ctx, poolID, false); err != nil {
 		return nil, err
 	}
@@ -386,19 +487,57 @@ func (s *ResourcePoolService) BulkUpdateResourceStatus(ctx context.Context, pool
 	if len(ids) == 0 {
 		return nil, resourcePoolValidationError("at least one resource ID is required")
 	}
-	if status != models.ResourceStatusActive && status != models.ResourceStatusDisabled {
-		return nil, resourcePoolValidationError("resource status must be active or disabled")
+	if params.Priority != nil && (*params.Priority < 1 || *params.Priority > 1000) {
+		return nil, resourcePoolValidationError("priority must be between 1 and 1000")
 	}
+	if params.Weight != nil && (*params.Weight < 1 || *params.Weight > 1000) {
+		return nil, resourcePoolValidationError("weight must be between 1 and 1000")
+	}
+	if params.Status != nil && *params.Status != models.ResourceStatusActive && *params.Status != models.ResourceStatusInvalid {
+		return nil, resourcePoolValidationError("health status must be active or invalid")
+	}
+	updates := make(map[string]any)
+	if params.Enabled != nil {
+		updates["enabled"] = *params.Enabled
+	}
+	if params.Status != nil {
+		updates["status"] = *params.Status
+		if *params.Status == models.ResourceStatusActive {
+			updates["failure_count"] = 0
+		}
+	}
+	if params.Priority != nil {
+		updates["priority"] = *params.Priority
+	}
+	if params.Weight != nil {
+		updates["weight"] = *params.Weight
+	}
+	if len(updates) == 0 {
+		return nil, resourcePoolValidationError("at least one field is required")
+	}
+	result := &BulkResourceStatusResult{RequestedCount: len(ids)}
 	var resources []models.UpstreamResource
-	if err := s.db.WithContext(ctx).Where("resource_pool_id = ? AND id IN ?", poolID, ids).Order("id asc").Find(&resources).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("resource_pool_id = ? AND id IN ?", poolID, ids).Find(&resources).Error; err != nil {
 		return nil, app_errors.ParseDBError(err)
 	}
-	result := &BulkResourceStatusResult{RequestedCount: len(ids), MatchedCount: len(resources)}
-	for i := range resources {
-		if _, err := s.UpdateResourceStatus(ctx, poolID, resources[i].ID, status); err != nil {
-			return nil, err
-		}
-		result.UpdatedCount++
+	result.MatchedCount = len(resources)
+	if len(resources) == 0 {
+		return result, nil
+	}
+	matchedIDs := make([]uint, 0, len(resources))
+	for _, resource := range resources {
+		matchedIDs = append(matchedIDs, resource.ID)
+	}
+	dbResult := s.db.WithContext(ctx).Model(&models.UpstreamResource{}).Where("resource_pool_id = ? AND id IN ?", poolID, matchedIDs).Updates(updates)
+	if dbResult.Error != nil {
+		return nil, app_errors.ParseDBError(dbResult.Error)
+	}
+	result.UpdatedCount = int(dbResult.RowsAffected)
+	if err := s.db.WithContext(ctx).Where("resource_pool_id = ? AND id IN ?", poolID, matchedIDs).Find(&resources).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if err := s.provider.SyncResourcesToStore(resources); err != nil {
+		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 	}
 	return result, nil
 }
@@ -474,6 +613,11 @@ func (s *ResourcePoolService) BulkDeleteResources(ctx context.Context, poolID ui
 		}
 		result.DeletedCount++
 	}
+	if result.DeletedCount > 0 {
+		if err := s.provider.RefreshScheduler(poolID); err != nil {
+			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+		}
+	}
 	return result, nil
 }
 
@@ -484,9 +628,10 @@ func (s *ResourcePoolService) UpdateResourceStatus(ctx context.Context, poolID, 
 	}
 	switch status {
 	case models.ResourceStatusDisabled:
-		resource.Status = models.ResourceStatusDisabled
+		resource.Enabled = models.Bool(false)
 		resource.DisabledReason = "disabled by administrator"
 	case models.ResourceStatusActive:
+		resource.Enabled = models.Bool(true)
 		resource.Status = models.ResourceStatusActive
 		resource.DisabledReason = ""
 		resource.FailureCount = 0
@@ -495,6 +640,7 @@ func (s *ResourcePoolService) UpdateResourceStatus(ctx context.Context, poolID, 
 		return nil, resourcePoolValidationError("resource status must be active or disabled")
 	}
 	updates := map[string]any{
+		"enabled":               models.CredentialEnabled(resource.Enabled),
 		"status":                resource.Status,
 		"disabled_reason":       resource.DisabledReason,
 		"failure_count":         resource.FailureCount,
@@ -528,6 +674,9 @@ func (s *ResourcePoolService) DeleteResource(ctx context.Context, poolID, resour
 	if err := s.db.WithContext(ctx).Delete(resource).Error; err != nil {
 		_ = s.provider.SyncResourceToStore(resource)
 		return app_errors.ParseDBError(err)
+	}
+	if err := s.provider.RefreshScheduler(poolID); err != nil {
+		return app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 	}
 	return nil
 }
@@ -620,10 +769,17 @@ func (s *ResourcePoolService) resourceView(resource *models.UpstreamResource) Re
 		UpstreamURL:         resource.UpstreamURL,
 		MaskedKey:           s.maskCredential(resource.KeyValue),
 		Status:              resource.Status,
+		Enabled:             models.CredentialEnabled(resource.Enabled),
+		Priority:            resource.Priority,
+		Weight:              resource.Weight,
+		RequestCount:        resource.RequestCount,
+		TotalFailureCount:   resource.TotalFailureCount,
 		FailureCount:        resource.FailureCount,
 		GlobalCooldownUntil: resource.GlobalCooldownUntil,
 		DisabledReason:      resource.DisabledReason,
 		LastUsedAt:          resource.LastUsedAt,
+		LastSuccessAt:       resource.LastSuccessAt,
+		LastFailureAt:       resource.LastFailureAt,
 		CreatedAt:           resource.CreatedAt,
 		UpdatedAt:           resource.UpdatedAt,
 	}
