@@ -7,6 +7,7 @@ import {
   ChevronDownOutline,
   ChevronForwardOutline,
   CreateOutline,
+  DocumentTextOutline,
   RefreshOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
@@ -45,6 +46,10 @@ const managerRefreshTokens = reactive<Record<number, number>>({});
 const poolFormRef = ref();
 const resourceUpstreamURL = ref("");
 const resourceKeysText = ref("");
+const resourcePriority = ref(10);
+const resourceWeight = ref(1);
+const resourceImportMode = ref<"batch" | "config">("batch");
+const resourceImportContent = ref("");
 
 const parsedResourceKeys = computed(() =>
   resourceKeysText.value
@@ -131,10 +136,14 @@ async function savePool() {
   }
 }
 
-function openResourceImporter(pool: ResourcePool) {
+function openResourceImporter(pool: ResourcePool, mode: "batch" | "config" = "batch") {
   targetPool.value = pool;
+  resourceImportMode.value = mode;
   resourceUpstreamURL.value = "";
   resourceKeysText.value = "";
+  resourcePriority.value = 10;
+  resourceWeight.value = 1;
+  resourceImportContent.value = "";
   resourcesModalVisible.value = true;
 }
 
@@ -157,6 +166,8 @@ function parseResources(): UpstreamResourceInput[] | null {
     name: "",
     upstream_url: upstreamURL,
     key,
+    priority: resourcePriority.value,
+    weight: resourceWeight.value,
   }));
 }
 
@@ -164,14 +175,22 @@ async function addResources() {
   if (!targetPool.value || savingResources.value) {
     return;
   }
-  const resources = parseResources();
-  if (!resources) {
-    return;
-  }
   savingResources.value = true;
   try {
     const poolID = targetPool.value.id;
-    await resourcePoolsApi.addResources(poolID, resources);
+    if (resourceImportMode.value === "config") {
+      if (!resourceImportContent.value.trim()) {
+        message.warning(t("resourcePools.importContentRequired"));
+        return;
+      }
+      await resourcePoolsApi.importResources(poolID, resourceImportContent.value);
+    } else {
+      const resources = parseResources();
+      if (!resources) {
+        return;
+      }
+      await resourcePoolsApi.addResources(poolID, resources);
+    }
     resourcesModalVisible.value = false;
     resourceUpstreamURL.value = "";
     resourceKeysText.value = "";
@@ -287,6 +306,10 @@ function formatTTL(seconds: number): string {
               <template #icon><n-icon :component="AddOutline" /></template>
               {{ t("resourcePools.addResources") }}
             </n-button>
+            <n-button size="small" quaternary @click="openResourceImporter(pool, 'config')">
+              <template #icon><n-icon :component="DocumentTextOutline" /></template>
+              {{ t("resourcePools.importConfig") }}
+            </n-button>
             <n-button size="small" quaternary @click="openPoolEditor(pool)">
               <template #icon><n-icon :component="CreateOutline" /></template>
               {{ t("common.edit") }}
@@ -396,10 +419,24 @@ function formatTTL(seconds: number): string {
       <n-card
         class="editor-card resource-importer"
         :bordered="false"
-        :title="t('resourcePools.addResources')"
+        :title="
+          resourceImportMode === 'batch'
+            ? t('resourcePools.addResources')
+            : t('resourcePools.importConfig')
+        "
       >
-        <p class="import-help">{{ t("resourcePools.importHelp") }}</p>
-        <n-form label-placement="top" class="resource-import-form">
+        <p class="import-help">
+          {{
+            resourceImportMode === "batch"
+              ? t("resourcePools.importHelp")
+              : t("resourcePools.importConfigHelp")
+          }}
+        </p>
+        <n-form
+          v-if="resourceImportMode === 'batch'"
+          label-placement="top"
+          class="resource-import-form"
+        >
           <n-form-item :label="t('resourcePools.upstreamURL')" required>
             <n-input
               v-model:value="resourceUpstreamURL"
@@ -431,7 +468,25 @@ function formatTTL(seconds: number): string {
               </small>
             </div>
           </n-form-item>
+          <div class="timing-fields scheduling-fields">
+            <n-form-item :label="t('resourcePools.priority')">
+              <n-input-number v-model:value="resourcePriority" :min="1" :max="1000" />
+            </n-form-item>
+            <n-form-item :label="t('resourcePools.weight')">
+              <n-input-number v-model:value="resourceWeight" :min="1" :max="1000" />
+            </n-form-item>
+          </div>
+          <p class="scheduling-help">{{ t("resourcePools.schedulingHelp") }}</p>
         </n-form>
+        <n-input
+          v-else
+          v-model:value="resourceImportContent"
+          class="config-import-input"
+          type="textarea"
+          :rows="12"
+          :placeholder="t('resourcePools.importConfigPlaceholder')"
+          spellcheck="false"
+        />
         <n-alert type="warning" :bordered="false" class="secret-note">
           {{ t("resourcePools.secretNote") }}
         </n-alert>
@@ -439,7 +494,11 @@ function formatTTL(seconds: number): string {
           <div class="modal-actions">
             <n-button @click="resourcesModalVisible = false">{{ t("common.cancel") }}</n-button>
             <n-button type="primary" :loading="savingResources" @click="addResources">
-              {{ t("resourcePools.importResources") }}
+              {{
+                resourceImportMode === "batch"
+                  ? t("resourcePools.importResources")
+                  : t("resourcePools.importConfigAction")
+              }}
             </n-button>
           </div>
         </template>
@@ -630,6 +689,20 @@ function formatTTL(seconds: number): string {
 
 .secret-note {
   margin-top: 12px;
+}
+
+.scheduling-fields {
+  margin-top: -4px;
+}
+
+.scheduling-help {
+  margin: -8px 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.config-import-input {
+  margin-top: 14px;
 }
 
 @media (max-width: 720px) {

@@ -58,13 +58,20 @@ type SystemExportGroup struct {
 }
 
 type SystemExportKey struct {
-	Key          string `json:"key,omitempty"`
-	EncryptedKey string `json:"encrypted_key,omitempty"`
-	MaskedKey    string `json:"masked_key,omitempty"`
-	Notes        string `json:"notes"`
-	Status       string `json:"status"`
-	RequestCount int64  `json:"request_count"`
-	FailureCount int64  `json:"failure_count"`
+	Key               string     `json:"key,omitempty"`
+	EncryptedKey      string     `json:"encrypted_key,omitempty"`
+	MaskedKey         string     `json:"masked_key,omitempty"`
+	Notes             string     `json:"notes"`
+	Enabled           *bool      `json:"enabled,omitempty"`
+	Status            string     `json:"status"`
+	Priority          int        `json:"priority,omitempty"`
+	Weight            int        `json:"weight,omitempty"`
+	RequestCount      int64      `json:"request_count"`
+	TotalFailureCount int64      `json:"total_failure_count,omitempty"`
+	FailureCount      int64      `json:"failure_count"`
+	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
+	LastSuccessAt     *time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt     *time.Time `json:"last_failure_at,omitempty"`
 }
 
 type SystemExportService struct {
@@ -136,10 +143,17 @@ func (s *SystemExportService) Export(ctx context.Context, options SystemExportOp
 
 func (s *SystemExportService) exportKey(key models.APIKey, mode string) SystemExportKey {
 	exportKey := SystemExportKey{
-		Notes:        key.Notes,
-		Status:       key.Status,
-		RequestCount: key.RequestCount,
-		FailureCount: key.FailureCount,
+		Notes:             key.Notes,
+		Enabled:           models.Bool(models.CredentialEnabled(key.Enabled)),
+		Status:            key.Status,
+		Priority:          key.Priority,
+		Weight:            key.Weight,
+		RequestCount:      key.RequestCount,
+		TotalFailureCount: key.TotalFailureCount,
+		FailureCount:      key.FailureCount,
+		LastUsedAt:        key.LastUsedAt,
+		LastSuccessAt:     key.LastSuccessAt,
+		LastFailureAt:     key.LastFailureAt,
 	}
 	rawKey := key.KeyValue
 	if s.encryptionSvc != nil {
@@ -264,14 +278,34 @@ func (s *SystemImportService) Import(ctx context.Context, envelope SystemExportE
 			if status == "" {
 				status = models.KeyStatusActive
 			}
+			enabled := models.CredentialEnabled(exportKey.Enabled)
+			if status == models.KeyStatusDisabled {
+				status = models.KeyStatusActive
+				enabled = false
+			}
+			priority := exportKey.Priority
+			if priority <= 0 {
+				priority = models.DefaultCredentialPriority
+			}
+			weight := exportKey.Weight
+			if weight <= 0 {
+				weight = models.DefaultCredentialWeight
+			}
 			key := models.APIKey{
-				GroupID:      group.ID,
-				KeyValue:     exportKey.Key,
-				KeyHash:      s.encryptionSvc.Hash(exportKey.Key),
-				Notes:        exportKey.Notes,
-				Status:       status,
-				RequestCount: exportKey.RequestCount,
-				FailureCount: exportKey.FailureCount,
+				GroupID:           group.ID,
+				KeyValue:          exportKey.Key,
+				KeyHash:           s.encryptionSvc.Hash(exportKey.Key),
+				Notes:             exportKey.Notes,
+				Enabled:           models.Bool(enabled),
+				Status:            status,
+				Priority:          priority,
+				Weight:            weight,
+				RequestCount:      exportKey.RequestCount,
+				TotalFailureCount: exportKey.TotalFailureCount,
+				FailureCount:      exportKey.FailureCount,
+				LastUsedAt:        exportKey.LastUsedAt,
+				LastSuccessAt:     exportKey.LastSuccessAt,
+				LastFailureAt:     exportKey.LastFailureAt,
 			}
 			if err := s.keyService.KeyProvider.AddKeys(group.ID, []models.APIKey{key}); err != nil {
 				return err

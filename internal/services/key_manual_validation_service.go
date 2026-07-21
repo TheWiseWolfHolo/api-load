@@ -74,7 +74,7 @@ func (s *KeyManualValidationService) queryKeysForValidation(group *models.Group,
 	}
 
 	var keys []models.APIKey
-	query := s.DB.Where("group_id = ?", group.ID)
+	query := s.DB.Where("group_id = ? AND enabled = ?", group.ID, true)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	} else {

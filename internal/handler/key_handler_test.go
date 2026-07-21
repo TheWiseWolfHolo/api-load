@@ -64,6 +64,11 @@ func handlerTestGroup(t *testing.T, db *gorm.DB) models.Group {
 
 func servicesSeedKey(t *testing.T, svc *services.KeyService, groupID uint, rawKey, notes, status string, failureCount, requestCount int64) models.APIKey {
 	t.Helper()
+	enabled := true
+	if status == models.KeyStatusDisabled {
+		status = models.KeyStatusActive
+		enabled = false
+	}
 
 	key := models.APIKey{
 		GroupID:      groupID,
@@ -71,6 +76,9 @@ func servicesSeedKey(t *testing.T, svc *services.KeyService, groupID uint, rawKe
 		KeyHash:      svc.EncryptionSvc.Hash(rawKey),
 		Notes:        notes,
 		Status:       status,
+		Enabled:      models.Bool(enabled),
+		Priority:     models.DefaultCredentialPriority,
+		Weight:       models.DefaultCredentialWeight,
 		FailureCount: failureCount,
 		RequestCount: requestCount,
 	}
@@ -118,8 +126,8 @@ func TestKEY006UpdateKeyStatusHandlerDisablesKey(t *testing.T) {
 	if err := server.DB.First(&stored, keyID).Error; err != nil {
 		t.Fatalf("reload key: %v", err)
 	}
-	if stored.Status != models.KeyStatusDisabled {
-		t.Fatalf("expected key disabled, got %q", stored.Status)
+	if stored.Status != models.KeyStatusActive || models.CredentialEnabled(stored.Enabled) {
+		t.Fatalf("expected key manually disabled with healthy status, got %#v", stored)
 	}
 }
 

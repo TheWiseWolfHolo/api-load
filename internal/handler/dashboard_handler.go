@@ -31,9 +31,9 @@ type TokenStatsResponse struct {
 // Stats Get dashboard statistics
 func (s *Server) Stats(c *gin.Context) {
 	var activeKeys, invalidKeys, disabledKeys int64
-	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusActive).Count(&activeKeys)
-	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusInvalid).Count(&invalidKeys)
-	s.DB.Model(&models.APIKey{}).Where("status = ?", models.KeyStatusDisabled).Count(&disabledKeys)
+	s.DB.Model(&models.APIKey{}).Where("enabled = ? AND status = ?", true, models.KeyStatusActive).Count(&activeKeys)
+	s.DB.Model(&models.APIKey{}).Where("enabled = ? AND status = ?", true, models.KeyStatusInvalid).Count(&invalidKeys)
+	s.DB.Model(&models.APIKey{}).Where("enabled = ?", false).Count(&disabledKeys)
 
 	now := time.Now()
 	rpmStats, err := s.getRPMStats(now)

@@ -4,12 +4,94 @@ import (
 	"api-load/internal/config"
 	"api-load/internal/models"
 	"api-load/internal/resourcepool"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestRES015ResourceExportRoundTripKeepsConfigAndResetsRuntimeState(t *testing.T) {
+	svc, _, _ := newTestResourcePoolService(t)
+	ctx := context.Background()
+	source, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "export-source"})
+	if err != nil {
+		t.Fatalf("create source pool: %v", err)
+	}
+	created, err := svc.AddResources(ctx, source.ID, []ResourceCreateParams{{
+		Name: "seat-a", UpstreamURL: "https://api.example.invalid", Key: "sk-export-a",
+		Enabled: models.Bool(false), Priority: 3, Weight: 7,
+	}})
+	if err != nil {
+		t.Fatalf("add source resource: %v", err)
+	}
+	if err := svc.db.Model(&models.UpstreamResource{}).Where("id = ?", created[0].ID).Updates(map[string]any{
+		"status": models.ResourceStatusInvalid, "request_count": 12, "total_failure_count": 4, "failure_count": 2,
+	}).Error; err != nil {
+		t.Fatalf("seed runtime state: %v", err)
+	}
+
+	var exported bytes.Buffer
+	result, err := svc.ExportResourcesToWriter(ctx, source.ID, "all", nil, "full", "jsonl", &exported)
+	if err != nil || result.ExportedCount != 1 {
+		t.Fatalf("export resource: %#v %v", result, err)
+	}
+	if strings.Contains(exported.String(), `"status"`) || strings.Contains(exported.String(), "request_count") || strings.Contains(exported.String(), "failure_count") {
+		t.Fatalf("full export leaked runtime state: %s", exported.String())
+	}
+
+	records, err := ParseResourceImportInput(exported.String())
+	if err != nil {
+		t.Fatalf("parse exported resource: %v", err)
+	}
+	target, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "export-target"})
+	if err != nil {
+		t.Fatalf("create target pool: %v", err)
+	}
+	imported, err := svc.AddResources(ctx, target.ID, records)
+	if err != nil {
+		t.Fatalf("import resource: %v", err)
+	}
+	if len(imported) != 1 || imported[0].Enabled || imported[0].Priority != 3 || imported[0].Weight != 7 || imported[0].Status != models.ResourceStatusActive || imported[0].RequestCount != 0 || imported[0].FailureCount != 0 {
+		t.Fatalf("unexpected round-tripped resource: %#v", imported)
+	}
+
+	var keysOnly bytes.Buffer
+	if _, err := svc.ExportResourcesToWriter(ctx, source.ID, "all", nil, "keys", "txt", &keysOnly); err != nil {
+		t.Fatalf("export keys only: %v", err)
+	}
+	if strings.TrimSpace(keysOnly.String()) != "sk-export-a" {
+		t.Fatalf("unexpected keys-only export: %q", keysOnly.String())
+	}
+}
+
+func TestRES016ManualEnablementDoesNotOverwriteHealth(t *testing.T) {
+	svc, _, _ := newTestResourcePoolService(t)
+	ctx := context.Background()
+	pool, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "independent-states"})
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	created, err := svc.AddResources(ctx, pool.ID, []ResourceCreateParams{{UpstreamURL: "https://api.example.invalid", Key: "sk-state"}})
+	if err != nil {
+		t.Fatalf("add resource: %v", err)
+	}
+	invalid := models.ResourceStatusInvalid
+	if _, err := svc.BulkUpdateResources(ctx, pool.ID, []uint{created[0].ID}, ResourceBatchUpdateParams{Status: &invalid}); err != nil {
+		t.Fatalf("mark invalid: %v", err)
+	}
+	if _, err := svc.BulkUpdateResources(ctx, pool.ID, []uint{created[0].ID}, ResourceBatchUpdateParams{Enabled: models.Bool(false)}); err != nil {
+		t.Fatalf("disable resource: %v", err)
+	}
+	if _, err := svc.BulkUpdateResources(ctx, pool.ID, []uint{created[0].ID}, ResourceBatchUpdateParams{Enabled: models.Bool(true)}); err != nil {
+		t.Fatalf("enable resource: %v", err)
+	}
+	page, err := svc.ListResources(ctx, pool.ID, ResourceListParams{Status: models.ResourceStatusInvalid})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Status != models.ResourceStatusInvalid || !page.Items[0].Enabled {
+		t.Fatalf("manual enablement overwrote health: %#v %v", page, err)
+	}
+}
 
 func newTestResourcePoolService(t *testing.T) (*ResourcePoolService, *resourcepool.Provider, *GroupService) {
 	t.Helper()

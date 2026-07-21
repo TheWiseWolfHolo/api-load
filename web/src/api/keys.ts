@@ -140,6 +140,37 @@ export const keysApi = {
     await http.put(`/keys/${keyId}/notes`, { notes }, { hideMessage: true });
   },
 
+  async updateKey(
+    keyId: number,
+    payload: {
+      enabled?: boolean;
+      status?: "active" | "invalid";
+      priority?: number;
+      weight?: number;
+      notes?: string;
+    }
+  ): Promise<{ changed_count: number; ignored_count: number }> {
+    const res = await http.put(`/keys/${keyId}`, payload, { hideMessage: true });
+    return res.data;
+  },
+
+  async batchUpdateKeys(
+    keyIds: number[],
+    payload: {
+      enabled?: boolean;
+      status?: "active" | "invalid";
+      priority?: number;
+      weight?: number;
+    }
+  ): Promise<{ changed_count: number; ignored_count: number }> {
+    const res = await http.post(
+      "/keys/batch-update",
+      { key_ids: keyIds, ...payload },
+      { hideMessage: true }
+    );
+    return res.data;
+  },
+
   // 更新密钥状态
   async updateKeyStatus(
     keyId: number,
@@ -243,7 +274,11 @@ export const keysApi = {
   },
 
   // 导出密钥
-  exportKeys(groupId: number, status: "all" | "active" | "invalid" | "disabled" = "all"): void {
+  exportKeys(
+    groupId: number,
+    status: "all" | "active" | "invalid" | "disabled" = "all",
+    format: "txt" | "jsonl" | "csv" = "txt"
+  ): void {
     const authKey = localStorage.getItem("authKey");
     if (!authKey) {
       window.$message.error(i18n.global.t("auth.noAuthKeyFound"));
@@ -259,11 +294,13 @@ export const keysApi = {
       params.append("status", status);
     }
 
+    params.append("format", format);
+
     const url = `${http.defaults.baseURL}/keys/export?${params.toString()}`;
 
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `keys-group_${groupId}-${status}-${Date.now()}.txt`);
+    link.setAttribute("download", `keys-group_${groupId}-${status}-${Date.now()}.${format}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

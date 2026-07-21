@@ -55,6 +55,11 @@ func createServiceTestGroup(t *testing.T, db *gorm.DB) models.Group {
 
 func seedKey(t *testing.T, svc *KeyService, groupID uint, rawKey, notes, status string, failureCount, requestCount int64) models.APIKey {
 	t.Helper()
+	enabled := true
+	if status == models.KeyStatusDisabled {
+		status = models.KeyStatusActive
+		enabled = false
+	}
 
 	key := models.APIKey{
 		GroupID:      groupID,
@@ -62,6 +67,9 @@ func seedKey(t *testing.T, svc *KeyService, groupID uint, rawKey, notes, status 
 		KeyHash:      svc.EncryptionSvc.Hash(rawKey),
 		Notes:        notes,
 		Status:       status,
+		Enabled:      models.Bool(enabled),
+		Priority:     models.DefaultCredentialPriority,
+		Weight:       models.DefaultCredentialWeight,
 		FailureCount: failureCount,
 		RequestCount: requestCount,
 	}
@@ -192,7 +200,7 @@ func TestIMP008DuplicatePolicyOverwriteUpdatesEditableFields(t *testing.T) {
 	if err := db.Where("key_hash = ?", svc.EncryptionSvc.Hash("sk-test-existing")).First(&stored).Error; err != nil {
 		t.Fatalf("load key: %v", err)
 	}
-	if stored.Notes != "new notes" || stored.Status != models.KeyStatusDisabled {
+	if stored.Notes != "new notes" || stored.Status != models.KeyStatusActive || models.CredentialEnabled(stored.Enabled) {
 		t.Fatalf("overwrite did not update editable fields: %#v", stored)
 	}
 	if stored.RequestCount != 42 || !stored.CreatedAt.Equal(created.CreatedAt) || stored.KeyHash != created.KeyHash {
@@ -230,7 +238,7 @@ func TestIMP003AsyncImportPreservesJSONLNotesAndStatus(t *testing.T) {
 	if err := db.Where("key_hash = ?", svc.EncryptionSvc.Hash("sk-test-jsonl")).First(&stored).Error; err != nil {
 		t.Fatalf("load imported key: %v", err)
 	}
-	if stored.Notes != "paused" || stored.Status != models.KeyStatusDisabled {
+	if stored.Notes != "paused" || stored.Status != models.KeyStatusActive || models.CredentialEnabled(stored.Enabled) {
 		t.Fatalf("async import lost JSONL fields: %#v", stored)
 	}
 }

@@ -7,14 +7,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
 type KeyImportRecord struct {
-	Key    string
-	Notes  string
-	Status string
+	Key      string
+	Notes    string
+	Status   string
+	Enabled  *bool
+	Priority int
+	Weight   int
 }
 
 func ParseKeyImportInput(text string) ([]KeyImportRecord, error) {
@@ -32,7 +36,7 @@ func ParseKeyImportInput(text string) ([]KeyImportRecord, error) {
 		for _, key := range keys {
 			key = strings.TrimSpace(key)
 			if key != "" {
-				records = append(records, KeyImportRecord{Key: key, Status: models.KeyStatusActive})
+				records = append(records, defaultKeyImportRecord(key))
 			}
 		}
 		return records, nil
@@ -56,7 +60,7 @@ func parseLegacyKeyImport(text string) []KeyImportRecord {
 	for _, part := range parts {
 		key := strings.TrimSpace(part)
 		if key != "" {
-			records = append(records, KeyImportRecord{Key: key, Status: models.KeyStatusActive})
+			records = append(records, defaultKeyImportRecord(key))
 		}
 	}
 	return records
@@ -72,14 +76,17 @@ func parseJSONLKeyImport(text string) ([]KeyImportRecord, error) {
 		}
 
 		var row struct {
-			Key    string `json:"key"`
-			Notes  string `json:"notes"`
-			Status string `json:"status"`
+			Key      string `json:"key"`
+			Notes    string `json:"notes"`
+			Status   string `json:"status"`
+			Enabled  *bool  `json:"enabled"`
+			Priority int    `json:"priority"`
+			Weight   int    `json:"weight"`
 		}
 		if err := json.Unmarshal([]byte(line), &row); err != nil {
 			return nil, fmt.Errorf("row %d: invalid JSONL record: %w", i+1, err)
 		}
-		record, err := normalizeImportRecord(i+1, row.Key, row.Notes, row.Status)
+		record, err := normalizeImportRecord(i+1, row.Key, row.Notes, row.Status, row.Enabled, row.Priority, row.Weight)
 		if err != nil {
 			return nil, err
 		}
@@ -107,8 +114,11 @@ func parseCSVKeyImport(text string) ([]KeyImportRecord, bool, error) {
 	if !ok {
 		return nil, false, nil
 	}
-	notesIndex := header["notes"]
-	statusIndex := header["status"]
+	notesIndex := csvHeaderIndex(header, "notes")
+	statusIndex := csvHeaderIndex(header, "status")
+	enabledIndex := csvHeaderIndex(header, "enabled")
+	priorityIndex := csvHeaderIndex(header, "priority")
+	weightIndex := csvHeaderIndex(header, "weight")
 
 	records := make([]KeyImportRecord, 0, len(rows)-1)
 	for i, row := range rows[1:] {
@@ -116,7 +126,23 @@ func parseCSVKeyImport(text string) ([]KeyImportRecord, bool, error) {
 		key := csvValue(row, keyIndex)
 		notes := csvValue(row, notesIndex)
 		status := csvValue(row, statusIndex)
-		record, err := normalizeImportRecord(rowNumber, key, notes, status)
+		var enabled *bool
+		if raw := csvValue(row, enabledIndex); raw != "" {
+			parsed, parseErr := strconv.ParseBool(raw)
+			if parseErr != nil {
+				return nil, true, fmt.Errorf("row %d: enabled must be true or false", rowNumber)
+			}
+			enabled = &parsed
+		}
+		priority, err := parseOptionalCSVInt(csvValue(row, priorityIndex), rowNumber, "priority")
+		if err != nil {
+			return nil, true, err
+		}
+		weight, err := parseOptionalCSVInt(csvValue(row, weightIndex), rowNumber, "weight")
+		if err != nil {
+			return nil, true, err
+		}
+		record, err := normalizeImportRecord(rowNumber, key, notes, status, enabled, priority, weight)
 		if err != nil {
 			return nil, true, err
 		}
@@ -132,7 +158,7 @@ func csvValue(row []string, index int) string {
 	return strings.TrimSpace(row[index])
 }
 
-func normalizeImportRecord(rowNumber int, key, notes, status string) (KeyImportRecord, error) {
+func normalizeImportRecord(rowNumber int, key, notes, status string, enabled *bool, priority, weight int) (KeyImportRecord, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return KeyImportRecord{}, fmt.Errorf("row %d: key is required", rowNumber)
@@ -148,10 +174,50 @@ func normalizeImportRecord(rowNumber int, key, notes, status string) (KeyImportR
 		status = models.KeyStatusActive
 	}
 	switch status {
-	case models.KeyStatusActive, models.KeyStatusInvalid, models.KeyStatusDisabled:
+	case models.KeyStatusDisabled:
+		status = models.KeyStatusActive
+		enabled = models.Bool(false)
+	case models.KeyStatusActive, models.KeyStatusInvalid:
 	default:
 		return KeyImportRecord{}, fmt.Errorf("row %d: invalid status %q for key %s", rowNumber, status, utils.MaskAPIKey(key))
 	}
+	if enabled == nil {
+		enabled = models.Bool(true)
+	}
+	if priority == 0 {
+		priority = models.DefaultCredentialPriority
+	}
+	if weight == 0 {
+		weight = models.DefaultCredentialWeight
+	}
+	if priority < 1 || priority > 1000 {
+		return KeyImportRecord{}, fmt.Errorf("row %d: priority must be between 1 and 1000 for key %s", rowNumber, utils.MaskAPIKey(key))
+	}
+	if weight < 1 || weight > 1000 {
+		return KeyImportRecord{}, fmt.Errorf("row %d: weight must be between 1 and 1000 for key %s", rowNumber, utils.MaskAPIKey(key))
+	}
 
-	return KeyImportRecord{Key: key, Notes: notes, Status: status}, nil
+	return KeyImportRecord{Key: key, Notes: notes, Status: status, Enabled: enabled, Priority: priority, Weight: weight}, nil
+}
+
+func defaultKeyImportRecord(key string) KeyImportRecord {
+	return KeyImportRecord{Key: key, Status: models.KeyStatusActive, Enabled: models.Bool(true), Priority: models.DefaultCredentialPriority, Weight: models.DefaultCredentialWeight}
+}
+
+func csvHeaderIndex(header map[string]int, name string) int {
+	if index, ok := header[name]; ok {
+		return index
+	}
+	return -1
+}
+
+func parseOptionalCSVInt(raw string, rowNumber int, field string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("row %d: %s must be an integer", rowNumber, field)
+	}
+	return value, nil
 }

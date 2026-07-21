@@ -23,8 +23,8 @@ func TestKEY006SetKeyStatusDisableAndEnableAreExplicit(t *testing.T) {
 	if err := db.First(&stored, key.ID).Error; err != nil {
 		t.Fatalf("reload disabled key: %v", err)
 	}
-	if stored.Status != models.KeyStatusDisabled || stored.FailureCount != 5 {
-		t.Fatalf("disable should preserve failure count and set disabled, got %#v", stored)
+	if stored.Status != models.KeyStatusActive || models.CredentialEnabled(stored.Enabled) || stored.FailureCount != 5 {
+		t.Fatalf("disable should preserve health state and failure count, got %#v", stored)
 	}
 	length, err := memStore.LLen(fmt.Sprintf("group:%d:active_keys", group.ID))
 	if err != nil {
@@ -44,7 +44,7 @@ func TestKEY006SetKeyStatusDisableAndEnableAreExplicit(t *testing.T) {
 	if err := db.First(&stored, key.ID).Error; err != nil {
 		t.Fatalf("reload enabled key: %v", err)
 	}
-	if stored.Status != models.KeyStatusActive || stored.FailureCount != 0 {
+	if stored.Status != models.KeyStatusActive || !models.CredentialEnabled(stored.Enabled) || stored.FailureCount != 0 {
 		t.Fatalf("enable should reset failure count and set active, got %#v", stored)
 	}
 	length, err = memStore.LLen(fmt.Sprintf("group:%d:active_keys", group.ID))
@@ -86,7 +86,7 @@ func TestKEY007ListKeysInGroupStatusFiltersIncludeDisabledAndAll(t *testing.T) {
 	}
 	for _, tc := range cases {
 		var keys []models.APIKey
-		if err := svc.ListKeysInGroupQuery(group.ID, tc.status, "", "", "").Find(&keys).Error; err != nil {
+		if err := svc.ListKeysInGroupQuery(group.ID, tc.status, nil, "", "", "").Find(&keys).Error; err != nil {
 			t.Fatalf("list status %q: %v", tc.status, err)
 		}
 		if len(keys) != tc.want {
@@ -106,7 +106,7 @@ func TestKEY011ListKeysSearchesNotesAndExactKeyHash(t *testing.T) {
 	seedKey(t, svc, group.ID, "sk-test-hash", "primary", models.KeyStatusActive, 0, 0)
 
 	var noteMatches []models.APIKey
-	if err := svc.ListKeysInGroupQuery(group.ID, "all", "", "billing", "").Find(&noteMatches).Error; err != nil {
+	if err := svc.ListKeysInGroupQuery(group.ID, "all", nil, "", "billing", "").Find(&noteMatches).Error; err != nil {
 		t.Fatalf("notes search: %v", err)
 	}
 	if len(noteMatches) != 1 || noteMatches[0].Notes != "billing backup" {
@@ -115,7 +115,7 @@ func TestKEY011ListKeysSearchesNotesAndExactKeyHash(t *testing.T) {
 
 	var hashMatches []models.APIKey
 	searchHash := svc.EncryptionSvc.Hash("sk-test-hash")
-	if err := svc.ListKeysInGroupQuery(group.ID, "all", searchHash, "", "").Find(&hashMatches).Error; err != nil {
+	if err := svc.ListKeysInGroupQuery(group.ID, "all", nil, searchHash, "", "").Find(&hashMatches).Error; err != nil {
 		t.Fatalf("exact key hash search: %v", err)
 	}
 	if len(hashMatches) != 1 || hashMatches[0].KeyHash != searchHash {
@@ -123,7 +123,7 @@ func TestKEY011ListKeysSearchesNotesAndExactKeyHash(t *testing.T) {
 	}
 
 	var generalMatches []models.APIKey
-	if err := svc.ListKeysInGroupQuery(group.ID, "all", "", "", "primary").Find(&generalMatches).Error; err != nil {
+	if err := svc.ListKeysInGroupQuery(group.ID, "all", nil, "", "", "primary").Find(&generalMatches).Error; err != nil {
 		t.Fatalf("general search: %v", err)
 	}
 	if len(generalMatches) != 1 || generalMatches[0].Notes != "primary" {

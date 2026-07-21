@@ -141,10 +141,13 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		resourcePools.PUT("/:id", serverHandler.UpdateResourcePool)
 		resourcePools.DELETE("/:id", serverHandler.DeleteResourcePool)
 		resourcePools.POST("/:id/resources", serverHandler.AddResourcePoolResources)
+		resourcePools.POST("/:id/resources/import", serverHandler.ImportResourcePoolResources)
 		resourcePools.GET("/:id/resources", serverHandler.ListResourcePoolResources)
+		resourcePools.GET("/:id/resources/export", serverHandler.ExportResourcePoolResources)
 		resourcePools.PUT("/:id/resources/:resourceId", serverHandler.UpdateResourcePoolResource)
 		resourcePools.PUT("/:id/resources/:resourceId/status", serverHandler.UpdateResourcePoolResourceStatus)
 		resourcePools.POST("/:id/resources/batch-status", serverHandler.BulkUpdateResourcePoolResourceStatus)
+		resourcePools.POST("/:id/resources/batch-update", serverHandler.BulkUpdateResourcePoolResources)
 		resourcePools.POST("/:id/resources/batch-delete", serverHandler.BulkDeleteResourcePoolResources)
 		resourcePools.DELETE("/:id/resources/:resourceId", serverHandler.DeleteResourcePoolResource)
 	}
@@ -165,6 +168,8 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		keys.POST("/validate-group", serverHandler.ValidateGroupKeys)
 		keys.POST("/test-multiple", serverHandler.TestMultipleKeys)
 		keys.POST("/status", serverHandler.BatchUpdateKeyStatus)
+		keys.POST("/batch-update", serverHandler.BatchUpdateKeys)
+		keys.PUT("/:id", serverHandler.UpdateKey)
 		keys.PUT("/:id/status", serverHandler.UpdateKeyStatus)
 		keys.PUT("/:id/notes", serverHandler.UpdateKeyNotes)
 	}

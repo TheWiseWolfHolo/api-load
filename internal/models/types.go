@@ -17,7 +17,16 @@ const (
 	ResourceStatusActive   = "active"
 	ResourceStatusInvalid  = "invalid"
 	ResourceStatusDisabled = "disabled"
+
+	DefaultCredentialPriority = 10
+	DefaultCredentialWeight   = 1
 )
+
+func Bool(value bool) *bool { return &value }
+
+func CredentialEnabled(value *bool) bool {
+	return value == nil || *value
+}
 
 // SystemSetting 对应 system_settings 表
 type SystemSetting struct {
@@ -152,11 +161,18 @@ type UpstreamResource struct {
 	KeyValue            string     `gorm:"type:text;not null" json:"key_value"`
 	KeyHash             string     `gorm:"type:varchar(128);not null;index" json:"key_hash"`
 	IdentityHash        string     `gorm:"type:varchar(128);not null;uniqueIndex:idx_resource_pool_identity" json:"identity_hash"`
+	Enabled             *bool      `gorm:"not null;default:true;index" json:"enabled"`
 	Status              string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
+	Priority            int        `gorm:"not null;default:10;index" json:"priority"`
+	Weight              int        `gorm:"not null;default:1" json:"weight"`
+	RequestCount        int64      `gorm:"not null;default:0" json:"request_count"`
+	TotalFailureCount   int64      `gorm:"not null;default:0" json:"total_failure_count"`
 	FailureCount        int64      `gorm:"not null;default:0" json:"failure_count"`
 	GlobalCooldownUntil *time.Time `gorm:"index" json:"global_cooldown_until,omitempty"`
 	DisabledReason      string     `gorm:"type:varchar(512)" json:"disabled_reason,omitempty"`
 	LastUsedAt          *time.Time `gorm:"index" json:"last_used_at,omitempty"`
+	LastSuccessAt       *time.Time `gorm:"index" json:"last_success_at,omitempty"`
+	LastFailureAt       *time.Time `gorm:"index" json:"last_failure_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
@@ -182,17 +198,23 @@ type UpstreamObjectBinding struct {
 
 // APIKey 对应 api_keys 表
 type APIKey struct {
-	ID           uint       `gorm:"primaryKey;autoIncrement;index:idx_api_keys_group_last_used_id,priority:3" json:"id"`
-	KeyValue     string     `gorm:"type:text;not null" json:"key_value"`
-	KeyHash      string     `gorm:"type:varchar(128);index" json:"key_hash"`
-	GroupID      uint       `gorm:"not null;index;index:idx_api_keys_group_last_used_id,priority:1" json:"group_id"`
-	Status       string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
-	Notes        string     `gorm:"type:varchar(255);default:''" json:"notes"`
-	RequestCount int64      `gorm:"not null;default:0" json:"request_count"`
-	FailureCount int64      `gorm:"not null;default:0" json:"failure_count"`
-	LastUsedAt   *time.Time `gorm:"index:idx_api_keys_group_last_used_id,priority:2" json:"last_used_at"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID                uint       `gorm:"primaryKey;autoIncrement;index:idx_api_keys_group_last_used_id,priority:3" json:"id"`
+	KeyValue          string     `gorm:"type:text;not null" json:"key_value"`
+	KeyHash           string     `gorm:"type:varchar(128);index" json:"key_hash"`
+	GroupID           uint       `gorm:"not null;index;index:idx_api_keys_group_last_used_id,priority:1" json:"group_id"`
+	Enabled           *bool      `gorm:"not null;default:true;index" json:"enabled"`
+	Status            string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
+	Priority          int        `gorm:"not null;default:10;index" json:"priority"`
+	Weight            int        `gorm:"not null;default:1" json:"weight"`
+	Notes             string     `gorm:"type:varchar(255);default:''" json:"notes"`
+	RequestCount      int64      `gorm:"not null;default:0" json:"request_count"`
+	TotalFailureCount int64      `gorm:"not null;default:0" json:"total_failure_count"`
+	FailureCount      int64      `gorm:"not null;default:0" json:"failure_count"`
+	LastUsedAt        *time.Time `gorm:"index:idx_api_keys_group_last_used_id,priority:2" json:"last_used_at"`
+	LastSuccessAt     *time.Time `gorm:"index" json:"last_success_at"`
+	LastFailureAt     *time.Time `gorm:"index" json:"last_failure_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // RequestType 请求类型常量

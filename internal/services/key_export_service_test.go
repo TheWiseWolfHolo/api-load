@@ -42,14 +42,25 @@ func TestEXP002JSONLExportIncludesNotesAndStatus(t *testing.T) {
 		t.Fatalf("unexpected export result: %#v", result)
 	}
 
-	var row map[string]string
+	var row struct {
+		Key      string `json:"key"`
+		Notes    string `json:"notes"`
+		Status   string `json:"status"`
+		Enabled  bool   `json:"enabled"`
+		Priority int    `json:"priority"`
+		Weight   int    `json:"weight"`
+	}
 	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &row); err != nil {
 		t.Fatalf("decode JSONL row: %v output=%q", err, out.String())
 	}
-	if row["key"] != "sk-test-jsonl" || row["notes"] != "paused" || row["status"] != models.KeyStatusDisabled {
+	if row.Key != "sk-test-jsonl" || row.Notes != "paused" || row.Status != models.KeyStatusActive || row.Enabled || row.Priority != 10 || row.Weight != 1 {
 		t.Fatalf("unexpected JSONL row: %#v", row)
 	}
-	if _, hasID := row["id"]; hasID {
+	var rawRow map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &rawRow); err != nil {
+		t.Fatalf("decode raw JSONL row: %v", err)
+	}
+	if _, hasID := rawRow["id"]; hasID {
 		t.Fatalf("JSONL export should not include database id: %#v", row)
 	}
 }
@@ -91,7 +102,7 @@ func TestEXP003JSONLExportRoundTripsThroughImport(t *testing.T) {
 		rows[row.Key] = key
 	}
 
-	if rows["sk-test-roundtrip-disabled"].Status != models.KeyStatusDisabled || rows["sk-test-roundtrip-disabled"].Notes != "paused" {
+	if rows["sk-test-roundtrip-disabled"].Status != models.KeyStatusActive || models.CredentialEnabled(rows["sk-test-roundtrip-disabled"].Enabled) || rows["sk-test-roundtrip-disabled"].Notes != "paused" {
 		t.Fatalf("disabled key did not round-trip: %#v", rows["sk-test-roundtrip-disabled"])
 	}
 	if rows["sk-test-roundtrip-active"].RequestCount != 0 {

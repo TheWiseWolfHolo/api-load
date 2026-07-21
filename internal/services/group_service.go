@@ -673,7 +673,7 @@ func (s *GroupService) CopyGroup(ctx context.Context, sourceGroupID uint, copyKe
 		var sourceKeys []models.APIKey
 		query := tx.Where("group_id = ?", sourceGroupID)
 		if option == "valid_only" {
-			query = query.Where("status = ?", models.KeyStatusActive)
+			query = query.Where("enabled = ? AND status = ?", true, models.KeyStatusActive)
 		}
 		if err := query.Find(&sourceKeys).Error; err != nil {
 			return nil, app_errors.ParseDBError(err)
@@ -818,19 +818,19 @@ func (s *GroupService) fetchKeyStats(ctx context.Context, groupID uint) (KeyStat
 	}
 
 	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
-		Where("group_id = ? AND status = ?", groupID, models.KeyStatusActive).
+		Where("group_id = ? AND enabled = ? AND status = ?", groupID, true, models.KeyStatusActive).
 		Count(&activeKeys).Error; err != nil {
 		return KeyStats{}, fmt.Errorf("failed to get active keys: %w", err)
 	}
 
 	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
-		Where("group_id = ? AND status = ?", groupID, models.KeyStatusInvalid).
+		Where("group_id = ? AND enabled = ? AND status = ?", groupID, true, models.KeyStatusInvalid).
 		Count(&invalidKeys).Error; err != nil {
 		return KeyStats{}, fmt.Errorf("failed to get invalid keys: %w", err)
 	}
 
 	if err := s.db.WithContext(ctx).Model(&models.APIKey{}).
-		Where("group_id = ? AND status = ?", groupID, models.KeyStatusDisabled).
+		Where("group_id = ? AND enabled = ?", groupID, false).
 		Count(&disabledKeys).Error; err != nil {
 		return KeyStats{}, fmt.Errorf("failed to get disabled keys: %w", err)
 	}

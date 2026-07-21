@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
 
 	app_errors "api-load/internal/errors"
@@ -34,6 +35,10 @@ type ResourceUpdateRequest struct {
 	Name        string  `json:"name"`
 	UpstreamURL string  `json:"upstream_url" binding:"required"`
 	Key         *string `json:"key,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	Priority    *int    `json:"priority,omitempty"`
+	Weight      *int    `json:"weight,omitempty"`
 }
 
 type BulkResourceStatusUpdateRequest struct {
@@ -44,6 +49,18 @@ type BulkResourceStatusUpdateRequest struct {
 type BulkResourceDeleteRequest struct {
 	ResourceIDs []uint   `json:"resource_ids"`
 	Keys        []string `json:"keys"`
+}
+
+type BulkResourceUpdateRequest struct {
+	ResourceIDs []uint  `json:"resource_ids" binding:"required"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	Priority    *int    `json:"priority,omitempty"`
+	Weight      *int    `json:"weight,omitempty"`
+}
+
+type ResourceImportRequest struct {
+	Content string `json:"content" binding:"required"`
 }
 
 func (s *Server) handleResourcePoolError(c *gin.Context, err error) bool {
@@ -148,6 +165,28 @@ func (s *Server) AddResourcePoolResources(c *gin.Context) {
 	response.Success(c, resources)
 }
 
+func (s *Server) ImportResourcePoolResources(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	var req ResourceImportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	items, err := services.ParseResourceImportInput(req.Content)
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, err.Error()))
+		return
+	}
+	resources, err := s.ResourcePoolService.AddResources(c.Request.Context(), poolID, items)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, resources)
+}
+
 func (s *Server) ListResourcePoolResources(c *gin.Context) {
 	id, ok := parseResourceID(c, "id")
 	if !ok {
@@ -155,16 +194,64 @@ func (s *Server) ListResourcePoolResources(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	var enabled *bool
+	if raw := c.Query("enabled"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "enabled must be true or false"))
+			return
+		}
+		enabled = &parsed
+	}
 	resources, err := s.ResourcePoolService.ListResources(c.Request.Context(), id, services.ResourceListParams{
 		Page:     page,
 		PageSize: pageSize,
 		Search:   c.Query("search"),
 		Status:   c.Query("status"),
+		Enabled:  enabled,
 	})
 	if s.handleResourcePoolError(c, err) {
 		return
 	}
 	response.Success(c, resources)
+}
+
+func (s *Server) ExportResourcePoolResources(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	content := c.DefaultQuery("content", "full")
+	format := c.Query("format")
+	if format == "" {
+		if content == "keys" {
+			format = "txt"
+		} else {
+			format = "jsonl"
+		}
+	}
+	var enabled *bool
+	if raw := c.Query("enabled"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "enabled must be true or false"))
+			return
+		}
+		enabled = &parsed
+	}
+	filename := fmt.Sprintf("resource-pool-%d-%s.%s", poolID, content, format)
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	switch format {
+	case "txt":
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+	case "csv":
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+	default:
+		c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	}
+	if _, err := s.ResourcePoolService.ExportResourcesToWriter(c.Request.Context(), poolID, c.DefaultQuery("status", "all"), enabled, content, format, c.Writer); err != nil {
+		logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to export resource pool")
+	}
 }
 
 func (s *Server) UpdateResourcePoolResource(c *gin.Context) {
@@ -185,11 +272,34 @@ func (s *Server) UpdateResourcePoolResource(c *gin.Context) {
 		Name:        req.Name,
 		UpstreamURL: req.UpstreamURL,
 		Key:         req.Key,
+		Enabled:     req.Enabled,
+		Status:      req.Status,
+		Priority:    req.Priority,
+		Weight:      req.Weight,
 	})
 	if s.handleResourcePoolError(c, err) {
 		return
 	}
 	response.Success(c, resource)
+}
+
+func (s *Server) BulkUpdateResourcePoolResources(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	var req BulkResourceUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.ResourcePoolService.BulkUpdateResources(c.Request.Context(), poolID, req.ResourceIDs, services.ResourceBatchUpdateParams{
+		Enabled: req.Enabled, Status: req.Status, Priority: req.Priority, Weight: req.Weight,
+	})
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, result)
 }
 
 func (s *Server) BulkUpdateResourcePoolResourceStatus(c *gin.Context) {

@@ -5,6 +5,7 @@ import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/keypool"
 	"api-load/internal/models"
+	"api-load/internal/scheduler"
 	"api-load/internal/store"
 	"context"
 	"errors"
@@ -39,13 +40,14 @@ type PoolConfig struct {
 }
 
 type Provider struct {
-	db            *gorm.DB
-	store         store.Store
-	encryptionSvc encryption.Service
+	db             *gorm.DB
+	store          store.Store
+	encryptionSvc  encryption.Service
+	weightedPicker *scheduler.SmoothPicker
 }
 
 func NewProvider(db *gorm.DB, cacheStore store.Store, encryptionSvc encryption.Service) *Provider {
-	return &Provider{db: db, store: cacheStore, encryptionSvc: encryptionSvc}
+	return &Provider{db: db, store: cacheStore, encryptionSvc: encryptionSvc, weightedPicker: scheduler.NewSmoothPicker()}
 }
 
 func (p *Provider) LoadResourcesFromDB() error {
@@ -68,7 +70,12 @@ func (p *Provider) LoadResourcesFromDB() error {
 	}
 	for i := range resources {
 		resource := &resources[i]
-		if err := p.SyncResourceToStore(resource); err != nil {
+		if err := p.syncResourceToStore(resource); err != nil {
+			return err
+		}
+	}
+	for _, pool := range pools {
+		if err := p.syncSchedulerSnapshot(pool.ID); err != nil {
 			return err
 		}
 	}
@@ -94,6 +101,9 @@ func (p *Provider) RemovePoolFromStore(poolID uint) error {
 	}
 	if err := p.store.Delete(poolKey(poolID)); err != nil {
 		return fmt.Errorf("delete resource pool config %d: %w", poolID, err)
+	}
+	if err := p.store.Delete(resourceSchedulerSnapshotKey(poolID)); err != nil {
+		return fmt.Errorf("delete resource scheduler snapshot %d: %w", poolID, err)
 	}
 	return nil
 }
@@ -156,9 +166,12 @@ func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource
 		return nil, fmt.Errorf("persist upstream resources: %w", err)
 	}
 	for i := range prepared {
-		if err := p.SyncResourceToStore(&prepared[i]); err != nil {
+		if err := p.syncResourceToStore(&prepared[i]); err != nil {
 			return nil, err
 		}
+	}
+	if err := p.syncSchedulerSnapshot(poolID); err != nil {
+		return nil, err
 	}
 	return prepared, nil
 }
@@ -219,6 +232,29 @@ func (p *Provider) prepareResource(resource *models.UpstreamResource, plainKey s
 }
 
 func (p *Provider) SyncResourceToStore(resource *models.UpstreamResource) error {
+	if err := p.syncResourceToStore(resource); err != nil {
+		return err
+	}
+	return p.syncSchedulerSnapshot(resource.ResourcePoolID)
+}
+
+func (p *Provider) SyncResourcesToStore(resources []models.UpstreamResource) error {
+	poolIDs := make(map[uint]struct{})
+	for i := range resources {
+		if err := p.syncResourceToStore(&resources[i]); err != nil {
+			return err
+		}
+		poolIDs[resources[i].ResourcePoolID] = struct{}{}
+	}
+	for poolID := range poolIDs {
+		if err := p.syncSchedulerSnapshot(poolID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Provider) syncResourceToStore(resource *models.UpstreamResource) error {
 	if resource == nil || resource.ID == 0 || resource.ResourcePoolID == 0 {
 		return errors.New("resource and pool IDs are required")
 	}
@@ -229,7 +265,7 @@ func (p *Provider) SyncResourceToStore(resource *models.UpstreamResource) error 
 	if err := p.store.LRem(listKey, 0, resource.ID); err != nil {
 		return fmt.Errorf("remove stale resource %d from pool %d: %w", resource.ID, resource.ResourcePoolID, err)
 	}
-	if resource.Status == models.ResourceStatusActive {
+	if models.CredentialEnabled(resource.Enabled) && resource.Status == models.ResourceStatusActive {
 		if err := p.store.LPush(listKey, resource.ID); err != nil {
 			return fmt.Errorf("add resource %d to pool %d: %w", resource.ID, resource.ResourcePoolID, err)
 		}
@@ -270,47 +306,17 @@ func (p *Provider) SelectResource(poolID uint, req SelectionRequest) (*models.Up
 						return resource, nil
 					}
 				}
+			} else {
+				_ = p.store.Delete(affinityKey(poolID, req.Affinity))
 			}
-			_ = p.store.Delete(affinityKey(poolID, req.Affinity))
 		}
 	}
 
-	listKey := activeResourcesKey(poolID)
-	listLen, err := p.store.LLen(listKey)
+	resource, err := p.selectWeightedResource(poolID, req.Route, excluded)
 	if err != nil {
-		return nil, fmt.Errorf("read active resource list: %w", err)
+		return nil, err
 	}
-	for range listLen {
-		rawID, rotateErr := p.store.Rotate(listKey)
-		if rotateErr != nil {
-			if errors.Is(rotateErr, store.ErrNotFound) {
-				break
-			}
-			return nil, fmt.Errorf("rotate resource pool: %w", rotateErr)
-		}
-		id, parseErr := strconv.ParseUint(rawID, 10, 64)
-		if parseErr != nil {
-			continue
-		}
-		if _, skip := excluded[uint(id)]; skip {
-			continue
-		}
-		resource, loadErr := p.resourceFromStore(uint(id))
-		if loadErr != nil || !p.isSelectable(resource, req.Route) {
-			continue
-		}
-		if req.Affinity != "" {
-			ttl := req.AffinityTTL
-			if ttl <= 0 {
-				ttl = DefaultAffinityTTL
-			}
-			if setErr := p.store.Set(affinityKey(poolID, req.Affinity), []byte(strconv.FormatUint(id, 10)), ttl); setErr != nil {
-				return nil, fmt.Errorf("bind resource affinity: %w", setErr)
-			}
-		}
-		return resource, nil
-	}
-	return nil, app_errors.ErrNoActiveKeys
+	return resource, nil
 }
 
 func (p *Provider) SelectBoundResource(poolID, resourceID uint, route string) (*models.UpstreamResource, error) {
@@ -399,6 +405,23 @@ func (p *Provider) RefreshAffinity(poolID uint, affinity string, ttl time.Durati
 	return p.store.Set(key, raw, ttl)
 }
 
+// BindAffinity persists a resource choice only after the corresponding
+// upstream attempt has succeeded. Failed fallback attempts must not move a
+// conversation away from its last known-good resource.
+func (p *Provider) BindAffinity(poolID uint, affinity string, resourceID uint, ttl time.Duration) error {
+	if poolID == 0 || resourceID == 0 || affinity == "" {
+		return nil
+	}
+	if ttl <= 0 {
+		ttl = DefaultAffinityTTL
+	}
+	return p.store.Set(
+		affinityKey(poolID, affinity),
+		[]byte(strconv.FormatUint(uint64(resourceID), 10)),
+		ttl,
+	)
+}
+
 func (p *Provider) SetRouteCooldown(resourceID uint, route string, ttl time.Duration) error {
 	if resourceID == 0 || strings.TrimSpace(route) == "" || ttl <= 0 {
 		return nil
@@ -412,6 +435,12 @@ func (p *Provider) SetRouteCooldown(resourceID uint, route string, ttl time.Dura
 func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string, statusCode int, message string, headers http.Header) error {
 	if resource == nil {
 		return nil
+	}
+	if statusCode == http.StatusNotFound {
+		return nil
+	}
+	if err := p.recordHealthFailure(resource); err != nil {
+		return err
 	}
 	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
 		return p.MarkInvalid(resource, message)
@@ -427,6 +456,18 @@ func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string
 		return p.SetRouteCooldown(resource.ID, route, transientRouteCooldown)
 	}
 	return nil
+}
+
+func (p *Provider) recordHealthFailure(resource *models.UpstreamResource) error {
+	if resource == nil || resource.ID == 0 {
+		return nil
+	}
+	if err := p.db.Model(&models.UpstreamResource{}).Where("id = ?", resource.ID).
+		UpdateColumn("failure_count", gorm.Expr("failure_count + ?", 1)).Error; err != nil {
+		return fmt.Errorf("increment resource health failure count: %w", err)
+	}
+	_, err := p.store.HIncrBy(resourceKey(resource.ID), "failure_count", 1)
+	return err
 }
 
 func (p *Provider) SetGlobalCooldown(resourceID uint, until time.Time, reason string) error {
@@ -451,11 +492,14 @@ func (p *Provider) MarkInvalid(resource *models.UpstreamResource, reason string)
 	if err := p.store.HSet(resourceKey(resource.ID), updates); err != nil {
 		return fmt.Errorf("cache invalid resource %d: %w", resource.ID, err)
 	}
-	return p.store.LRem(activeResourcesKey(resource.ResourcePoolID), 0, resource.ID)
+	if err := p.store.LRem(activeResourcesKey(resource.ResourcePoolID), 0, resource.ID); err != nil {
+		return err
+	}
+	return p.syncSchedulerSnapshot(resource.ResourcePoolID)
 }
 
 func (p *Provider) isSelectable(resource *models.UpstreamResource, route string) bool {
-	if resource == nil || resource.Status != models.ResourceStatusActive {
+	if resource == nil || !models.CredentialEnabled(resource.Enabled) || resource.Status != models.ResourceStatusActive {
 		return false
 	}
 	if resource.GlobalCooldownUntil != nil && resource.GlobalCooldownUntil.After(time.Now()) {
@@ -475,6 +519,9 @@ func (p *Provider) resourceFromStore(resourceID uint) (*models.UpstreamResource,
 	}
 	poolID, _ := strconv.ParseUint(details["resource_pool_id"], 10, 64)
 	failureCount, _ := strconv.ParseInt(details["failure_count"], 10, 64)
+	priority, _ := strconv.Atoi(details["priority"])
+	weight, _ := strconv.Atoi(details["weight"])
+	enabled := details["enabled"] == "true" || details["enabled"] == "1"
 	resource := &models.UpstreamResource{
 		ID:             resourceID,
 		ResourcePoolID: uint(poolID),
@@ -483,6 +530,9 @@ func (p *Provider) resourceFromStore(resourceID uint) (*models.UpstreamResource,
 		KeyValue:       details["key_string"],
 		KeyHash:        details["key_hash"],
 		Status:         details["status"],
+		Enabled:        models.Bool(enabled),
+		Priority:       priority,
+		Weight:         weight,
 		FailureCount:   failureCount,
 		DisabledReason: details["disabled_reason"],
 	}
@@ -511,6 +561,9 @@ func resourceToMap(resource *models.UpstreamResource) map[string]any {
 		"key_hash":              resource.KeyHash,
 		"identity_hash":         resource.IdentityHash,
 		"status":                resource.Status,
+		"enabled":               models.CredentialEnabled(resource.Enabled),
+		"priority":              resource.Priority,
+		"weight":                resource.Weight,
 		"failure_count":         resource.FailureCount,
 		"global_cooldown_until": cooldownUntil,
 		"disabled_reason":       resource.DisabledReason,
