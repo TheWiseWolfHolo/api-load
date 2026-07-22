@@ -7,6 +7,8 @@ import type {
   ResourcePool,
   ResourcePoolInput,
   ResourceStatus,
+  ResourceValidationGroup,
+  ResourceValidationResult,
   UpstreamResource,
   UpstreamResourceInput,
   UpstreamResourceUpdateInput,
@@ -40,6 +42,24 @@ export const resourcePoolsApi = {
 
   async listResources(id: number, params: ResourceListParams): Promise<ResourceListResponse> {
     const response = await http.get(`/resource-pools/${id}/resources`, { params });
+    return response.data;
+  },
+
+  async listValidationGroups(poolId: number): Promise<ResourceValidationGroup[]> {
+    const response = await http.get(`/resource-pools/${poolId}/validation-groups`);
+    return response.data || [];
+  },
+
+  async testResource(
+    poolId: number,
+    resourceId: number,
+    groupId: number
+  ): Promise<ResourceValidationResult> {
+    const response = await http.post(
+      `/resource-pools/${poolId}/resources/${resourceId}/test`,
+      { group_id: groupId },
+      { hideMessage: true }
+    );
     return response.data;
   },
 
@@ -128,7 +148,7 @@ export const resourcePoolsApi = {
     }
     const link = document.createElement("a");
     link.href = `${http.defaults.baseURL}/resource-pools/${poolId}/resources/export?${params}`;
-    link.download = `resource-pool-${poolId}-${options.content}-${Date.now()}.${options.format}`;
+    link.download = `resource-pool-${poolId}-${options.content}-${options.status ?? "all"}-${Date.now()}.${options.format}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

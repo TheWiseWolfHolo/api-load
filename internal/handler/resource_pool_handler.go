@@ -63,6 +63,10 @@ type ResourceImportRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
+type ResourceTestRequest struct {
+	GroupID uint `json:"group_id" binding:"required"`
+}
+
 func (s *Server) handleResourcePoolError(c *gin.Context, err error) bool {
 	if err == nil {
 		return false
@@ -239,7 +243,12 @@ func (s *Server) ExportResourcePoolResources(c *gin.Context) {
 		}
 		enabled = &parsed
 	}
-	filename := fmt.Sprintf("resource-pool-%d-%s.%s", poolID, content, format)
+	status := c.DefaultQuery("status", "all")
+	suffix := content
+	if status != "" && status != "all" {
+		suffix += "-" + status
+	}
+	filename := fmt.Sprintf("resource-pool-%d-%s.%s", poolID, suffix, format)
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	switch format {
 	case "txt":
@@ -249,9 +258,42 @@ func (s *Server) ExportResourcePoolResources(c *gin.Context) {
 	default:
 		c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
 	}
-	if _, err := s.ResourcePoolService.ExportResourcesToWriter(c.Request.Context(), poolID, c.DefaultQuery("status", "all"), enabled, content, format, c.Writer); err != nil {
+	if _, err := s.ResourcePoolService.ExportResourcesToWriter(c.Request.Context(), poolID, status, enabled, content, format, c.Writer); err != nil {
 		logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to export resource pool")
 	}
+}
+
+func (s *Server) ListResourcePoolValidationGroups(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	groups, err := s.ResourceValidationService.ListValidationGroups(c.Request.Context(), poolID)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, groups)
+}
+
+func (s *Server) TestResourcePoolResource(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	resourceID, ok := parseResourceID(c, "resourceId")
+	if !ok {
+		return
+	}
+	var req ResourceTestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	result, err := s.ResourceValidationService.TestResource(c.Request.Context(), poolID, resourceID, req.GroupID)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, result)
 }
 
 func (s *Server) UpdateResourcePoolResource(c *gin.Context) {

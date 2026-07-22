@@ -429,6 +429,13 @@ func (p *Provider) SetRouteCooldown(resourceID uint, route string, ttl time.Dura
 	return p.store.Set(routeCooldownKey(resourceID, route), []byte("1"), ttl)
 }
 
+func (p *Provider) ClearRouteCooldown(resourceID uint, route string) error {
+	if resourceID == 0 || strings.TrimSpace(route) == "" {
+		return nil
+	}
+	return p.store.Delete(routeCooldownKey(resourceID, route))
+}
+
 // HandleFailure classifies resource failures into global state and route-local
 // cooldowns. Credential and explicit quota failures affect every protocol;
 // ordinary rate limits and transient upstream failures affect only one route.
@@ -496,6 +503,29 @@ func (p *Provider) MarkInvalid(resource *models.UpstreamResource, reason string)
 		return err
 	}
 	return p.syncSchedulerSnapshot(resource.ResourcePoolID)
+}
+
+// MarkHealthy clears runtime health failures after an explicit validation
+// succeeds. Manual enablement remains untouched, so a disabled resource is not
+// silently returned to scheduling.
+func (p *Provider) MarkHealthy(resource *models.UpstreamResource) error {
+	if resource == nil || resource.ID == 0 {
+		return errors.New("resource is required")
+	}
+	updates := map[string]any{
+		"status":                models.ResourceStatusActive,
+		"failure_count":         0,
+		"global_cooldown_until": nil,
+		"disabled_reason":       "",
+	}
+	if err := p.db.Model(&models.UpstreamResource{}).Where("id = ?", resource.ID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("mark resource %d healthy: %w", resource.ID, err)
+	}
+	resource.Status = models.ResourceStatusActive
+	resource.FailureCount = 0
+	resource.GlobalCooldownUntil = nil
+	resource.DisabledReason = ""
+	return p.SyncResourceToStore(resource)
 }
 
 func (p *Provider) isSelectable(resource *models.UpstreamResource, route string) bool {

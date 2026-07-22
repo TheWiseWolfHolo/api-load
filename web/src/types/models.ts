@@ -275,6 +275,25 @@ export interface ResourceListResponse {
   pagination: Pagination;
 }
 
+export interface ResourceValidationGroup {
+  id: number;
+  name: string;
+  display_name: string;
+  channel_type: ChannelType;
+  test_model: string;
+  validation_endpoint: string;
+}
+
+export interface ResourceValidationResult {
+  resource_id: number;
+  group_id: number;
+  group_name: string;
+  channel_type: ChannelType;
+  is_valid: boolean;
+  error?: string;
+  duration_ms: number;
+}
+
 export interface BulkResourceStatusResult {
   requested_count: number;
   matched_count: number;

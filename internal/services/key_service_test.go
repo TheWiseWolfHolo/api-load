@@ -4,6 +4,7 @@ import (
 	"api-load/internal/models"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestKEY006SetKeyStatusDisableAndEnableAreExplicit(t *testing.T) {
@@ -64,6 +65,39 @@ func TestKEY006SetKeyStatusValidatesStatus(t *testing.T) {
 	_, err := svc.SetKeyStatus(key.ID, "paused")
 	if err == nil {
 		t.Fatal("expected validation error for unknown status")
+	}
+}
+
+func TestKEY006ManualRestoreClearsStaleCooldown(t *testing.T) {
+	svc, db, memStore, _ := newTestKeyService(t)
+	group := createServiceTestGroup(t, db)
+	key := seedKey(t, svc, group.ID, "sk-test-cooldown", "", models.KeyStatusInvalid, 3, 0)
+	future := time.Now().Add(24 * time.Hour)
+	if err := db.Model(&models.APIKey{}).Where("id = ?", key.ID).Update("cooldown_until", future).Error; err != nil {
+		t.Fatalf("seed cooldown: %v", err)
+	}
+	key.CooldownUntil = &future
+	if err := svc.KeyProvider.SyncKeysToStore([]models.APIKey{key}); err != nil {
+		t.Fatalf("cache cooldown: %v", err)
+	}
+
+	if _, err := svc.SetKeyStatus(key.ID, models.KeyStatusActive); err != nil {
+		t.Fatalf("restore key: %v", err)
+	}
+
+	var stored models.APIKey
+	if err := db.First(&stored, key.ID).Error; err != nil {
+		t.Fatalf("reload restored key: %v", err)
+	}
+	if stored.Status != models.KeyStatusActive || stored.FailureCount != 0 || stored.CooldownUntil != nil {
+		t.Fatalf("manual restore left stale health state: %#v", stored)
+	}
+	details, err := memStore.HGetAll(fmt.Sprintf("key:%d", key.ID))
+	if err != nil {
+		t.Fatalf("read cached key: %v", err)
+	}
+	if details["cooldown_until"] != "0" {
+		t.Fatalf("manual restore left cached cooldown: %#v", details)
 	}
 }
 

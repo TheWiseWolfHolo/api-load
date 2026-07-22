@@ -1,15 +1,20 @@
 package services
 
 import (
+	"api-load/internal/channel"
 	"api-load/internal/config"
+	"api-load/internal/httpclient"
 	"api-load/internal/models"
 	"api-load/internal/resourcepool"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRES015ResourceExportRoundTripKeepsConfigAndResetsRuntimeState(t *testing.T) {
@@ -64,6 +69,182 @@ func TestRES015ResourceExportRoundTripKeepsConfigAndResetsRuntimeState(t *testin
 	if strings.TrimSpace(keysOnly.String()) != "sk-export-a" {
 		t.Fatalf("unexpected keys-only export: %q", keysOnly.String())
 	}
+}
+
+func TestRES017KeysOnlyExportSeparatesHealthAndManualDisablement(t *testing.T) {
+	svc, _, _ := newTestResourcePoolService(t)
+	ctx := context.Background()
+	pool, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "export-statuses"})
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	created, err := svc.AddResources(ctx, pool.ID, []ResourceCreateParams{
+		{Name: "active-enabled", UpstreamURL: "https://a.example.invalid", Key: "key-active-enabled"},
+		{Name: "invalid-enabled", UpstreamURL: "https://b.example.invalid", Key: "key-invalid-enabled"},
+		{Name: "active-disabled", UpstreamURL: "https://c.example.invalid", Key: "key-active-disabled", Enabled: models.Bool(false)},
+		{Name: "invalid-disabled", UpstreamURL: "https://d.example.invalid", Key: "key-invalid-disabled", Enabled: models.Bool(false)},
+	})
+	if err != nil {
+		t.Fatalf("add resources: %v", err)
+	}
+	if err := svc.db.Model(&models.UpstreamResource{}).
+		Where("id IN ?", []uint{created[1].ID, created[3].ID}).
+		Update("status", models.ResourceStatusInvalid).Error; err != nil {
+		t.Fatalf("mark invalid resources: %v", err)
+	}
+
+	tests := []struct {
+		status string
+		want   []string
+	}{
+		{"all", []string{"key-active-enabled", "key-invalid-enabled", "key-active-disabled", "key-invalid-disabled"}},
+		{models.ResourceStatusActive, []string{"key-active-enabled"}},
+		{models.ResourceStatusInvalid, []string{"key-invalid-enabled"}},
+		{models.ResourceStatusDisabled, []string{"key-active-disabled", "key-invalid-disabled"}},
+	}
+	for _, tc := range tests {
+		var output bytes.Buffer
+		result, err := svc.ExportResourcesToWriter(ctx, pool.ID, tc.status, nil, "keys", "txt", &output)
+		if err != nil {
+			t.Fatalf("export status %q: %v", tc.status, err)
+		}
+		lines := strings.Fields(output.String())
+		if result.ExportedCount != len(tc.want) || strings.Join(lines, ",") != strings.Join(tc.want, ",") {
+			t.Fatalf("status %q exported %v, want %v", tc.status, lines, tc.want)
+		}
+	}
+}
+
+func TestRES018SingleResourceValidationUsesBoundRouteWithoutCountingUsage(t *testing.T) {
+	const rawKey = "sk-resource-validation"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer "+rawKey {
+			http.Error(w, `{"error":{"message":"unexpected validation request"}}`, http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	validationSvc, poolSvc, provider, pool, resource, group := newTestResourceValidationFixture(t, upstream.URL, rawKey)
+	future := time.Now().Add(time.Hour)
+	if err := poolSvc.db.Model(&models.UpstreamResource{}).Where("id = ?", resource.ID).Updates(map[string]any{
+		"enabled": false, "status": models.ResourceStatusInvalid, "failure_count": 4,
+		"global_cooldown_until": future, "disabled_reason": "old quota state",
+	}).Error; err != nil {
+		t.Fatalf("seed unhealthy resource: %v", err)
+	}
+	var seeded models.UpstreamResource
+	if err := poolSvc.db.First(&seeded, resource.ID).Error; err != nil {
+		t.Fatalf("reload seeded resource: %v", err)
+	}
+	if err := provider.SyncResourceToStore(&seeded); err != nil {
+		t.Fatalf("sync seeded resource: %v", err)
+	}
+
+	groups, err := validationSvc.ListValidationGroups(context.Background(), pool.ID)
+	if err != nil || len(groups) != 1 || groups[0].ID != group.ID || groups[0].ChannelType != "openai" {
+		t.Fatalf("unexpected validation groups: %#v %v", groups, err)
+	}
+	result, err := validationSvc.TestResource(context.Background(), pool.ID, resource.ID, group.ID)
+	if err != nil || !result.IsValid || result.ResourceID != resource.ID || result.GroupID != group.ID {
+		t.Fatalf("unexpected validation result: %#v %v", result, err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal validation result: %v", err)
+	}
+	if strings.Contains(string(encoded), rawKey) {
+		t.Fatalf("validation result leaked raw credential: %s", encoded)
+	}
+
+	var stored models.UpstreamResource
+	if err := poolSvc.db.First(&stored, resource.ID).Error; err != nil {
+		t.Fatalf("reload validated resource: %v", err)
+	}
+	if stored.Status != models.ResourceStatusActive || stored.FailureCount != 0 || stored.GlobalCooldownUntil != nil || stored.DisabledReason != "" {
+		t.Fatalf("successful test did not restore health: %#v", stored)
+	}
+	if models.CredentialEnabled(stored.Enabled) {
+		t.Fatal("successful test silently enabled a manually disabled resource")
+	}
+	if stored.RequestCount != 0 || stored.TotalFailureCount != 0 {
+		t.Fatalf("validation probe changed usage counters: %#v", stored)
+	}
+}
+
+func TestRES019SingleResourceValidationAppliesFailurePolicyExcept404(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		wantStatus  string
+		wantFailure int64
+	}{
+		{name: "credential rejection", statusCode: http.StatusUnauthorized, wantStatus: models.ResourceStatusInvalid, wantFailure: 1},
+		{name: "missing endpoint", statusCode: http.StatusNotFound, wantStatus: models.ResourceStatusActive, wantFailure: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(`{"error":{"message":"validation rejected"}}`))
+			}))
+			defer upstream.Close()
+
+			validationSvc, poolSvc, _, pool, resource, group := newTestResourceValidationFixture(t, upstream.URL, "sk-rejected")
+			result, err := validationSvc.TestResource(context.Background(), pool.ID, resource.ID, group.ID)
+			if err != nil || result.IsValid || !strings.Contains(result.Error, fmt.Sprintf("[status %d]", tc.statusCode)) {
+				t.Fatalf("unexpected failed validation: %#v %v", result, err)
+			}
+			var stored models.UpstreamResource
+			if err := poolSvc.db.First(&stored, resource.ID).Error; err != nil {
+				t.Fatalf("reload failed resource: %v", err)
+			}
+			if stored.Status != tc.wantStatus || stored.FailureCount != tc.wantFailure {
+				t.Fatalf("status %d applied wrong health policy: %#v", tc.statusCode, stored)
+			}
+			if stored.RequestCount != 0 || stored.TotalFailureCount != 0 {
+				t.Fatalf("failed validation changed usage counters: %#v", stored)
+			}
+		})
+	}
+}
+
+func newTestResourceValidationFixture(
+	t *testing.T,
+	upstreamURL, rawKey string,
+) (*ResourceValidationService, *ResourcePoolService, *resourcepool.Provider, *ResourcePoolView, ResourceView, *models.Group) {
+	t.Helper()
+	poolSvc, provider, groupSvc := newTestResourcePoolService(t)
+	ctx := context.Background()
+	pool, err := poolSvc.CreatePool(ctx, ResourcePoolCreateParams{Name: "validation-pool-" + fmt.Sprint(time.Now().UnixNano())})
+	if err != nil {
+		t.Fatalf("create validation pool: %v", err)
+	}
+	resources, err := poolSvc.AddResources(ctx, pool.ID, []ResourceCreateParams{{
+		Name: "validation-seat", UpstreamURL: upstreamURL, Key: rawKey,
+	}})
+	if err != nil {
+		t.Fatalf("create validation resource: %v", err)
+	}
+	group, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
+		Name: "validation-route-" + fmt.Sprint(time.Now().UnixNano()), GroupType: "standard",
+		ResourcePoolID: &pool.ID, ChannelType: "openai", TestModel: "gpt-test",
+		ValidationEndpoint: "/v1/chat/completions",
+	})
+	if err != nil {
+		t.Fatalf("create validation group: %v", err)
+	}
+	settings := config.NewSystemSettingsManager()
+	validationSvc := NewResourceValidationService(
+		poolSvc.db,
+		channel.NewFactory(settings, httpclient.NewHTTPClientManager()),
+		settings,
+		provider,
+		poolSvc.encryptionSvc,
+	)
+	return validationSvc, poolSvc, provider, pool, resources[0], group
 }
 
 func TestRES016ManualEnablementDoesNotOverwriteHealth(t *testing.T) {

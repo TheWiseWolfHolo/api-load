@@ -69,16 +69,23 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 
 	logrus.Debugf("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
 
-	constructor, ok := channelRegistry[group.ChannelType]
-	if !ok {
-		return nil, fmt.Errorf("unsupported channel type: %s", group.ChannelType)
-	}
-	channel, err := constructor(f, group)
+	channel, err := f.CreateChannel(group)
 	if err != nil {
 		return nil, err
 	}
 	f.channelCache[group.ID] = channel
 	return channel, nil
+}
+
+// CreateChannel builds a channel without adding it to the group cache. This is
+// used for one-off resource validation, where the physical upstream URL is
+// supplied temporarily and must not replace the group's normal cached channel.
+func (f *Factory) CreateChannel(group *models.Group) (ChannelProxy, error) {
+	constructor, ok := channelRegistry[group.ChannelType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported channel type: %s", group.ChannelType)
+	}
+	return constructor(f, group)
 }
 
 // newBaseChannel is a helper function to create and configure a BaseChannel.

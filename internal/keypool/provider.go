@@ -102,8 +102,9 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
 	status := keyDetails["status"]
 	isActive := status == models.KeyStatusActive
+	hasCooldown := keyDetails["cooldown_until"] != "" && keyDetails["cooldown_until"] != "0"
 
-	if failureCount == 0 && isActive {
+	if failureCount == 0 && isActive && !hasCooldown {
 		return nil
 	}
 	if status == models.KeyStatusDisabled {
@@ -116,13 +117,11 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 			return fmt.Errorf("failed to lock key %d for update: %w", keyID, err)
 		}
 
-		updates := map[string]any{"failure_count": 0}
-		storeUpdates := map[string]any{"failure_count": 0}
+		updates := map[string]any{"failure_count": 0, "cooldown_until": nil}
+		storeUpdates := map[string]any{"failure_count": 0, "cooldown_until": 0}
 		if !isActive {
 			updates["status"] = models.KeyStatusActive
-			updates["cooldown_until"] = nil
 			storeUpdates["status"] = models.KeyStatusActive
-			storeUpdates["cooldown_until"] = 0
 		}
 
 		if err := tx.Model(&key).Updates(updates).Error; err != nil {
@@ -177,7 +176,7 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 
 		newFailureCount := failureCount + 1
 
-		updates := map[string]any{"failure_count": newFailureCount, "last_failure_status_code": statusCode}
+		updates := map[string]any{"failure_count": newFailureCount, "last_failure_status_code": statusCode, "cooldown_until": nil}
 		shouldBlacklist = blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
 		cooldownUntil = nil
 		if shouldBlacklist {
@@ -196,7 +195,7 @@ func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, 
 		if _, err := p.store.HIncrBy(keyHashKey, "failure_count", 1); err != nil {
 			return fmt.Errorf("failed to increment failure count in store: %w", err)
 		}
-		if err := p.store.HSet(keyHashKey, map[string]any{"last_failure_status_code": statusCode}); err != nil {
+		if err := p.store.HSet(keyHashKey, map[string]any{"last_failure_status_code": statusCode, "cooldown_until": 0}); err != nil {
 			return fmt.Errorf("failed to update last failure status code in store: %w", err)
 		}
 
