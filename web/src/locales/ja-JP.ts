@@ -424,6 +424,11 @@ export default {
     fillStickyTtlSeconds: "スティッキー TTL 秒",
     fillSwitchStatusCodes: "切替ステータスコード",
     fillQuotaPatterns: "クォータエラーパターン",
+    autoRestoreSchedule: "自動復元スケジュール",
+    autoRestoreScheduleTooltip:
+      "空欄で無効。指定ステータスコードでブラックリスト化されたキーを検証なしで定刻に復元します:24h のようなローリング期間、または 00:05 +08:00 のような毎日の時刻",
+    autoRestoreSchedulePlaceholder: "24h または 00:05 +08:00、空欄で無効",
+    autoRestoreStatusCodes: "自動復元ステータスコード",
     schedulerInvalidNumber: "スケジューラの数値は 0 以上である必要があります",
     never: "使用なし",
     daysAgo: "{days}日前",

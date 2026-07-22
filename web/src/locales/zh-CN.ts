@@ -407,6 +407,11 @@ export default {
     fillStickyTtlSeconds: "粘性 TTL 秒",
     fillSwitchStatusCodes: "切换状态码",
     fillQuotaPatterns: "额度错误模式",
+    autoRestoreSchedule: "自动恢复周期",
+    autoRestoreScheduleTooltip:
+      "留空关闭。按状态码被拉黑的 key 到点直接恢复,不发验证请求:滚动窗口如 24h,或每日固定时刻如 00:05 +08:00",
+    autoRestoreSchedulePlaceholder: "24h 或 00:05 +08:00,留空关闭",
+    autoRestoreStatusCodes: "自动恢复状态码",
     schedulerInvalidNumber: "调度数值不能小于 0",
     never: "从未",
     daysAgo: "{days}天前",

@@ -81,6 +81,8 @@ export interface GroupConfig {
   fill_max_consecutive_requests?: number;
   fill_max_consecutive_tokens?: number;
   fill_sticky_ttl_seconds?: number;
+  auto_restore_schedule?: string;
+  auto_restore_status_codes?: string;
 }
 
 export interface ModelMappingTarget {

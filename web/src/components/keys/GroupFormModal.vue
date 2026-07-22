@@ -93,6 +93,8 @@ interface GroupFormData {
   fill_max_consecutive_requests: number;
   fill_max_consecutive_tokens: number;
   fill_sticky_ttl_seconds: number;
+  auto_restore_schedule: string;
+  auto_restore_status_codes: string;
   header_rules: HeaderRuleItem[];
   proxy_keys: string;
   group_type?: string;
@@ -127,6 +129,8 @@ const formData = reactive<GroupFormData>({
   fill_max_consecutive_requests: 0,
   fill_max_consecutive_tokens: 0,
   fill_sticky_ttl_seconds: 0,
+  auto_restore_schedule: "",
+  auto_restore_status_codes: "",
   header_rules: [] as HeaderRuleItem[],
   proxy_keys: "",
   group_type: "standard",
@@ -154,6 +158,8 @@ const schedulerConfigKeys = new Set([
   "fill_max_consecutive_requests",
   "fill_max_consecutive_tokens",
   "fill_sticky_ttl_seconds",
+  "auto_restore_schedule",
+  "auto_restore_status_codes",
 ]);
 const strategyOptions = computed(() => [
   { label: t("keys.strategyRoundRobin"), value: "round_robin" },
@@ -371,6 +377,8 @@ function resetForm() {
     fill_max_consecutive_requests: 0,
     fill_max_consecutive_tokens: 0,
     fill_sticky_ttl_seconds: 0,
+    auto_restore_schedule: "",
+    auto_restore_status_codes: "",
     header_rules: [],
     proxy_keys: "",
     group_type: "standard",
@@ -448,6 +456,8 @@ function loadGroupData() {
       groupConfig.fill_max_consecutive_tokens
     ),
     fill_sticky_ttl_seconds: normalizeNonNegativeNumber(groupConfig.fill_sticky_ttl_seconds),
+    auto_restore_schedule: String(groupConfig.auto_restore_schedule || ""),
+    auto_restore_status_codes: String(groupConfig.auto_restore_status_codes || ""),
     header_rules: (props.group.header_rules || []).map((rule: HeaderRuleItem) => ({
       key: rule.key || "",
       value: rule.value || "",
@@ -713,6 +723,14 @@ function buildSchedulerConfig(): Record<string, number | string> {
     config.fill_max_consecutive_requests = formData.fill_max_consecutive_requests;
     config.fill_max_consecutive_tokens = formData.fill_max_consecutive_tokens;
     config.fill_sticky_ttl_seconds = formData.fill_sticky_ttl_seconds;
+  }
+  const autoRestoreSchedule = formData.auto_restore_schedule.trim();
+  if (autoRestoreSchedule) {
+    config.auto_restore_schedule = autoRestoreSchedule;
+    const autoRestoreCodes = formData.auto_restore_status_codes.trim();
+    if (autoRestoreCodes) {
+      config.auto_restore_status_codes = autoRestoreCodes;
+    }
   }
   return config;
 }
@@ -1051,6 +1069,35 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     <n-select
                       v-model:value="formData.key_affinity_scope"
                       :options="affinityOptions"
+                    />
+                  </n-form-item>
+                </div>
+                <div class="form-row">
+                  <n-form-item class="form-item-half">
+                    <template #label>
+                      <div class="form-label-with-tooltip">
+                        {{ t("keys.autoRestoreSchedule") }}
+                        <n-tooltip trigger="hover" placement="top">
+                          <template #trigger>
+                            <n-icon :component="HelpCircleOutline" class="help-icon" />
+                          </template>
+                          {{ t("keys.autoRestoreScheduleTooltip") }}
+                        </n-tooltip>
+                      </div>
+                    </template>
+                    <n-input
+                      v-model:value="formData.auto_restore_schedule"
+                      :placeholder="t('keys.autoRestoreSchedulePlaceholder')"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    v-if="formData.auto_restore_schedule.trim()"
+                    :label="t('keys.autoRestoreStatusCodes')"
+                    class="form-item-half"
+                  >
+                    <n-input
+                      v-model:value="formData.auto_restore_status_codes"
+                      placeholder="429"
                     />
                   </n-form-item>
                 </div>

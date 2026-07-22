@@ -62,6 +62,8 @@ type GroupConfig struct {
 	FillMaxConsecutiveRequests   *int    `json:"fill_max_consecutive_requests,omitempty"`
 	FillMaxConsecutiveTokens     *int    `json:"fill_max_consecutive_tokens,omitempty"`
 	FillStickyTTLSeconds         *int    `json:"fill_sticky_ttl_seconds,omitempty"`
+	AutoRestoreSchedule          *string `json:"auto_restore_schedule,omitempty"`
+	AutoRestoreStatusCodes       *string `json:"auto_restore_status_codes,omitempty"`
 }
 
 // HeaderRule defines a single rule for header manipulation.
@@ -210,7 +212,10 @@ type APIKey struct {
 	RequestCount      int64      `gorm:"not null;default:0" json:"request_count"`
 	TotalFailureCount int64      `gorm:"not null;default:0" json:"total_failure_count"`
 	FailureCount      int64      `gorm:"not null;default:0" json:"failure_count"`
-	LastUsedAt        *time.Time `gorm:"index:idx_api_keys_group_last_used_id,priority:2" json:"last_used_at"`
+	// LastFailureStatusCode 记录最近一次失败的上游状态码,用于自动恢复的原因过滤
+	LastFailureStatusCode int        `gorm:"not null;default:0" json:"last_failure_status_code"`
+	CooldownUntil         *time.Time `gorm:"index" json:"cooldown_until,omitempty"`
+	LastUsedAt            *time.Time `gorm:"index:idx_api_keys_group_last_used_id,priority:2" json:"last_used_at"`
 	LastSuccessAt     *time.Time `gorm:"index" json:"last_success_at"`
 	LastFailureAt     *time.Time `gorm:"index" json:"last_failure_at"`
 	CreatedAt         time.Time  `json:"created_at"`
