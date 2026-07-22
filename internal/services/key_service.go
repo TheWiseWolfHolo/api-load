@@ -385,6 +385,10 @@ func (s *KeyService) UpdateKeys(keyIDs []uint, params KeyUpdateParams) (*KeyStat
 			key.FailureCount = 0
 			changed = true
 		}
+		if params.Status != nil && *params.Status == models.KeyStatusActive && key.CooldownUntil != nil {
+			key.CooldownUntil = nil
+			changed = true
+		}
 		if params.Priority != nil && key.Priority != *params.Priority {
 			key.Priority = *params.Priority
 			changed = true
@@ -412,12 +416,13 @@ func (s *KeyService) UpdateKeys(keyIDs []uint, params KeyUpdateParams) (*KeyStat
 				continue
 			}
 			if err := tx.Model(&models.APIKey{}).Where("id = ?", keys[i].ID).Updates(map[string]any{
-				"enabled":       models.CredentialEnabled(keys[i].Enabled),
-				"status":        keys[i].Status,
-				"failure_count": keys[i].FailureCount,
-				"priority":      keys[i].Priority,
-				"weight":        keys[i].Weight,
-				"notes":         keys[i].Notes,
+				"enabled":        models.CredentialEnabled(keys[i].Enabled),
+				"status":         keys[i].Status,
+				"failure_count":  keys[i].FailureCount,
+				"cooldown_until": keys[i].CooldownUntil,
+				"priority":       keys[i].Priority,
+				"weight":         keys[i].Weight,
+				"notes":          keys[i].Notes,
 			}).Error; err != nil {
 				return err
 			}

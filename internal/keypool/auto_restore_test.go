@@ -168,7 +168,11 @@ func TestKEY010HandleFailureWithoutMatchLeavesCooldownEmpty(t *testing.T) {
 	group.Config = map[string]any{"auto_restore_schedule": "24h"}
 	group.EffectiveConfig.BlacklistThreshold = 1
 
-	key := models.APIKey{GroupID: group.ID, KeyValue: "sk-test-dead", KeyHash: "hash-dead", Status: models.KeyStatusActive}
+	staleCooldown := time.Now().Add(12 * time.Hour)
+	key := models.APIKey{
+		GroupID: group.ID, KeyValue: "sk-test-dead", KeyHash: "hash-dead",
+		Status: models.KeyStatusActive, CooldownUntil: &staleCooldown,
+	}
 	if err := db.Create(&key).Error; err != nil {
 		t.Fatalf("create key: %v", err)
 	}

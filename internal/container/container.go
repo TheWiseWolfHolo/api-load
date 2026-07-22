@@ -95,6 +95,9 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(services.NewResourcePoolService); err != nil {
 		return nil, err
 	}
+	if err := container.Provide(services.NewResourceValidationService); err != nil {
+		return nil, err
+	}
 	if err := container.Provide(keypool.NewKeyValidator); err != nil {
 		return nil, err
 	}

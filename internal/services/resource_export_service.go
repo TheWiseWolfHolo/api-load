@@ -53,7 +53,7 @@ func (s *ResourcePoolService) ExportResourcesToWriter(ctx context.Context, poolI
 	if enabled != nil {
 		query = query.Where("enabled = ?", *enabled)
 	}
-	if status == models.ResourceStatusActive && enabled == nil {
+	if (status == models.ResourceStatusActive || status == models.ResourceStatusInvalid) && enabled == nil {
 		query = query.Where("enabled = ?", true)
 	}
 

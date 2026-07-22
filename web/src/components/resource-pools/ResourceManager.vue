@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { resourcePoolsApi } from "@/api/resourcePools";
-import type { ResourceStatus, UpstreamResource } from "@/types/models";
+import type { ResourceStatus, ResourceValidationGroup, UpstreamResource } from "@/types/models";
 import {
   CreateOutline,
   DownloadOutline,
+  PulseOutline,
   RefreshOutline,
   SearchOutline,
   SettingsOutline,
@@ -38,7 +39,10 @@ const { t } = useI18n();
 const message = useMessage();
 
 const resources = ref<UpstreamResource[]>([]);
+const validationGroups = ref<ResourceValidationGroup[]>([]);
 const loading = ref(false);
+const validationGroupsLoading = ref(false);
+const testingResourceID = ref<number | null>(null);
 const mutating = ref(false);
 const search = ref("");
 const health = ref<ResourceStatus | "">("");
@@ -77,8 +81,23 @@ const availabilityOptions = computed(() => [
 const exportOptions = computed(() => [
   { label: t("resourcePools.exportFullJSONL"), key: "full-jsonl" },
   { label: t("resourcePools.exportFullCSV"), key: "full-csv" },
-  { label: t("resourcePools.exportKeysOnly"), key: "keys-txt" },
+  {
+    label: t("resourcePools.exportKeysOnly"),
+    key: "keys-menu",
+    children: [
+      { label: t("resourcePools.exportAllKeys"), key: "keys-all" },
+      { label: t("resourcePools.exportValidKeys"), key: "keys-active" },
+      { label: t("resourcePools.exportInvalidKeys"), key: "keys-invalid" },
+      { label: t("resourcePools.exportDisabledKeys"), key: "keys-disabled" },
+    ],
+  },
 ]);
+const validationRouteOptions = computed(() =>
+  validationGroups.value.map(group => ({
+    label: `${group.display_name || group.name} · ${group.channel_type}`,
+    key: group.id,
+  }))
+);
 const selectedSet = computed(() => new Set(selectedIDs.value));
 const allPageSelected = computed(
   () => resources.value.length > 0 && resources.value.every(item => selectedSet.value.has(item.id))
@@ -95,7 +114,10 @@ const parsedDeleteKeys = computed(() => [
   ),
 ]);
 
-onMounted(loadResources);
+onMounted(() => {
+  void loadResources();
+  void loadValidationGroups();
+});
 onBeforeUnmount(() => clearTimeout(searchTimer));
 watch(
   () => props.refreshToken,
@@ -133,6 +155,15 @@ async function loadResources() {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadValidationGroups() {
+  validationGroupsLoading.value = true;
+  try {
+    validationGroups.value = await resourcePoolsApi.listValidationGroups(props.poolId);
+  } finally {
+    validationGroupsLoading.value = false;
   }
 }
 
@@ -303,9 +334,49 @@ async function runBulkDelete(payload: { resource_ids?: number[]; keys?: string[]
   }
 }
 
-function handleExport(key: string) {
-  const [content, format] = key.split("-") as ["full" | "keys", "jsonl" | "csv" | "txt"];
-  resourcePoolsApi.exportResources(props.poolId, { content, format });
+function handleExport(key: string | number) {
+  const value = String(key);
+  if (value === "full-jsonl" || value === "full-csv") {
+    resourcePoolsApi.exportResources(props.poolId, {
+      content: "full",
+      format: value === "full-jsonl" ? "jsonl" : "csv",
+    });
+    return;
+  }
+  if (value.startsWith("keys-")) {
+    const status = value.slice(5) as "all" | "active" | "invalid" | "disabled";
+    resourcePoolsApi.exportResources(props.poolId, { content: "keys", format: "txt", status });
+  }
+}
+async function testResource(resource: UpstreamResource, selectedGroupID?: number) {
+  const groupID = selectedGroupID ?? validationGroups.value[0]?.id;
+  if (!groupID || testingResourceID.value !== null) {
+    return;
+  }
+  testingResourceID.value = resource.id;
+  try {
+    const result = await resourcePoolsApi.testResource(props.poolId, resource.id, groupID);
+    if (result.is_valid) {
+      message.success(t("resourcePools.testSuccess", { duration: result.duration_ms }));
+    } else {
+      message.error(
+        t("resourcePools.testFailed", {
+          error: result.error || t("resourcePools.testUnknownError"),
+        })
+      );
+    }
+    await loadResources();
+  } finally {
+    testingResourceID.value = null;
+  }
+}
+function isResourceTestDisabled(): boolean {
+  return (
+    mutating.value ||
+    validationGroupsLoading.value ||
+    validationGroups.value.length === 0 ||
+    testingResourceID.value !== null
+  );
 }
 function healthType(value: ResourceStatus): "success" | "error" {
   return value === "active" ? "success" : "error";
@@ -460,6 +531,36 @@ function formatDate(value?: string): string {
               </n-button>
               <n-button size="tiny" secondary :disabled="mutating" @click="toggleEnabled(resource)">
                 {{ resource.enabled ? t("common.disable") : t("resourcePools.enable") }}
+              </n-button>
+              <n-dropdown
+                v-if="validationGroups.length > 1"
+                :options="validationRouteOptions"
+                trigger="click"
+                @select="groupId => testResource(resource, Number(groupId))"
+              >
+                <n-button
+                  size="tiny"
+                  secondary
+                  :disabled="isResourceTestDisabled()"
+                  :loading="testingResourceID === resource.id"
+                >
+                  <template #icon><n-icon :component="PulseOutline" /></template>
+                  {{ t("resourcePools.testKey") }}
+                </n-button>
+              </n-dropdown>
+              <n-button
+                v-else
+                size="tiny"
+                secondary
+                :title="
+                  validationGroups.length === 0 ? t('resourcePools.testRequiresGroup') : undefined
+                "
+                :disabled="isResourceTestDisabled()"
+                :loading="testingResourceID === resource.id"
+                @click="testResource(resource)"
+              >
+                <template #icon><n-icon :component="PulseOutline" /></template>
+                {{ t("resourcePools.testKey") }}
               </n-button>
               <n-button
                 v-if="resource.status === 'invalid'"
@@ -707,6 +808,7 @@ function formatDate(value?: string): string {
 }
 .resource-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
 }
