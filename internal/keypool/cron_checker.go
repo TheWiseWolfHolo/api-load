@@ -19,6 +19,7 @@ type CronChecker struct {
 	SettingsManager *config.SystemSettingsManager
 	Validator       *KeyValidator
 	EncryptionSvc   encryption.Service
+	KeypoolProvider *KeyProvider
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 }
@@ -29,12 +30,14 @@ func NewCronChecker(
 	settingsManager *config.SystemSettingsManager,
 	validator *KeyValidator,
 	encryptionSvc encryption.Service,
+	keypoolProvider *KeyProvider,
 ) *CronChecker {
 	return &CronChecker{
 		DB:              db,
 		SettingsManager: settingsManager,
 		Validator:       validator,
 		EncryptionSvc:   encryptionSvc,
+		KeypoolProvider: keypoolProvider,
 		stopChan:        make(chan struct{}),
 	}
 }
@@ -68,6 +71,7 @@ func (s *CronChecker) Stop(ctx context.Context) {
 func (s *CronChecker) runLoop() {
 	defer s.wg.Done()
 
+	s.restoreCooldownExpiredKeys()
 	s.submitValidationJobs()
 
 	ticker := time.NewTicker(5 * time.Minute)
@@ -77,10 +81,26 @@ func (s *CronChecker) runLoop() {
 		select {
 		case <-ticker.C:
 			logrus.Debug("CronChecker: Running as Master, submitting validation jobs.")
+			s.restoreCooldownExpiredKeys()
 			s.submitValidationJobs()
 		case <-s.stopChan:
 			return
 		}
+	}
+}
+
+// restoreCooldownExpiredKeys 把冷却期已到的自动恢复 key 直接放回轮转,不发验证请求。
+func (s *CronChecker) restoreCooldownExpiredKeys() {
+	if s.KeypoolProvider == nil {
+		return
+	}
+	restored, err := s.KeypoolProvider.RestoreCooldownExpiredKeys(time.Now())
+	if err != nil {
+		logrus.Errorf("CronChecker: Failed to restore cooled-down keys: %v", err)
+		return
+	}
+	if restored > 0 {
+		logrus.Infof("CronChecker: Auto-restored %d key(s) whose cooldown expired.", restored)
 	}
 }
 
@@ -118,7 +138,8 @@ func (s *CronChecker) validateGroupKeys(group *models.Group) {
 	groupProcessStart := time.Now()
 
 	var invalidKeys []models.APIKey
-	err := s.DB.Where("group_id = ? AND status = ?", group.ID, models.KeyStatusInvalid).Find(&invalidKeys).Error
+	// 冷却期内的 key 由到点直接恢复接管,豁免验证探测,避免提前复活或空转撞上游
+	err := s.DB.Where("group_id = ? AND status = ? AND (cooldown_until IS NULL OR cooldown_until <= ?)", group.ID, models.KeyStatusInvalid, time.Now()).Find(&invalidKeys).Error
 	if err != nil {
 		logrus.Errorf("CronChecker: Failed to get invalid keys for group %s: %v", group.Name, err)
 		return

@@ -17,6 +17,8 @@ import (
 	"api-load/internal/config"
 	"api-load/internal/encryption"
 	app_errors "api-load/internal/errors"
+	"api-load/internal/failover"
+	"api-load/internal/keypool"
 	"api-load/internal/models"
 	"api-load/internal/types"
 	"api-load/internal/utils"
@@ -996,6 +998,8 @@ func schedulerConfigOptions() []ConfigOption {
 		{Key: "fill_max_consecutive_requests", Name: "Fill-first max consecutive requests", Description: "0 means unlimited", DefaultValue: 0},
 		{Key: "fill_max_consecutive_tokens", Name: "Fill-first max consecutive tokens", Description: "0 means unlimited", DefaultValue: 0},
 		{Key: "fill_sticky_ttl_seconds", Name: "Fill-first sticky TTL seconds", Description: "0 means no TTL", DefaultValue: 0},
+		{Key: "auto_restore_schedule", Name: "Auto-restore schedule", Description: "Empty disables. Rolling window like \"24h\" or a daily time like \"00:05 +08:00\"", DefaultValue: ""},
+		{Key: "auto_restore_status_codes", Name: "Auto-restore status codes", Description: "Blacklist causes eligible for scheduled restore without validation", DefaultValue: keypool.DefaultAutoRestoreStatusCodes},
 	}
 }
 
@@ -1101,6 +1105,22 @@ func validateSchedulerGroupConfig(config models.GroupConfig) error {
 	for name, value := range numericFields {
 		if value != nil && *value < 0 {
 			return fmt.Errorf("%s must be non-negative", name)
+		}
+	}
+
+	if config.AutoRestoreSchedule != nil {
+		if schedule := strings.TrimSpace(*config.AutoRestoreSchedule); schedule != "" {
+			if err := keypool.ValidateAutoRestoreSchedule(schedule); err != nil {
+				return fmt.Errorf("invalid auto_restore_schedule: %w", err)
+			}
+		}
+	}
+
+	if config.AutoRestoreStatusCodes != nil {
+		if codes := strings.TrimSpace(*config.AutoRestoreStatusCodes); codes != "" {
+			if _, err := failover.ParseStatusCodeMatcher(codes); err != nil {
+				return fmt.Errorf("invalid auto_restore_status_codes: %w", err)
+			}
 		}
 	}
 

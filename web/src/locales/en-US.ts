@@ -425,6 +425,11 @@ export default {
     fillStickyTtlSeconds: "Sticky TTL Seconds",
     fillSwitchStatusCodes: "Switch Status Codes",
     fillQuotaPatterns: "Quota Patterns",
+    autoRestoreSchedule: "Auto-Restore Schedule",
+    autoRestoreScheduleTooltip:
+      "Empty disables. Keys blacklisted by a matching status code are restored on schedule without probing: a rolling window like 24h, or a daily time like 00:05 +08:00",
+    autoRestoreSchedulePlaceholder: "24h or 00:05 +08:00, empty to disable",
+    autoRestoreStatusCodes: "Auto-Restore Status Codes",
     schedulerInvalidNumber: "Scheduler values cannot be below 0",
     never: "Never",
     daysAgo: "{days} days ago",
