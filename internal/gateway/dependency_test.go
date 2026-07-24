@@ -10,6 +10,7 @@ func TestDataPlaneDependencyGraph(t *testing.T) {
 	roots := []string{
 		"gpt-load/internal/gateway",
 		"gpt-load/internal/scheduler",
+		"gpt-load/internal/state",
 		"gpt-load/internal/health",
 		"gpt-load/internal/telemetry",
 	}
