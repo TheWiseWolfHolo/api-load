@@ -223,6 +223,7 @@ export interface ResourcePool {
   strategy: "round_robin";
   affinity_ttl_seconds: number;
   busy_wait_milliseconds: number;
+  auto_restore_schedule: string;
   resource_count: number;
   created_at: string;
   updated_at: string;
@@ -234,6 +235,7 @@ export interface ResourcePoolInput {
   strategy?: "round_robin";
   affinity_ttl_seconds?: number;
   busy_wait_milliseconds?: number;
+  auto_restore_schedule?: string;
 }
 
 export interface UpstreamResourceInput {

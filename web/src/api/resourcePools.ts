@@ -129,7 +129,7 @@ export const resourcePoolsApi = {
     options: {
       content: "full" | "keys";
       format: "jsonl" | "csv" | "txt";
-      status?: "all" | "active" | "invalid" | "disabled";
+      status?: "all" | "active" | "cooling" | "invalid" | "disabled";
       enabled?: boolean;
     }
   ): void {

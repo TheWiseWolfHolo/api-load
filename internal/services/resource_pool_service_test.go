@@ -115,6 +115,81 @@ func TestRES017KeysOnlyExportSeparatesHealthAndManualDisablement(t *testing.T) {
 	}
 }
 
+func TestRES022ExportSeparatesCoolingFromActiveKeys(t *testing.T) {
+	svc, _, _ := newTestResourcePoolService(t)
+	ctx := context.Background()
+	pool, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "export-cooling"})
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	created, err := svc.AddResources(ctx, pool.ID, []ResourceCreateParams{
+		{Name: "ready", UpstreamURL: "https://a.example.invalid", Key: "key-ready"},
+		{Name: "cooling", UpstreamURL: "https://b.example.invalid", Key: "key-cooling"},
+		{Name: "expired", UpstreamURL: "https://c.example.invalid", Key: "key-expired"},
+	})
+	if err != nil {
+		t.Fatalf("add resources: %v", err)
+	}
+	future := time.Now().Add(time.Hour)
+	past := time.Now().Add(-time.Hour)
+	if err := svc.db.Model(&models.UpstreamResource{}).Where("id = ?", created[1].ID).
+		Update("global_cooldown_until", future).Error; err != nil {
+		t.Fatalf("seed cooling resource: %v", err)
+	}
+	if err := svc.db.Model(&models.UpstreamResource{}).Where("id = ?", created[2].ID).
+		Update("global_cooldown_until", past).Error; err != nil {
+		t.Fatalf("seed expired cooldown resource: %v", err)
+	}
+
+	tests := []struct {
+		status string
+		want   []string
+	}{
+		// 冷却中的资源不算可用 key;冷却已过期的照常按可用导出。
+		{models.ResourceStatusActive, []string{"key-ready", "key-expired"}},
+		{ResourceExportStatusCooling, []string{"key-cooling"}},
+		{"all", []string{"key-ready", "key-cooling", "key-expired"}},
+	}
+	for _, tc := range tests {
+		var output bytes.Buffer
+		result, err := svc.ExportResourcesToWriter(ctx, pool.ID, tc.status, nil, "keys", "txt", &output)
+		if err != nil {
+			t.Fatalf("export status %q: %v", tc.status, err)
+		}
+		lines := strings.Fields(output.String())
+		if result.ExportedCount != len(tc.want) || strings.Join(lines, ",") != strings.Join(tc.want, ",") {
+			t.Fatalf("status %q exported %v, want %v", tc.status, lines, tc.want)
+		}
+	}
+}
+
+func TestRES023PoolAutoRestoreScheduleConfigValidation(t *testing.T) {
+	svc, _, _ := newTestResourcePoolService(t)
+	ctx := context.Background()
+	if _, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "bad-schedule", AutoRestoreSchedule: "not-a-schedule"}); err == nil {
+		t.Fatal("invalid auto restore schedule must be rejected on create")
+	}
+	pool, err := svc.CreatePool(ctx, ResourcePoolCreateParams{Name: "with-schedule", AutoRestoreSchedule: "24h"})
+	if err != nil || pool.AutoRestoreSchedule != "24h" {
+		t.Fatalf("create pool with schedule: %#v %v", pool, err)
+	}
+
+	daily := "00:05 +08:00"
+	updated, err := svc.UpdatePool(ctx, pool.ID, ResourcePoolUpdateParams{AutoRestoreSchedule: &daily})
+	if err != nil || updated.AutoRestoreSchedule != daily {
+		t.Fatalf("update pool schedule: %#v %v", updated, err)
+	}
+	empty := ""
+	cleared, err := svc.UpdatePool(ctx, pool.ID, ResourcePoolUpdateParams{AutoRestoreSchedule: &empty})
+	if err != nil || cleared.AutoRestoreSchedule != "" {
+		t.Fatalf("clear pool schedule: %#v %v", cleared, err)
+	}
+	bad := "nope"
+	if _, err := svc.UpdatePool(ctx, pool.ID, ResourcePoolUpdateParams{AutoRestoreSchedule: &bad}); err == nil {
+		t.Fatal("invalid auto restore schedule must be rejected on update")
+	}
+}
+
 func TestRES018SingleResourceValidationUsesBoundRouteWithoutCountingUsage(t *testing.T) {
 	const rawKey = "sk-resource-validation"
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

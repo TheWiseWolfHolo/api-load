@@ -9,6 +9,7 @@ import (
 
 	"api-load/internal/encryption"
 	app_errors "api-load/internal/errors"
+	"api-load/internal/keypool"
 	"api-load/internal/models"
 	"api-load/internal/resourcepool"
 
@@ -37,6 +38,7 @@ type ResourcePoolCreateParams struct {
 	Strategy             string
 	AffinityTTLSeconds   int
 	BusyWaitMilliseconds int
+	AutoRestoreSchedule  string
 }
 
 type ResourcePoolUpdateParams struct {
@@ -44,6 +46,7 @@ type ResourcePoolUpdateParams struct {
 	Description          *string
 	AffinityTTLSeconds   *int
 	BusyWaitMilliseconds *int
+	AutoRestoreSchedule  *string
 }
 
 type ResourceCreateParams struct {
@@ -114,6 +117,7 @@ type ResourcePoolView struct {
 	Strategy             string    `json:"strategy"`
 	AffinityTTLSeconds   int       `json:"affinity_ttl_seconds"`
 	BusyWaitMilliseconds int       `json:"busy_wait_milliseconds"`
+	AutoRestoreSchedule  string    `json:"auto_restore_schedule"`
 	ResourceCount        int       `json:"resource_count"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -164,6 +168,10 @@ func (s *ResourcePoolService) CreatePool(ctx context.Context, params ResourcePoo
 	if err := validateResourcePoolTiming(ttl, busyWait); err != nil {
 		return nil, err
 	}
+	schedule := strings.TrimSpace(params.AutoRestoreSchedule)
+	if err := validateResourcePoolAutoRestoreSchedule(schedule); err != nil {
+		return nil, err
+	}
 
 	pool := models.ResourcePool{
 		Name:                 name,
@@ -171,6 +179,7 @@ func (s *ResourcePoolService) CreatePool(ctx context.Context, params ResourcePoo
 		Strategy:             strategy,
 		AffinityTTLSeconds:   ttl,
 		BusyWaitMilliseconds: busyWait,
+		AutoRestoreSchedule:  schedule,
 	}
 	if err := s.db.WithContext(ctx).Create(&pool).Error; err != nil {
 		return nil, app_errors.ParseDBError(err)
@@ -232,6 +241,13 @@ func (s *ResourcePoolService) UpdatePool(ctx context.Context, id uint, params Re
 	}
 	if params.BusyWaitMilliseconds != nil {
 		pool.BusyWaitMilliseconds = *params.BusyWaitMilliseconds
+	}
+	if params.AutoRestoreSchedule != nil {
+		schedule := strings.TrimSpace(*params.AutoRestoreSchedule)
+		if err := validateResourcePoolAutoRestoreSchedule(schedule); err != nil {
+			return nil, err
+		}
+		pool.AutoRestoreSchedule = schedule
 	}
 	if err := validateResourcePoolTiming(pool.AffinityTTLSeconds, pool.BusyWaitMilliseconds); err != nil {
 		return nil, err
@@ -712,6 +728,7 @@ func (s *ResourcePoolService) poolView(pool *models.ResourcePool, resourceCount 
 		Strategy:             pool.Strategy,
 		AffinityTTLSeconds:   pool.AffinityTTLSeconds,
 		BusyWaitMilliseconds: pool.BusyWaitMilliseconds,
+		AutoRestoreSchedule:  pool.AutoRestoreSchedule,
 		ResourceCount:        resourceCount,
 		CreatedAt:            pool.CreatedAt,
 		UpdatedAt:            pool.UpdatedAt,
@@ -808,6 +825,17 @@ func validateResourcePoolTiming(ttlSeconds, busyWaitMilliseconds int) error {
 	}
 	if busyWaitMilliseconds < 0 || busyWaitMilliseconds > 10000 {
 		return resourcePoolValidationError("busy_wait_milliseconds must be between 0 and 10000")
+	}
+	return nil
+}
+
+// validateResourcePoolAutoRestoreSchedule 校验池级配额自动恢复调度;空串表示关闭。
+func validateResourcePoolAutoRestoreSchedule(schedule string) error {
+	if schedule == "" {
+		return nil
+	}
+	if err := keypool.ValidateAutoRestoreSchedule(schedule); err != nil {
+		return resourcePoolValidationError(fmt.Sprintf("invalid auto_restore_schedule: %v", err))
 	}
 	return nil
 }
