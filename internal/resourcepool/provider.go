@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +59,10 @@ func (p *Provider) LoadResourcesFromDB() error {
 	if err := p.db.Find(&resources).Error; err != nil {
 		return fmt.Errorf("load upstream resources: %w", err)
 	}
+	var endpoints []models.ResourcePoolEndpoint
+	if err := p.db.Find(&endpoints).Error; err != nil {
+		return fmt.Errorf("load resource pool endpoints: %w", err)
+	}
 
 	for _, pool := range pools {
 		if err := p.store.Delete(activeResourcesKey(pool.ID)); err != nil {
@@ -72,6 +75,11 @@ func (p *Provider) LoadResourcesFromDB() error {
 	for i := range resources {
 		resource := &resources[i]
 		if err := p.syncResourceToStore(resource); err != nil {
+			return err
+		}
+	}
+	for i := range endpoints {
+		if err := p.SyncEndpointToStore(&endpoints[i]); err != nil {
 			return err
 		}
 	}
@@ -144,8 +152,8 @@ func (p *Provider) GetPoolConfig(poolID uint) (PoolConfig, error) {
 	}, nil
 }
 
-// AddResources persists atomic URL+credential resources. Credentials are
-// encrypted at rest and the URL+credential identity is HMACed for deduplication.
+// AddResources persists shared credentials. Credentials are encrypted at rest
+// and deduplicated by key identity within the pool.
 func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource) ([]models.UpstreamResource, error) {
 	if poolID == 0 {
 		return nil, errors.New("resource pool ID is required")
@@ -216,10 +224,9 @@ func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource
 	return prepared, nil
 }
 
-// UpdateResource changes the user-managed fields of one physical resource.
-// A nil key keeps the existing credential while still recomputing the atomic
-// URL+credential identity when the upstream URL changes.
-func (p *Provider) UpdateResource(resource *models.UpstreamResource, name, upstreamURL string, key *string) error {
+// UpdateResource changes the user-managed fields of one shared credential.
+// A nil key keeps the existing credential.
+func (p *Provider) UpdateResource(resource *models.UpstreamResource, name string, key *string) error {
 	if resource == nil || resource.ID == 0 || resource.ResourcePoolID == 0 {
 		return errors.New("resource and pool IDs are required")
 	}
@@ -236,7 +243,6 @@ func (p *Provider) UpdateResource(resource *models.UpstreamResource, name, upstr
 
 	updated := *resource
 	updated.Name = strings.TrimSpace(name)
-	updated.UpstreamURL = upstreamURL
 	if err := p.prepareResource(&updated, plainKey); err != nil {
 		return err
 	}
@@ -251,24 +257,81 @@ func (p *Provider) UpdateResource(resource *models.UpstreamResource, name, upstr
 }
 
 func (p *Provider) prepareResource(resource *models.UpstreamResource, plainKey string) error {
-	resource.UpstreamURL = strings.TrimSpace(resource.UpstreamURL)
 	plainKey = strings.TrimSpace(plainKey)
-	if resource.UpstreamURL == "" || plainKey == "" {
-		return errors.New("upstream URL and key are required")
+	if plainKey == "" {
+		return errors.New("key is required")
 	}
-	parsedURL, err := url.ParseRequestURI(resource.UpstreamURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return errors.New("invalid upstream URL")
-	}
-	resource.UpstreamURL = strings.TrimRight(resource.UpstreamURL, "/")
 	resource.KeyHash = p.encryptionSvc.Hash(plainKey)
-	resource.IdentityHash = p.encryptionSvc.Hash(resource.UpstreamURL + "\x00" + plainKey)
+	resource.IdentityHash = resource.KeyHash
 	encryptedKey, err := p.encryptionSvc.Encrypt(plainKey)
 	if err != nil {
 		return fmt.Errorf("encrypt key: %w", err)
 	}
 	resource.KeyValue = encryptedKey
 	return nil
+}
+
+func (p *Provider) SyncEndpointToStore(endpoint *models.ResourcePoolEndpoint) error {
+	if endpoint == nil || endpoint.ID == 0 || endpoint.ResourcePoolID == 0 {
+		return errors.New("endpoint and pool IDs are required")
+	}
+	return p.store.HSet(endpointKey(endpoint.ID), map[string]any{
+		"resource_pool_id": endpoint.ResourcePoolID,
+		"name":             endpoint.Name,
+		"channel_type":     endpoint.ChannelType,
+		"base_url":         endpoint.BaseURL,
+		"enabled":          models.CredentialEnabled(endpoint.Enabled),
+	})
+}
+
+func (p *Provider) RemoveEndpointFromStore(endpointID uint) error {
+	if endpointID == 0 {
+		return errors.New("endpoint ID is required")
+	}
+	return p.store.Delete(endpointKey(endpointID))
+}
+
+// ResolveEndpoint validates that the selected endpoint belongs to the pool,
+// matches the group's protocol, and is currently enabled.
+func (p *Provider) ResolveEndpoint(poolID, endpointID uint, channelType string) (*models.ResourcePoolEndpoint, error) {
+	if poolID == 0 || endpointID == 0 {
+		return nil, errors.New("resource pool endpoint is required")
+	}
+	details, err := p.store.HGetAll(endpointKey(endpointID))
+	if err != nil || len(details) == 0 {
+		var endpoint models.ResourcePoolEndpoint
+		if dbErr := p.db.Where("id = ? AND resource_pool_id = ?", endpointID, poolID).First(&endpoint).Error; dbErr != nil {
+			return nil, dbErr
+		}
+		if syncErr := p.SyncEndpointToStore(&endpoint); syncErr != nil {
+			return nil, syncErr
+		}
+		if !models.CredentialEnabled(endpoint.Enabled) {
+			return nil, errors.New("resource pool endpoint is disabled")
+		}
+		if endpoint.ChannelType != channelType {
+			return nil, fmt.Errorf("resource pool endpoint uses %s, group uses %s", endpoint.ChannelType, channelType)
+		}
+		return &endpoint, nil
+	}
+	cachedPoolID, _ := strconv.ParseUint(details["resource_pool_id"], 10, 64)
+	if uint(cachedPoolID) != poolID {
+		return nil, errors.New("resource pool endpoint belongs to a different pool")
+	}
+	if details["enabled"] != "true" && details["enabled"] != "1" {
+		return nil, errors.New("resource pool endpoint is disabled")
+	}
+	if details["channel_type"] != channelType {
+		return nil, fmt.Errorf("resource pool endpoint uses %s, group uses %s", details["channel_type"], channelType)
+	}
+	return &models.ResourcePoolEndpoint{
+		ID:             endpointID,
+		ResourcePoolID: poolID,
+		Name:           details["name"],
+		ChannelType:    details["channel_type"],
+		BaseURL:        details["base_url"],
+		Enabled:        models.Bool(true),
+	}, nil
 }
 
 func (p *Provider) SyncResourceToStore(resource *models.UpstreamResource) error {
@@ -657,6 +720,10 @@ func poolKey(poolID uint) string {
 
 func resourceKey(resourceID uint) string {
 	return fmt.Sprintf("resource:%d", resourceID)
+}
+
+func endpointKey(endpointID uint) string {
+	return fmt.Sprintf("resource_endpoint:%d", endpointID)
 }
 
 func affinityKey(poolID uint, affinity string) string {

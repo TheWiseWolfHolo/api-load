@@ -141,6 +141,7 @@ export interface Group {
   proxy_keys: string;
   group_type?: GroupType;
   resource_pool_id?: number | null;
+  resource_endpoint_id?: number | null;
   sub_groups?: SubGroupInfo[]; // 子分组列表（仅聚合分组）
   sub_group_ids?: number[]; // 子分组ID列表
   created_at?: string;
@@ -225,6 +226,7 @@ export interface ResourcePool {
   busy_wait_milliseconds: number;
   auto_restore_schedule: string;
   resource_count: number;
+  endpoint_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -240,7 +242,7 @@ export interface ResourcePoolInput {
 
 export interface UpstreamResourceInput {
   name?: string;
-  upstream_url: string;
+  upstream_url?: string;
   key: string;
   enabled?: boolean;
   priority?: number;
@@ -249,12 +251,30 @@ export interface UpstreamResourceInput {
 
 export interface UpstreamResourceUpdateInput {
   name: string;
-  upstream_url: string;
+  upstream_url?: string;
   key?: string;
   enabled?: boolean;
   status?: Extract<ResourceStatus, "active" | "invalid">;
   priority?: number;
   weight?: number;
+}
+
+export interface ResourcePoolEndpoint {
+  id: number;
+  resource_pool_id: number;
+  name: string;
+  channel_type: ChannelType;
+  base_url: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResourcePoolEndpointInput {
+  name: string;
+  channel_type: ChannelType;
+  base_url: string;
+  enabled?: boolean;
 }
 
 export interface ResourceListParams {

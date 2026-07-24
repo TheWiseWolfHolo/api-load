@@ -71,6 +71,21 @@ func TestRES015ResourceExportRoundTripKeepsConfigAndResetsRuntimeState(t *testin
 	}
 }
 
+func TestRES025PlainKeyImportAcceptsNewlinesAndCommas(t *testing.T) {
+	records, err := ParseResourceImportInput("key-a\nkey-b,key-c；key-d")
+	if err != nil {
+		t.Fatalf("parse plain key import: %v", err)
+	}
+	if len(records) != 4 {
+		t.Fatalf("unexpected imported key count: %#v", records)
+	}
+	for i, want := range []string{"key-a", "key-b", "key-c", "key-d"} {
+		if records[i].Key != want || records[i].UpstreamURL != "" {
+			t.Fatalf("unexpected imported key %d: %#v", i, records[i])
+		}
+	}
+}
+
 func TestRES017KeysOnlyExportSeparatesHealthAndManualDisablement(t *testing.T) {
 	svc, _, _ := newTestResourcePoolService(t)
 	ctx := context.Background()
@@ -297,6 +312,11 @@ func newTestResourceValidationFixture(
 	if err != nil {
 		t.Fatalf("create validation pool: %v", err)
 	}
+	if _, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "openai", ChannelType: "openai", BaseURL: upstreamURL,
+	}); err != nil {
+		t.Fatalf("create validation endpoint: %v", err)
+	}
 	resources, err := poolSvc.AddResources(ctx, pool.ID, []ResourceCreateParams{{
 		Name: "validation-seat", UpstreamURL: upstreamURL, Key: rawKey,
 	}})
@@ -310,6 +330,9 @@ func newTestResourceValidationFixture(
 	})
 	if err != nil {
 		t.Fatalf("create validation group: %v", err)
+	}
+	if group.ResourceEndpointID == nil || *group.ResourceEndpointID == 0 {
+		t.Fatalf("single matching endpoint was not selected automatically: %#v", group)
 	}
 	settings := config.NewSystemSettingsManager()
 	validationSvc := NewResourceValidationService(
@@ -352,7 +375,7 @@ func TestRES016ManualEnablementDoesNotOverwriteHealth(t *testing.T) {
 func newTestResourcePoolService(t *testing.T) (*ResourcePoolService, *resourcepool.Provider, *GroupService) {
 	t.Helper()
 	_, db, memStore, encryptionSvc := newTestKeyService(t)
-	if err := db.AutoMigrate(&models.ResourcePool{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}); err != nil {
+	if err := db.AutoMigrate(&models.ResourcePool{}, &models.ResourcePoolEndpoint{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}); err != nil {
 		t.Fatalf("migrate resource pool models: %v", err)
 	}
 	provider := resourcepool.NewProvider(db, memStore, encryptionSvc)
@@ -406,6 +429,55 @@ func TestRES006ResourcePoolManagementMasksAndPublishesResources(t *testing.T) {
 	}
 	if selected, err := provider.SelectResource(pool.ID, resourcepool.SelectionRequest{Route: "openai"}); err != nil || selected == nil {
 		t.Fatalf("restored resource was not selectable: %#v %v", selected, err)
+	}
+}
+
+func TestRES024PoolEndpointsAreExplicitWhenChannelHasMultipleChoices(t *testing.T) {
+	poolSvc, provider, groupSvc := newTestResourcePoolService(t)
+	ctx := context.Background()
+	pool, err := poolSvc.CreatePool(ctx, ResourcePoolCreateParams{Name: "multi-endpoint"})
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	first, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "primary", ChannelType: "openai", BaseURL: "https://primary.example.test",
+	})
+	if err != nil {
+		t.Fatalf("create first endpoint: %v", err)
+	}
+	second, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "secondary", ChannelType: "openai", BaseURL: "https://secondary.example.test",
+	})
+	if err != nil {
+		t.Fatalf("create second endpoint: %v", err)
+	}
+	if _, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
+		Name: "ambiguous-route", GroupType: "standard", ResourcePoolID: &pool.ID,
+		ChannelType: "openai", TestModel: "gpt-test",
+	}); err == nil {
+		t.Fatal("group creation must reject an ambiguous endpoint binding")
+	}
+	group, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
+		Name: "explicit-route", GroupType: "standard", ResourcePoolID: &pool.ID,
+		ResourceEndpointID: &second.ID, ChannelType: "openai", TestModel: "gpt-test",
+	})
+	if err != nil {
+		t.Fatalf("create explicitly bound group: %v", err)
+	}
+	if group.ResourceEndpointID == nil || *group.ResourceEndpointID != second.ID {
+		t.Fatalf("wrong endpoint binding: %#v", group)
+	}
+	if err := poolSvc.DeleteEndpoint(ctx, pool.ID, second.ID); err == nil {
+		t.Fatal("referenced endpoint deletion must be rejected")
+	}
+	newURL := "https://primary-updated.example.test/prefix"
+	updated, err := poolSvc.UpdateEndpoint(ctx, pool.ID, first.ID, ResourceEndpointUpdateParams{BaseURL: &newURL})
+	if err != nil {
+		t.Fatalf("update endpoint: %v", err)
+	}
+	resolved, err := provider.ResolveEndpoint(pool.ID, first.ID, "openai")
+	if err != nil || resolved.BaseURL != updated.BaseURL {
+		t.Fatalf("endpoint cache was not refreshed: %#v %v", resolved, err)
 	}
 }
 
@@ -484,11 +556,11 @@ func TestRES012ResourcePoolResourcesSupportEditAndSafeBulkOperations(t *testing.
 	if err != nil {
 		t.Fatalf("update resource: %v", err)
 	}
-	if updated.Name != "seat-a-renamed" || updated.UpstreamURL != "https://new-a.example.invalid" || updated.MaskedKey != "****aced" {
+	if updated.Name != "seat-a-renamed" || updated.UpstreamURL != "" || updated.MaskedKey != "****aced" {
 		t.Fatalf("unexpected edited resource: %#v", updated)
 	}
 	selected, err := provider.SelectBoundResource(pool.ID, created[0].ID, "anthropic")
-	if err != nil || selected.KeyValue != replacement || selected.UpstreamURL != "https://new-a.example.invalid" {
+	if err != nil || selected.KeyValue != replacement || selected.UpstreamURL != "" {
 		t.Fatalf("edited resource was not synchronized to scheduler: %#v %v", selected, err)
 	}
 
@@ -530,6 +602,11 @@ func TestRES007GroupCanBindAndUnbindSharedResourcePool(t *testing.T) {
 	pool, err := poolSvc.CreatePool(ctx, ResourcePoolCreateParams{Name: "shared-routes"})
 	if err != nil {
 		t.Fatalf("create pool: %v", err)
+	}
+	if _, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "anthropic", ChannelType: "anthropic", BaseURL: "https://api.anthropic.com",
+	}); err != nil {
+		t.Fatalf("create endpoint: %v", err)
 	}
 
 	group, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
@@ -573,6 +650,11 @@ func TestRES013PoolBoundGroupCanStoreDormantLegacyUpstreams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create pool: %v", err)
 	}
+	if _, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "openai", ChannelType: "openai", BaseURL: "https://api.openai.com",
+	}); err != nil {
+		t.Fatalf("create endpoint: %v", err)
+	}
 	group, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
 		Name: "chat-route-with-fallback", GroupType: "standard", ResourcePoolID: &pool.ID,
 		Upstreams:   json.RawMessage(`[{"url":"https://dormant.example.invalid","weight":1}]`),
@@ -592,6 +674,11 @@ func TestRES008ReferencedResourcePoolCannotBeDeleted(t *testing.T) {
 	pool, err := poolSvc.CreatePool(ctx, ResourcePoolCreateParams{Name: "protected-pool"})
 	if err != nil {
 		t.Fatalf("create pool: %v", err)
+	}
+	if _, err := poolSvc.CreateEndpoint(ctx, pool.ID, ResourceEndpointCreateParams{
+		Name: "openai", ChannelType: "openai", BaseURL: "https://api.openai.com",
+	}); err != nil {
+		t.Fatalf("create endpoint: %v", err)
 	}
 	if _, err := groupSvc.CreateGroup(ctx, GroupCreateParams{
 		Name: "chat-route", GroupType: "standard", ResourcePoolID: &pool.ID,

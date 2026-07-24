@@ -5,6 +5,8 @@ import type {
   ResourceListParams,
   ResourceListResponse,
   ResourcePool,
+  ResourcePoolEndpoint,
+  ResourcePoolEndpointInput,
   ResourcePoolInput,
   ResourceStatus,
   ResourceValidationGroup,
@@ -33,6 +35,32 @@ export const resourcePoolsApi = {
 
   deletePool(id: number): Promise<void> {
     return http.delete(`/resource-pools/${id}`);
+  },
+
+  async listEndpoints(poolId: number): Promise<ResourcePoolEndpoint[]> {
+    const response = await http.get(`/resource-pools/${poolId}/endpoints`);
+    return response.data || [];
+  },
+
+  async createEndpoint(
+    poolId: number,
+    payload: ResourcePoolEndpointInput
+  ): Promise<ResourcePoolEndpoint> {
+    const response = await http.post(`/resource-pools/${poolId}/endpoints`, payload);
+    return response.data;
+  },
+
+  async updateEndpoint(
+    poolId: number,
+    endpointId: number,
+    payload: Partial<ResourcePoolEndpointInput>
+  ): Promise<ResourcePoolEndpoint> {
+    const response = await http.put(`/resource-pools/${poolId}/endpoints/${endpointId}`, payload);
+    return response.data;
+  },
+
+  deleteEndpoint(poolId: number, endpointId: number): Promise<void> {
+    return http.delete(`/resource-pools/${poolId}/endpoints/${endpointId}`);
   },
 
   async addResources(id: number, payload: UpstreamResourceInput[]): Promise<UpstreamResource[]> {

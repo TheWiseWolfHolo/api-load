@@ -16,6 +16,7 @@ import (
 
 type upstreamObjectRouting struct {
 	ForcedPoolID             uint
+	ForcedEndpointID         uint
 	ForcedResourceID         uint
 	ResponseObjectType       string
 	NonReplayableOnUncertain bool
@@ -53,6 +54,7 @@ func (ps *ProxyServer) resolveUpstreamObjectRouting(
 				return routing, app_errors.NewAPIError(app_errors.ErrObjectOwnerUnknown, "batch input file belongs to a different resource pool")
 			}
 			routing.ForcedPoolID = binding.ResourcePoolID
+			routing.ForcedEndpointID = binding.ResourceEndpointID
 			routing.ForcedResourceID = binding.ResourceID
 			routing.ResponseObjectType = models.UpstreamObjectTypeBatch
 			routing.NonReplayableOnUncertain = true
@@ -66,6 +68,7 @@ func (ps *ProxyServer) resolveUpstreamObjectRouting(
 			return routing, app_errors.NewAPIError(app_errors.ErrObjectOwnerUnknown, "batch belongs to a different resource pool")
 		}
 		routing.ForcedPoolID = binding.ResourcePoolID
+		routing.ForcedEndpointID = binding.ResourceEndpointID
 		routing.ForcedResourceID = binding.ResourceID
 		routing.ResponseObjectType = models.UpstreamObjectTypeBatch
 	case models.UpstreamObjectTypeFile:
@@ -84,6 +87,7 @@ func (ps *ProxyServer) resolveUpstreamObjectRouting(
 			return routing, app_errors.NewAPIError(app_errors.ErrObjectOwnerUnknown, "file belongs to a different resource pool")
 		}
 		routing.ForcedPoolID = binding.ResourcePoolID
+		routing.ForcedEndpointID = binding.ResourceEndpointID
 		routing.ForcedResourceID = binding.ResourceID
 		routing.ResponseObjectType = models.UpstreamObjectTypeFile
 	}
@@ -105,6 +109,7 @@ func (ps *ProxyServer) persistUpstreamObjectBindings(
 	ctx context.Context,
 	groupID uint,
 	routing upstreamObjectRouting,
+	endpointID uint,
 	resource *models.UpstreamResource,
 	responseBody []byte,
 ) error {
@@ -121,11 +126,12 @@ func (ps *ProxyServer) persistUpstreamObjectBindings(
 			return nil
 		}
 		return ps.resourceProvider.BindObject(ctx, models.UpstreamObjectBinding{
-			GroupID:        groupID,
-			ResourcePoolID: resource.ResourcePoolID,
-			ResourceID:     resource.ID,
-			ObjectType:     objectType,
-			ObjectID:       objectID,
+			GroupID:            groupID,
+			ResourcePoolID:     resource.ResourcePoolID,
+			ResourceEndpointID: endpointID,
+			ResourceID:         resource.ID,
+			ObjectType:         objectType,
+			ObjectID:           objectID,
 		})
 	}
 

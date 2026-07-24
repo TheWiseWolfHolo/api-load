@@ -102,6 +102,7 @@ func (a *App) Start() error {
 			&models.GroupSubGroup{},
 			&models.APIKey{},
 			&models.ResourcePool{},
+			&models.ResourcePoolEndpoint{},
 			&models.UpstreamResource{},
 			&models.UpstreamObjectBinding{},
 			&models.RequestLog{},

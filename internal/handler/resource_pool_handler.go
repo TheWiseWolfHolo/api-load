@@ -35,7 +35,7 @@ type ResourceStatusUpdateRequest struct {
 
 type ResourceUpdateRequest struct {
 	Name        string  `json:"name"`
-	UpstreamURL string  `json:"upstream_url" binding:"required"`
+	UpstreamURL string  `json:"upstream_url"`
 	Key         *string `json:"key,omitempty"`
 	Enabled     *bool   `json:"enabled,omitempty"`
 	Status      *string `json:"status,omitempty"`
@@ -67,6 +67,20 @@ type ResourceImportRequest struct {
 
 type ResourceTestRequest struct {
 	GroupID uint `json:"group_id" binding:"required"`
+}
+
+type ResourceEndpointCreateRequest struct {
+	Name        string `json:"name" binding:"required"`
+	ChannelType string `json:"channel_type" binding:"required"`
+	BaseURL     string `json:"base_url" binding:"required"`
+	Enabled     *bool  `json:"enabled,omitempty"`
+}
+
+type ResourceEndpointUpdateRequest struct {
+	Name        *string `json:"name,omitempty"`
+	ChannelType *string `json:"channel_type,omitempty"`
+	BaseURL     *string `json:"base_url,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
 }
 
 func (s *Server) handleResourcePoolError(c *gin.Context, err error) bool {
@@ -171,6 +185,75 @@ func (s *Server) AddResourcePoolResources(c *gin.Context) {
 		return
 	}
 	response.Success(c, resources)
+}
+
+func (s *Server) CreateResourcePoolEndpoint(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	var req ResourceEndpointCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	endpoint, err := s.ResourcePoolService.CreateEndpoint(c.Request.Context(), poolID, services.ResourceEndpointCreateParams{
+		Name: req.Name, ChannelType: req.ChannelType, BaseURL: req.BaseURL, Enabled: req.Enabled,
+	})
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, endpoint)
+}
+
+func (s *Server) ListResourcePoolEndpoints(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	endpoints, err := s.ResourcePoolService.ListEndpoints(c.Request.Context(), poolID)
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, endpoints)
+}
+
+func (s *Server) UpdateResourcePoolEndpoint(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	endpointID, ok := parseResourceID(c, "endpointId")
+	if !ok {
+		return
+	}
+	var req ResourceEndpointUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInvalidJSON, err.Error()))
+		return
+	}
+	endpoint, err := s.ResourcePoolService.UpdateEndpoint(c.Request.Context(), poolID, endpointID, services.ResourceEndpointUpdateParams{
+		Name: req.Name, ChannelType: req.ChannelType, BaseURL: req.BaseURL, Enabled: req.Enabled,
+	})
+	if s.handleResourcePoolError(c, err) {
+		return
+	}
+	response.Success(c, endpoint)
+}
+
+func (s *Server) DeleteResourcePoolEndpoint(c *gin.Context) {
+	poolID, ok := parseResourceID(c, "id")
+	if !ok {
+		return
+	}
+	endpointID, ok := parseResourceID(c, "endpointId")
+	if !ok {
+		return
+	}
+	if s.handleResourcePoolError(c, s.ResourcePoolService.DeleteEndpoint(c.Request.Context(), poolID, endpointID)) {
+		return
+	}
+	response.Success(c, nil)
 }
 
 func (s *Server) ImportResourcePoolResources(c *gin.Context) {

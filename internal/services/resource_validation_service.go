@@ -101,12 +101,20 @@ func (s *ResourceValidationService) TestResource(ctx context.Context, poolID, re
 	if err != nil {
 		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, "failed to decrypt resource credential")
 	}
-	upstreams, err := json.Marshal([]map[string]any{{"url": resource.UpstreamURL, "weight": 1}})
+	if group.ResourceEndpointID == nil || *group.ResourceEndpointID == 0 {
+		return nil, resourcePoolValidationError("validation group has no resource endpoint")
+	}
+	endpoint, err := s.provider.ResolveEndpoint(poolID, *group.ResourceEndpointID, group.ChannelType)
+	if err != nil {
+		return nil, resourcePoolValidationError(err.Error())
+	}
+	upstreams, err := json.Marshal([]map[string]any{{"url": endpoint.BaseURL, "weight": 1}})
 	if err != nil {
 		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 	}
 	testGroup := group
 	testGroup.ResourcePoolID = nil
+	testGroup.ResourceEndpointID = nil
 	testGroup.Upstreams = datatypes.JSON(upstreams)
 	testGroup.EffectiveConfig = s.settingsManager.GetEffectiveConfig(group.Config)
 	if len(group.HeaderRules) > 0 {
