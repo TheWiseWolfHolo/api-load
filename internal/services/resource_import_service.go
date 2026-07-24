@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 func ParseResourceImportInput(text string) ([]ResourceCreateParams, error) {
@@ -49,18 +50,32 @@ func ParseResourceImportInput(text string) ([]ResourceCreateParams, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid CSV resource import: %w", err)
 	}
-	if len(rows) < 2 {
-		return nil, fmt.Errorf("CSV resource import requires a header and at least one row")
+	if len(rows) == 0 {
+		return nil, nil
 	}
 	header := make(map[string]int, len(rows[0]))
 	for i, value := range rows[0] {
 		header[strings.ToLower(strings.TrimSpace(value))] = i
 	}
-	urlIndex, hasURL := header["upstream_url"]
 	keyIndex, hasKey := header["key"]
-	if !hasURL || !hasKey {
-		return nil, fmt.Errorf("CSV resource import requires upstream_url and key columns")
+	if !hasKey {
+		tokens := strings.FieldsFunc(trimmed, func(r rune) bool {
+			return unicode.IsSpace(r) || r == ',' || r == '，' || r == ';' || r == '；'
+		})
+		result := make([]ResourceCreateParams, 0, len(tokens))
+		for i, token := range tokens {
+			item, normalizeErr := normalizeResourceImport(i+1, ResourceCreateParams{Key: token})
+			if normalizeErr != nil {
+				return nil, normalizeErr
+			}
+			result = append(result, item)
+		}
+		return result, nil
 	}
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("CSV resource import requires at least one data row")
+	}
+	urlIndex := csvHeaderIndex(header, "upstream_url")
 	nameIndex := csvHeaderIndex(header, "name")
 	enabledIndex := csvHeaderIndex(header, "enabled")
 	priorityIndex := csvHeaderIndex(header, "priority")
@@ -100,8 +115,8 @@ func normalizeResourceImport(rowNumber int, item ResourceCreateParams) (Resource
 	item.Name = strings.TrimSpace(item.Name)
 	item.UpstreamURL = strings.TrimSpace(item.UpstreamURL)
 	item.Key = strings.TrimSpace(item.Key)
-	if item.UpstreamURL == "" || item.Key == "" {
-		return ResourceCreateParams{}, fmt.Errorf("row %d: upstream_url and key are required", rowNumber)
+	if item.Key == "" {
+		return ResourceCreateParams{}, fmt.Errorf("row %d: key is required", rowNumber)
 	}
 	if item.Enabled == nil {
 		item.Enabled = models.Bool(true)

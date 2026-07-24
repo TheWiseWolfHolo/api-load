@@ -56,6 +56,7 @@ type GroupCreateRequest struct {
 	Description         string              `json:"description"`
 	GroupType           string              `json:"group_type"` // 'standard' or 'aggregate'
 	ResourcePoolID      *uint               `json:"resource_pool_id"`
+	ResourceEndpointID  *uint               `json:"resource_endpoint_id"`
 	Upstreams           json.RawMessage     `json:"upstreams"`
 	ChannelType         string              `json:"channel_type"`
 	Sort                int                 `json:"sort"`
@@ -83,6 +84,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		Description:         req.Description,
 		GroupType:           req.GroupType,
 		ResourcePoolID:      req.ResourcePoolID,
+		ResourceEndpointID:  req.ResourceEndpointID,
 		Upstreams:           req.Upstreams,
 		ChannelType:         req.ChannelType,
 		Sort:                req.Sort,
@@ -122,23 +124,25 @@ func (s *Server) ListGroups(c *gin.Context) {
 // GroupUpdateRequest defines the payload for updating a group.
 // Using a dedicated struct avoids issues with zero values being ignored by GORM's Update.
 type GroupUpdateRequest struct {
-	Name                *string             `json:"name,omitempty"`
-	DisplayName         *string             `json:"display_name,omitempty"`
-	Description         *string             `json:"description,omitempty"`
-	GroupType           *string             `json:"group_type,omitempty"`
-	ResourcePoolID      *uint               `json:"resource_pool_id,omitempty"`
-	HasResourcePoolID   bool                `json:"-"`
-	Upstreams           json.RawMessage     `json:"upstreams"`
-	ChannelType         *string             `json:"channel_type,omitempty"`
-	Sort                *int                `json:"sort"`
-	TestModel           string              `json:"test_model"`
-	ValidationEndpoint  *string             `json:"validation_endpoint,omitempty"`
-	ParamOverrides      map[string]any      `json:"param_overrides"`
-	ModelRedirectRules  map[string]string   `json:"model_redirect_rules"`
-	ModelRedirectStrict *bool               `json:"model_redirect_strict"`
-	Config              map[string]any      `json:"config"`
-	HeaderRules         []models.HeaderRule `json:"header_rules"`
-	ProxyKeys           *string             `json:"proxy_keys,omitempty"`
+	Name                  *string             `json:"name,omitempty"`
+	DisplayName           *string             `json:"display_name,omitempty"`
+	Description           *string             `json:"description,omitempty"`
+	GroupType             *string             `json:"group_type,omitempty"`
+	ResourcePoolID        *uint               `json:"resource_pool_id,omitempty"`
+	HasResourcePoolID     bool                `json:"-"`
+	ResourceEndpointID    *uint               `json:"resource_endpoint_id,omitempty"`
+	HasResourceEndpointID bool                `json:"-"`
+	Upstreams             json.RawMessage     `json:"upstreams"`
+	ChannelType           *string             `json:"channel_type,omitempty"`
+	Sort                  *int                `json:"sort"`
+	TestModel             string              `json:"test_model"`
+	ValidationEndpoint    *string             `json:"validation_endpoint,omitempty"`
+	ParamOverrides        map[string]any      `json:"param_overrides"`
+	ModelRedirectRules    map[string]string   `json:"model_redirect_rules"`
+	ModelRedirectStrict   *bool               `json:"model_redirect_strict"`
+	Config                map[string]any      `json:"config"`
+	HeaderRules           []models.HeaderRule `json:"header_rules"`
+	ProxyKeys             *string             `json:"proxy_keys,omitempty"`
 }
 
 func (r *GroupUpdateRequest) UnmarshalJSON(data []byte) error {
@@ -153,6 +157,7 @@ func (r *GroupUpdateRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	_, r.HasResourcePoolID = fields["resource_pool_id"]
+	_, r.HasResourceEndpointID = fields["resource_endpoint_id"]
 	return nil
 }
 
@@ -202,20 +207,22 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	}
 
 	params := services.GroupUpdateParams{
-		Name:                req.Name,
-		DisplayName:         req.DisplayName,
-		Description:         req.Description,
-		GroupType:           req.GroupType,
-		ResourcePoolID:      req.ResourcePoolID,
-		HasResourcePoolID:   req.HasResourcePoolID,
-		ChannelType:         req.ChannelType,
-		Sort:                req.Sort,
-		ValidationEndpoint:  req.ValidationEndpoint,
-		ParamOverrides:      req.ParamOverrides,
-		ModelRedirectRules:  req.ModelRedirectRules,
-		ModelRedirectStrict: req.ModelRedirectStrict,
-		Config:              req.Config,
-		ProxyKeys:           req.ProxyKeys,
+		Name:                  req.Name,
+		DisplayName:           req.DisplayName,
+		Description:           req.Description,
+		GroupType:             req.GroupType,
+		ResourcePoolID:        req.ResourcePoolID,
+		HasResourcePoolID:     req.HasResourcePoolID,
+		ResourceEndpointID:    req.ResourceEndpointID,
+		HasResourceEndpointID: req.HasResourceEndpointID,
+		ChannelType:           req.ChannelType,
+		Sort:                  req.Sort,
+		ValidationEndpoint:    req.ValidationEndpoint,
+		ParamOverrides:        req.ParamOverrides,
+		ModelRedirectRules:    req.ModelRedirectRules,
+		ModelRedirectStrict:   req.ModelRedirectStrict,
+		Config:                req.Config,
+		ProxyKeys:             req.ProxyKeys,
 	}
 
 	if req.Upstreams != nil {
@@ -277,6 +284,7 @@ type GroupResponse struct {
 	Description         string              `json:"description"`
 	GroupType           string              `json:"group_type"`
 	ResourcePoolID      *uint               `json:"resource_pool_id,omitempty"`
+	ResourceEndpointID  *uint               `json:"resource_endpoint_id,omitempty"`
 	Upstreams           datatypes.JSON      `json:"upstreams"`
 	ChannelType         string              `json:"channel_type"`
 	Sort                int                 `json:"sort"`
@@ -324,6 +332,7 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		Description:         group.Description,
 		GroupType:           group.GroupType,
 		ResourcePoolID:      group.ResourcePoolID,
+		ResourceEndpointID:  group.ResourceEndpointID,
 		Upstreams:           group.Upstreams,
 		ChannelType:         group.ChannelType,
 		Sort:                group.Sort,
@@ -405,6 +414,15 @@ func (s *Server) DiscoverGroupModels(c *gin.Context) {
 
 	var keys []models.APIKey
 	if group.ResourcePoolID != nil && *group.ResourcePoolID > 0 {
+		if group.ResourceEndpointID == nil || *group.ResourceEndpointID == 0 {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "resource pool endpoint is required"))
+			return
+		}
+		endpoint, resolveErr := s.ResourcePoolProvider.ResolveEndpoint(*group.ResourcePoolID, *group.ResourceEndpointID, group.ChannelType)
+		if resolveErr != nil {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, resolveErr.Error()))
+			return
+		}
 		resource, selectErr := s.ResourcePoolProvider.SelectResource(*group.ResourcePoolID, resourcepool.SelectionRequest{Route: group.ChannelType})
 		if selectErr != nil {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, selectErr.Error()))
@@ -414,7 +432,7 @@ func (s *Server) DiscoverGroupModels(c *gin.Context) {
 			ID: resource.ID, GroupID: group.ID, KeyValue: resource.KeyValue,
 			KeyHash: resource.KeyHash, Status: resource.Status,
 		}}
-		upstreams, marshalErr := json.Marshal([]map[string]any{{"url": resource.UpstreamURL, "weight": 1}})
+		upstreams, marshalErr := json.Marshal([]map[string]any{{"url": endpoint.BaseURL, "weight": 1}})
 		if marshalErr != nil {
 			response.Error(c, app_errors.ErrInternalServer)
 			return

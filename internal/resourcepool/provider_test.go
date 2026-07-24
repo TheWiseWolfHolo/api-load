@@ -20,7 +20,7 @@ func newTestProvider(t *testing.T) (*Provider, *gorm.DB, *models.ResourcePool) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.ResourcePool{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}, &models.Group{}); err != nil {
+	if err := db.AutoMigrate(&models.ResourcePool{}, &models.ResourcePoolEndpoint{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}, &models.Group{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	pool := &models.ResourcePool{Name: "shared", Strategy: "round_robin", AffinityTTLSeconds: 3600, BusyWaitMilliseconds: 2000}
@@ -71,17 +71,17 @@ func TestBAT000UpstreamObjectOwnerCannotMoveBetweenResources(t *testing.T) {
 	}
 }
 
-func TestRES000ResourceIdentityIsURLAndKeyPair(t *testing.T) {
+func TestRES000ResourceIdentityIsSharedKeyWithinPool(t *testing.T) {
 	provider, db, pool := newTestProvider(t)
 	created, err := provider.AddResources(pool.ID, []models.UpstreamResource{
 		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-c"},
 		{UpstreamURL: "https://other.example.invalid", KeyValue: "key-a"},
 	})
 	if err != nil {
-		t.Fatalf("same URL with a new key and same key at a new URL should be accepted: %v", err)
+		t.Fatalf("append shared keys: %v", err)
 	}
-	if len(created) != 2 {
-		t.Fatalf("unexpected newly created resource count: got %d want 2", len(created))
+	if len(created) != 1 {
+		t.Fatalf("same key at another URL must be deduplicated: got %d new rows", len(created))
 	}
 	created, err = provider.AddResources(pool.ID, []models.UpstreamResource{
 		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"},
@@ -92,15 +92,15 @@ func TestRES000ResourceIdentityIsURLAndKeyPair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("idempotent resource append failed: %v", err)
 	}
-	if len(created) != 1 || created[0].UpstreamURL != "https://a.example.invalid" {
+	if len(created) != 1 || created[0].KeyHash == "" {
 		t.Fatalf("duplicate resources were not skipped: %#v", created)
 	}
 	var count int64
 	if err := db.Model(&models.UpstreamResource{}).Where("resource_pool_id = ?", pool.ID).Count(&count).Error; err != nil {
 		t.Fatalf("count resources: %v", err)
 	}
-	if count != 5 {
-		t.Fatalf("unexpected resource count: got %d want 5", count)
+	if count != 4 {
+		t.Fatalf("unexpected shared key count: got %d want 4", count)
 	}
 }
 
@@ -158,8 +158,8 @@ func TestRES001AffinityUsesAtomicURLKeyResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second select: %v", err)
 	}
-	if first.ID != second.ID || first.UpstreamURL != second.UpstreamURL || first.KeyValue != second.KeyValue {
-		t.Fatalf("affinity split atomic resource: first=%#v second=%#v", first, second)
+	if first.ID != second.ID || first.KeyValue != second.KeyValue {
+		t.Fatalf("affinity split shared credential: first=%#v second=%#v", first, second)
 	}
 }
 

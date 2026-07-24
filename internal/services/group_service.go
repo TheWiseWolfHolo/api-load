@@ -94,6 +94,7 @@ type GroupCreateParams struct {
 	Description         string
 	GroupType           string
 	ResourcePoolID      *uint
+	ResourceEndpointID  *uint
 	Upstreams           json.RawMessage
 	ChannelType         string
 	Sort                int
@@ -110,26 +111,28 @@ type GroupCreateParams struct {
 
 // GroupUpdateParams captures updatable fields for a group.
 type GroupUpdateParams struct {
-	Name                *string
-	DisplayName         *string
-	Description         *string
-	GroupType           *string
-	ResourcePoolID      *uint
-	HasResourcePoolID   bool
-	Upstreams           json.RawMessage
-	HasUpstreams        bool
-	ChannelType         *string
-	Sort                *int
-	TestModel           string
-	HasTestModel        bool
-	ValidationEndpoint  *string
-	ParamOverrides      map[string]any
-	ModelRedirectRules  map[string]string
-	ModelRedirectStrict *bool
-	Config              map[string]any
-	HeaderRules         *[]models.HeaderRule
-	ProxyKeys           *string
-	SubGroups           *[]SubGroupInput
+	Name                  *string
+	DisplayName           *string
+	Description           *string
+	GroupType             *string
+	ResourcePoolID        *uint
+	HasResourcePoolID     bool
+	ResourceEndpointID    *uint
+	HasResourceEndpointID bool
+	Upstreams             json.RawMessage
+	HasUpstreams          bool
+	ChannelType           *string
+	Sort                  *int
+	TestModel             string
+	HasTestModel          bool
+	ValidationEndpoint    *string
+	ParamOverrides        map[string]any
+	ModelRedirectRules    map[string]string
+	ModelRedirectStrict   *bool
+	Config                map[string]any
+	HeaderRules           *[]models.HeaderRule
+	ProxyKeys             *string
+	SubGroups             *[]SubGroupInput
 }
 
 // GroupReorderItem captures a group ID and target sort value.
@@ -197,12 +200,17 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 	if err != nil {
 		return nil, err
 	}
+	resourceEndpointID, err := s.resolveResourceEndpointID(ctx, resourcePoolID, params.ResourceEndpointID, channelType)
+	if err != nil {
+		return nil, err
+	}
 
 	switch groupType {
 	case "aggregate":
 		if resourcePoolID != nil {
 			return nil, NewI18nError(app_errors.ErrValidation, "validation.aggregate_no_resource_pool", nil)
 		}
+		resourceEndpointID = nil
 		validationEndpoint = ""
 		cleanedUpstreams = datatypes.JSON("[]")
 		testModel = "-"
@@ -259,6 +267,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, params GroupCreateParams
 		Description:         strings.TrimSpace(params.Description),
 		GroupType:           groupType,
 		ResourcePoolID:      resourcePoolID,
+		ResourceEndpointID:  resourceEndpointID,
 		Upstreams:           cleanedUpstreams,
 		ChannelType:         channelType,
 		Sort:                params.Sort,
@@ -318,6 +327,41 @@ func (s *GroupService) validateResourcePoolID(ctx context.Context, requested *ui
 	}
 	id := *requested
 	return &id, nil
+}
+
+func (s *GroupService) resolveResourceEndpointID(ctx context.Context, poolID, requested *uint, channelType string) (*uint, error) {
+	if poolID == nil || *poolID == 0 {
+		if requested != nil && *requested > 0 {
+			return nil, resourcePoolValidationError("resource endpoint requires a resource pool")
+		}
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.ResourcePoolEndpoint{}).
+		Where("resource_pool_id = ? AND channel_type = ? AND enabled = ?", *poolID, channelType, true)
+	if requested != nil && *requested > 0 {
+		var count int64
+		if err := query.Where("id = ?", *requested).Count(&count).Error; err != nil {
+			return nil, app_errors.ParseDBError(err)
+		}
+		if count != 1 {
+			return nil, resourcePoolValidationError("resource endpoint does not belong to this pool, is disabled, or uses a different channel type")
+		}
+		id := *requested
+		return &id, nil
+	}
+	var endpoints []models.ResourcePoolEndpoint
+	if err := query.Order("id asc").Limit(2).Find(&endpoints).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	switch len(endpoints) {
+	case 0:
+		return nil, resourcePoolValidationError("the resource pool has no enabled endpoint for this channel type")
+	case 1:
+		id := endpoints[0].ID
+		return &id, nil
+	default:
+		return nil, resourcePoolValidationError("multiple resource endpoints match this channel type; select one explicitly")
+	}
 }
 
 // ReorderGroups updates sort values in a single transaction.
@@ -474,6 +518,27 @@ func (s *GroupService) UpdateGroup(ctx context.Context, id uint, params GroupUpd
 			return nil, NewI18nError(app_errors.ErrValidation, "validation.invalid_channel_type", map[string]any{"types": supported})
 		}
 		group.ChannelType = cleanedChannelType
+	}
+
+	if group.GroupType == "aggregate" {
+		group.ResourceEndpointID = nil
+	} else if group.ResourcePoolID == nil {
+		if params.HasResourceEndpointID && params.ResourceEndpointID != nil && *params.ResourceEndpointID > 0 {
+			return nil, resourcePoolValidationError("resource endpoint requires a resource pool")
+		}
+		group.ResourceEndpointID = nil
+	} else if params.HasResourceEndpointID || params.HasResourcePoolID || params.ChannelType != nil || group.ResourceEndpointID == nil {
+		requestedEndpointID := group.ResourceEndpointID
+		if params.HasResourceEndpointID {
+			requestedEndpointID = params.ResourceEndpointID
+		} else if params.HasResourcePoolID || params.ChannelType != nil {
+			requestedEndpointID = nil
+		}
+		resolvedEndpointID, err := s.resolveResourceEndpointID(ctx, group.ResourcePoolID, requestedEndpointID, group.ChannelType)
+		if err != nil {
+			return nil, err
+		}
+		group.ResourceEndpointID = resolvedEndpointID
 	}
 
 	if params.Sort != nil {

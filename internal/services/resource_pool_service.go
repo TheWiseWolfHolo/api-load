@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
+	"api-load/internal/channel"
 	"api-load/internal/encryption"
 	app_errors "api-load/internal/errors"
 	"api-load/internal/keypool"
@@ -50,7 +52,8 @@ type ResourcePoolUpdateParams struct {
 }
 
 type ResourceCreateParams struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// UpstreamURL is accepted for backward-compatible imports but ignored.
 	UpstreamURL string `json:"upstream_url"`
 	Key         string `json:"key"`
 	Enabled     *bool  `json:"enabled,omitempty"`
@@ -59,7 +62,8 @@ type ResourceCreateParams struct {
 }
 
 type ResourceUpdateParams struct {
-	Name        string
+	Name string
+	// UpstreamURL is accepted for backward-compatible clients but ignored.
 	UpstreamURL string
 	Key         *string
 	Enabled     *bool
@@ -119,6 +123,7 @@ type ResourcePoolView struct {
 	BusyWaitMilliseconds int       `json:"busy_wait_milliseconds"`
 	AutoRestoreSchedule  string    `json:"auto_restore_schedule"`
 	ResourceCount        int       `json:"resource_count"`
+	EndpointCount        int       `json:"endpoint_count"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
@@ -143,6 +148,20 @@ type ResourceView struct {
 	LastFailureAt       *time.Time `json:"last_failure_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
+type ResourceEndpointCreateParams struct {
+	Name        string `json:"name"`
+	ChannelType string `json:"channel_type"`
+	BaseURL     string `json:"base_url"`
+	Enabled     *bool  `json:"enabled,omitempty"`
+}
+
+type ResourceEndpointUpdateParams struct {
+	Name        *string `json:"name,omitempty"`
+	ChannelType *string `json:"channel_type,omitempty"`
+	BaseURL     *string `json:"base_url,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
 }
 
 func (s *ResourcePoolService) CreatePool(ctx context.Context, params ResourcePoolCreateParams) (*ResourcePoolView, error) {
@@ -188,7 +207,7 @@ func (s *ResourcePoolService) CreatePool(ctx context.Context, params ResourcePoo
 		_ = s.db.WithContext(ctx).Delete(&pool).Error
 		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 	}
-	view := s.poolView(&pool, 0)
+	view := s.poolView(&pool, 0, 0)
 	return &view, nil
 }
 
@@ -201,9 +220,13 @@ func (s *ResourcePoolService) ListPools(ctx context.Context) ([]ResourcePoolView
 	if err != nil {
 		return nil, err
 	}
+	endpointCounts, err := s.endpointCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]ResourcePoolView, 0, len(pools))
 	for i := range pools {
-		views = append(views, s.poolView(&pools[i], counts[pools[i].ID]))
+		views = append(views, s.poolView(&pools[i], counts[pools[i].ID], endpointCounts[pools[i].ID]))
 	}
 	return views, nil
 }
@@ -217,7 +240,11 @@ func (s *ResourcePoolService) GetPool(ctx context.Context, id uint) (*ResourcePo
 	if err != nil {
 		return nil, err
 	}
-	view := s.poolView(pool, count)
+	endpointCount, err := s.endpointCount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	view := s.poolView(pool, count, endpointCount)
 	return &view, nil
 }
 
@@ -266,6 +293,10 @@ func (s *ResourcePoolService) DeletePool(ctx context.Context, id uint) error {
 	if err != nil {
 		return err
 	}
+	var endpoints []models.ResourcePoolEndpoint
+	if err := s.db.WithContext(ctx).Where("resource_pool_id = ?", id).Find(&endpoints).Error; err != nil {
+		return app_errors.ParseDBError(err)
+	}
 	var groupCount int64
 	if err := s.db.WithContext(ctx).Model(&models.Group{}).Where("resource_pool_id = ?", id).Count(&groupCount).Error; err != nil {
 		return app_errors.ParseDBError(err)
@@ -302,6 +333,11 @@ func (s *ResourcePoolService) DeletePool(ctx context.Context, id uint) error {
 		s.restoreResourcesToStore(removed)
 		return app_errors.ParseDBError(err)
 	}
+	if err := tx.Where("resource_pool_id = ?", id).Delete(&models.ResourcePoolEndpoint{}).Error; err != nil {
+		tx.Rollback()
+		s.restoreResourcesToStore(removed)
+		return app_errors.ParseDBError(err)
+	}
 	if err := tx.Delete(&models.ResourcePool{}, id).Error; err != nil {
 		tx.Rollback()
 		s.restoreResourcesToStore(removed)
@@ -313,6 +349,11 @@ func (s *ResourcePoolService) DeletePool(ctx context.Context, id uint) error {
 	}
 	if err := s.provider.RemovePoolFromStore(id); err != nil {
 		return app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+	}
+	for _, endpoint := range endpoints {
+		if err := s.provider.RemoveEndpointFromStore(endpoint.ID); err != nil {
+			return app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+		}
 	}
 	return nil
 }
@@ -342,13 +383,12 @@ func (s *ResourcePoolService) AddResources(ctx context.Context, poolID uint, par
 			enabled = models.Bool(true)
 		}
 		resources = append(resources, models.UpstreamResource{
-			Name:        strings.TrimSpace(item.Name),
-			UpstreamURL: item.UpstreamURL,
-			KeyValue:    item.Key,
-			Status:      models.ResourceStatusActive,
-			Enabled:     enabled,
-			Priority:    priority,
-			Weight:      weight,
+			Name:     strings.TrimSpace(item.Name),
+			KeyValue: item.Key,
+			Status:   models.ResourceStatusActive,
+			Enabled:  enabled,
+			Priority: priority,
+			Weight:   weight,
 		})
 	}
 	created, err := s.provider.AddResources(poolID, resources)
@@ -402,7 +442,7 @@ func (s *ResourcePoolService) ListResources(ctx context.Context, poolID uint, pa
 	}
 	if search := strings.TrimSpace(params.Search); search != "" {
 		like := "%" + search + "%"
-		query = query.Where("name LIKE ? OR upstream_url LIKE ? OR key_hash = ?", like, like, s.encryptionSvc.Hash(search))
+		query = query.Where("name LIKE ? OR key_hash = ?", like, s.encryptionSvc.Hash(search))
 	}
 	var totalItems int64
 	if err := query.Count(&totalItems).Error; err != nil {
@@ -444,7 +484,7 @@ func (s *ResourcePoolService) UpdateResource(ctx context.Context, poolID, resour
 	if params.Status != nil && *params.Status != models.ResourceStatusActive && *params.Status != models.ResourceStatusInvalid {
 		return nil, resourcePoolValidationError("health status must be active or invalid")
 	}
-	if err := s.provider.UpdateResource(resource, params.Name, params.UpstreamURL, params.Key); err != nil {
+	if err := s.provider.UpdateResource(resource, params.Name, params.Key); err != nil {
 		if strings.Contains(err.Error(), "persist upstream resource") {
 			return nil, app_errors.ParseDBError(err)
 		}
@@ -720,7 +760,7 @@ func (s *ResourcePoolService) loadResource(ctx context.Context, poolID, resource
 	return &resource, nil
 }
 
-func (s *ResourcePoolService) poolView(pool *models.ResourcePool, resourceCount int) ResourcePoolView {
+func (s *ResourcePoolService) poolView(pool *models.ResourcePool, resourceCount, endpointCount int) ResourcePoolView {
 	return ResourcePoolView{
 		ID:                   pool.ID,
 		Name:                 pool.Name,
@@ -730,9 +770,147 @@ func (s *ResourcePoolService) poolView(pool *models.ResourcePool, resourceCount 
 		BusyWaitMilliseconds: pool.BusyWaitMilliseconds,
 		AutoRestoreSchedule:  pool.AutoRestoreSchedule,
 		ResourceCount:        resourceCount,
+		EndpointCount:        endpointCount,
 		CreatedAt:            pool.CreatedAt,
 		UpdatedAt:            pool.UpdatedAt,
 	}
+}
+
+func (s *ResourcePoolService) CreateEndpoint(ctx context.Context, poolID uint, params ResourceEndpointCreateParams) (*models.ResourcePoolEndpoint, error) {
+	if _, err := s.loadPool(ctx, poolID, false); err != nil {
+		return nil, err
+	}
+	endpoint, err := normalizeResourceEndpoint(poolID, params.Name, params.ChannelType, params.BaseURL, params.Enabled)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.db.WithContext(ctx).Create(endpoint).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if err := s.provider.SyncEndpointToStore(endpoint); err != nil {
+		_ = s.db.WithContext(ctx).Delete(endpoint).Error
+		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+	}
+	return endpoint, nil
+}
+
+func (s *ResourcePoolService) ListEndpoints(ctx context.Context, poolID uint) ([]models.ResourcePoolEndpoint, error) {
+	if _, err := s.loadPool(ctx, poolID, false); err != nil {
+		return nil, err
+	}
+	var endpoints []models.ResourcePoolEndpoint
+	if err := s.db.WithContext(ctx).Where("resource_pool_id = ?", poolID).Order("channel_type asc, id asc").Find(&endpoints).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	return endpoints, nil
+}
+
+func (s *ResourcePoolService) UpdateEndpoint(ctx context.Context, poolID, endpointID uint, params ResourceEndpointUpdateParams) (*models.ResourcePoolEndpoint, error) {
+	endpoint, err := s.loadEndpoint(ctx, poolID, endpointID)
+	if err != nil {
+		return nil, err
+	}
+	name, channelType, baseURL, enabled := endpoint.Name, endpoint.ChannelType, endpoint.BaseURL, endpoint.Enabled
+	if params.Name != nil {
+		name = *params.Name
+	}
+	if params.ChannelType != nil {
+		channelType = *params.ChannelType
+	}
+	if params.BaseURL != nil {
+		baseURL = *params.BaseURL
+	}
+	if params.Enabled != nil {
+		enabled = models.Bool(*params.Enabled)
+	}
+	normalized, err := normalizeResourceEndpoint(poolID, name, channelType, baseURL, enabled)
+	if err != nil {
+		return nil, err
+	}
+	normalized.ID = endpoint.ID
+	normalized.CreatedAt = endpoint.CreatedAt
+	var incompatibleGroups int64
+	if err := s.db.WithContext(ctx).Model(&models.Group{}).
+		Where("resource_endpoint_id = ? AND channel_type <> ?", endpointID, normalized.ChannelType).
+		Count(&incompatibleGroups).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if incompatibleGroups > 0 {
+		return nil, resourcePoolValidationError("endpoint channel type does not match its bound groups")
+	}
+	if err := s.db.WithContext(ctx).Save(normalized).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	if err := s.provider.SyncEndpointToStore(normalized); err != nil {
+		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+	}
+	return normalized, nil
+}
+
+func (s *ResourcePoolService) DeleteEndpoint(ctx context.Context, poolID, endpointID uint) error {
+	endpoint, err := s.loadEndpoint(ctx, poolID, endpointID)
+	if err != nil {
+		return err
+	}
+	var groupCount int64
+	if err := s.db.WithContext(ctx).Model(&models.Group{}).Where("resource_endpoint_id = ?", endpointID).Count(&groupCount).Error; err != nil {
+		return app_errors.ParseDBError(err)
+	}
+	var objectCount int64
+	if err := s.db.WithContext(ctx).Model(&models.UpstreamObjectBinding{}).Where("resource_endpoint_id = ?", endpointID).Count(&objectCount).Error; err != nil {
+		return app_errors.ParseDBError(err)
+	}
+	if groupCount > 0 || objectCount > 0 {
+		return app_errors.NewAPIError(app_errors.ErrResourceInUse, "resource pool endpoint is still referenced")
+	}
+	if err := s.db.WithContext(ctx).Delete(endpoint).Error; err != nil {
+		return app_errors.ParseDBError(err)
+	}
+	if err := s.provider.RemoveEndpointFromStore(endpointID); err != nil {
+		return app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+	}
+	return nil
+}
+
+func (s *ResourcePoolService) loadEndpoint(ctx context.Context, poolID, endpointID uint) (*models.ResourcePoolEndpoint, error) {
+	var endpoint models.ResourcePoolEndpoint
+	if err := s.db.WithContext(ctx).Where("id = ? AND resource_pool_id = ?", endpointID, poolID).First(&endpoint).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	return &endpoint, nil
+}
+
+func normalizeResourceEndpoint(poolID uint, name, channelType, baseURL string, enabled *bool) (*models.ResourcePoolEndpoint, error) {
+	name = strings.TrimSpace(name)
+	channelType = strings.TrimSpace(channelType)
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if name == "" {
+		return nil, resourcePoolValidationError("endpoint name is required")
+	}
+	supported := false
+	for _, candidate := range channel.GetChannels() {
+		if candidate == channelType {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return nil, resourcePoolValidationError("unsupported endpoint channel type")
+	}
+	parsed, err := url.ParseRequestURI(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, resourcePoolValidationError("invalid endpoint base URL")
+	}
+	if enabled == nil {
+		enabled = models.Bool(true)
+	}
+	return &models.ResourcePoolEndpoint{
+		ResourcePoolID: poolID,
+		Name:           name,
+		ChannelType:    channelType,
+		BaseURL:        baseURL,
+		Enabled:        enabled,
+	}, nil
 }
 
 func (s *ResourcePoolService) resourceCount(ctx context.Context, poolID uint) (int, error) {
@@ -750,6 +928,33 @@ func (s *ResourcePoolService) resourceCounts(ctx context.Context) (map[uint]int,
 	}
 	var rows []countRow
 	if err := s.db.WithContext(ctx).Model(&models.UpstreamResource{}).
+		Select("resource_pool_id, COUNT(*) AS count").
+		Group("resource_pool_id").
+		Scan(&rows).Error; err != nil {
+		return nil, app_errors.ParseDBError(err)
+	}
+	counts := make(map[uint]int, len(rows))
+	for _, row := range rows {
+		counts[row.ResourcePoolID] = row.Count
+	}
+	return counts, nil
+}
+
+func (s *ResourcePoolService) endpointCount(ctx context.Context, poolID uint) (int, error) {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&models.ResourcePoolEndpoint{}).Where("resource_pool_id = ?", poolID).Count(&count).Error; err != nil {
+		return 0, app_errors.ParseDBError(err)
+	}
+	return int(count), nil
+}
+
+func (s *ResourcePoolService) endpointCounts(ctx context.Context) (map[uint]int, error) {
+	type countRow struct {
+		ResourcePoolID uint
+		Count          int
+	}
+	var rows []countRow
+	if err := s.db.WithContext(ctx).Model(&models.ResourcePoolEndpoint{}).
 		Select("resource_pool_id, COUNT(*) AS count").
 		Group("resource_pool_id").
 		Scan(&rows).Error; err != nil {

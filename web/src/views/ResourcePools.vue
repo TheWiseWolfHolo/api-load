@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { resourcePoolsApi } from "@/api/resourcePools";
+import ResourceEndpointManager from "@/components/resource-pools/ResourceEndpointManager.vue";
 import ResourceManager from "@/components/resource-pools/ResourceManager.vue";
 import type { ResourcePool, ResourcePoolInput, UpstreamResourceInput } from "@/types/models";
 import {
@@ -44,7 +45,6 @@ const targetPool = ref<ResourcePool | null>(null);
 const expandedPoolIDs = ref(new Set<number>());
 const managerRefreshTokens = reactive<Record<number, number>>({});
 const poolFormRef = ref();
-const resourceUpstreamURL = ref("");
 const resourceKeysText = ref("");
 const resourcePriority = ref(10);
 const resourceWeight = ref(1);
@@ -141,7 +141,6 @@ async function savePool() {
 function openResourceImporter(pool: ResourcePool, mode: "batch" | "config" = "batch") {
   targetPool.value = pool;
   resourceImportMode.value = mode;
-  resourceUpstreamURL.value = "";
   resourceKeysText.value = "";
   resourcePriority.value = 10;
   resourceWeight.value = 1;
@@ -150,23 +149,12 @@ function openResourceImporter(pool: ResourcePool, mode: "batch" | "config" = "ba
 }
 
 function parseResources(): UpstreamResourceInput[] | null {
-  const upstreamURL = resourceUpstreamURL.value.trim();
-  try {
-    const parsed = new URL(upstreamURL);
-    if (!/^https?:$/.test(parsed.protocol)) {
-      throw new Error("invalid upstream URL");
-    }
-  } catch {
-    message.error(t("resourcePools.invalidUpstream"));
-    return null;
-  }
   if (uniqueResourceKeys.value.length === 0) {
     message.warning(t("resourcePools.resourcesRequired"));
     return null;
   }
   return uniqueResourceKeys.value.map(key => ({
     name: "",
-    upstream_url: upstreamURL,
     key,
     priority: resourcePriority.value,
     weight: resourceWeight.value,
@@ -201,7 +189,6 @@ async function addResources() {
       );
     }
     resourcesModalVisible.value = false;
-    resourceUpstreamURL.value = "";
     resourceKeysText.value = "";
     await loadPools();
     expandedPoolIDs.value = new Set([...expandedPoolIDs.value, poolID]);
@@ -228,6 +215,10 @@ function toggleResourceManager(poolID: number) {
 
 function handleResourcesDeleted(pool: ResourcePool, count: number) {
   pool.resource_count = Math.max(0, pool.resource_count - count);
+}
+
+function handleEndpointCount(pool: ResourcePool, count: number) {
+  pool.endpoint_count = count;
 }
 
 function formatTTL(seconds: number): string {
@@ -286,18 +277,18 @@ function formatTTL(seconds: number): string {
           <div class="pool-identity">
             <div class="pool-title-row">
               <h2>{{ pool.name }}</h2>
-              <n-tag size="small" :bordered="false">{{ pool.resource_count }}</n-tag>
+              <n-tag size="small" :bordered="false">
+                {{ t("resourcePools.keyCount", { count: pool.resource_count }) }}
+              </n-tag>
+              <n-tag size="small" :bordered="false">
+                {{ t("resourcePools.endpointCount", { count: pool.endpoint_count }) }}
+              </n-tag>
             </div>
             <p v-if="pool.description">{{ pool.description }}</p>
             <p v-else class="muted">{{ t("resourcePools.noDescription") }}</p>
           </div>
           <div class="pool-actions">
-            <n-button
-              v-if="pool.resource_count > 0"
-              size="small"
-              secondary
-              @click="toggleResourceManager(pool.id)"
-            >
+            <n-button size="small" secondary @click="toggleResourceManager(pool.id)">
               <template #icon>
                 <n-icon
                   :component="
@@ -358,6 +349,11 @@ function formatTTL(seconds: number): string {
           </div>
         </dl>
 
+        <resource-endpoint-manager
+          v-if="expandedPoolIDs.has(pool.id)"
+          :pool-id="pool.id"
+          @count-changed="count => handleEndpointCount(pool, count)"
+        />
         <resource-manager
           v-if="expandedPoolIDs.has(pool.id)"
           :pool-id="pool.id"
@@ -365,7 +361,7 @@ function formatTTL(seconds: number): string {
           @resources-deleted="count => handleResourcesDeleted(pool, count)"
         />
         <n-empty
-          v-else-if="pool.resource_count === 0"
+          v-else-if="pool.resource_count === 0 && pool.endpoint_count === 0"
           size="small"
           class="pool-empty"
           :description="t('resourcePools.noResources')"
@@ -457,13 +453,6 @@ function formatTTL(seconds: number): string {
           label-placement="top"
           class="resource-import-form"
         >
-          <n-form-item :label="t('resourcePools.upstreamURL')" required>
-            <n-input
-              v-model:value="resourceUpstreamURL"
-              :placeholder="t('resourcePools.upstreamPlaceholder')"
-              spellcheck="false"
-            />
-          </n-form-item>
           <n-form-item :label="t('resourcePools.bulkKeys')" required>
             <div class="key-input-stack">
               <n-input

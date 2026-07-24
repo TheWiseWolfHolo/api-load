@@ -77,7 +77,7 @@ func (s *ResourcePoolService) ExportResourcesToWriter(ctx context.Context, poolI
 	var csvWriter *csv.Writer
 	if format == "csv" {
 		csvWriter = csv.NewWriter(writer)
-		if err := csvWriter.Write([]string{"name", "upstream_url", "key", "enabled", "priority", "weight"}); err != nil {
+		if err := csvWriter.Write([]string{"name", "key", "enabled", "priority", "weight"}); err != nil {
 			return nil, err
 		}
 	}
@@ -96,7 +96,7 @@ func (s *ResourcePoolService) ExportResourcesToWriter(ctx context.Context, poolI
 				}
 			case "jsonl":
 				row := map[string]any{
-					"name": resource.Name, "upstream_url": resource.UpstreamURL, "key": key,
+					"name": resource.Name, "key": key,
 					"enabled":  models.CredentialEnabled(resource.Enabled),
 					"priority": resource.Priority, "weight": resource.Weight,
 				}
@@ -109,7 +109,7 @@ func (s *ResourcePoolService) ExportResourcesToWriter(ctx context.Context, poolI
 				}
 			case "csv":
 				if err := csvWriter.Write([]string{
-					resource.Name, resource.UpstreamURL, key,
+					resource.Name, key,
 					fmt.Sprint(models.CredentialEnabled(resource.Enabled)), fmt.Sprint(resource.Priority), fmt.Sprint(resource.Weight),
 				}); err != nil {
 					return err

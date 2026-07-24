@@ -15,7 +15,11 @@ func MigrateDatabase(db *gorm.DB) error {
 		return err
 	}
 
-	return V1_2_0_SplitCredentialEnablement(db)
+	if err := V1_2_0_SplitCredentialEnablement(db); err != nil {
+		return err
+	}
+
+	return V1_3_0_SharePoolCredentialsAcrossEndpoints(db)
 }
 
 // HandleLegacyIndexes removes old indexes from previous versions to prevent migration errors

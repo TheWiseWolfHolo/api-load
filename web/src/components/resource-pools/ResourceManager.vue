@@ -59,7 +59,6 @@ const deleteKeysText = ref("");
 const editingResource = ref<UpstreamResource | null>(null);
 const editForm = reactive({
   name: "",
-  upstream_url: "",
   key: "",
   enabled: true,
   priority: 10,
@@ -205,7 +204,6 @@ function openEditor(resource: UpstreamResource) {
   editingResource.value = resource;
   Object.assign(editForm, {
     name: resource.name,
-    upstream_url: resource.upstream_url,
     key: "",
     enabled: resource.enabled,
     priority: resource.priority,
@@ -214,14 +212,13 @@ function openEditor(resource: UpstreamResource) {
   editVisible.value = true;
 }
 async function saveResource() {
-  if (!editingResource.value || !editForm.upstream_url.trim() || mutating.value) {
+  if (!editingResource.value || mutating.value) {
     return;
   }
   mutating.value = true;
   try {
     await resourcePoolsApi.updateResource(props.poolId, editingResource.value.id, {
       name: editForm.name.trim(),
-      upstream_url: editForm.upstream_url.trim(),
       enabled: editForm.enabled,
       priority: editForm.priority,
       weight: editForm.weight,
@@ -239,7 +236,6 @@ async function toggleEnabled(resource: UpstreamResource) {
   try {
     await resourcePoolsApi.updateResource(props.poolId, resource.id, {
       name: resource.name,
-      upstream_url: resource.upstream_url,
       enabled: !resource.enabled,
     });
     await loadResources();
@@ -252,7 +248,6 @@ async function restoreHealth(resource: UpstreamResource) {
   try {
     await resourcePoolsApi.updateResource(props.poolId, resource.id, {
       name: resource.name,
-      upstream_url: resource.upstream_url,
       status: "active",
     });
     await loadResources();
@@ -468,7 +463,6 @@ function formatDate(value?: string): string {
               @update:checked="togglePage"
             />
             <span>{{ t("resourcePools.resource") }}</span>
-            <span>{{ t("resourcePools.upstream") }}</span>
             <span>{{ t("resourcePools.scheduling") }}</span>
             <span>{{ t("resourcePools.status") }}</span>
             <span>{{ t("resourcePools.usage") }}</span>
@@ -486,9 +480,6 @@ function formatDate(value?: string): string {
             <div class="stacked resource-name" role="cell">
               <strong>{{ resource.name || `#${resource.id}` }}</strong>
               <code>{{ resource.masked_key }}</code>
-            </div>
-            <div class="resource-url" role="cell" :title="resource.upstream_url">
-              {{ resource.upstream_url }}
             </div>
             <div class="stacked compact-data" role="cell">
               <span>{{ t("resourcePools.priorityValue", { value: resource.priority }) }}</span>
@@ -619,9 +610,6 @@ function formatDate(value?: string): string {
               <n-switch v-model:value="editForm.enabled" />
             </n-form-item>
           </div>
-          <n-form-item :label="t('resourcePools.upstreamURL')" required>
-            <n-input v-model:value="editForm.upstream_url" spellcheck="false" />
-          </n-form-item>
           <div class="form-grid two-equal">
             <n-form-item :label="t('resourcePools.priority')">
               <n-input-number v-model:value="editForm.priority" :min="1" :max="1000" />
@@ -762,12 +750,12 @@ function formatDate(value?: string): string {
   overflow-x: auto;
 }
 .resource-table {
-  min-width: 1240px;
+  min-width: 980px;
 }
 .resource-row {
   display: grid;
   grid-template-columns:
-    28px minmax(140px, 0.9fr) minmax(210px, 1.4fr) 105px minmax(170px, 1fr)
+    28px minmax(160px, 1fr) 105px minmax(170px, 1fr)
     110px 145px minmax(180px, auto);
   gap: 14px;
   align-items: center;
@@ -788,7 +776,6 @@ function formatDate(value?: string): string {
   min-width: 0;
 }
 .resource-name code,
-.resource-url,
 .resource-row time,
 .status-stack small,
 .compact-data {
@@ -797,11 +784,6 @@ function formatDate(value?: string): string {
 }
 .resource-name code {
   font-family: var(--font-mono);
-}
-.resource-url {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .compact-data strong {
   color: var(--text-primary);

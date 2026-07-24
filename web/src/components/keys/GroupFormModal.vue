@@ -3,7 +3,13 @@ import { keysApi } from "@/api/keys";
 import { resourcePoolsApi } from "@/api/resourcePools";
 import { settingsApi } from "@/api/settings";
 import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
-import type { Group, GroupConfigOption, ResourcePool, UpstreamInfo } from "@/types/models";
+import type {
+  Group,
+  GroupConfigOption,
+  ResourcePool,
+  ResourcePoolEndpoint,
+  UpstreamInfo,
+} from "@/types/models";
 import {
   Add,
   AlertCircleOutline,
@@ -99,6 +105,7 @@ interface GroupFormData {
   proxy_keys: string;
   group_type?: string;
   resource_pool_id: number | null;
+  resource_endpoint_id: number | null;
 }
 
 // 表单数据
@@ -135,6 +142,7 @@ const formData = reactive<GroupFormData>({
   proxy_keys: "",
   group_type: "standard",
   resource_pool_id: null,
+  resource_endpoint_id: null,
 });
 
 const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
@@ -142,6 +150,7 @@ const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
 const resourcePools = ref<ResourcePool[]>([]);
+const resourceEndpoints = ref<ResourcePoolEndpoint[]>([]);
 const resourcePoolOptions = computed(() => [
   { label: t("resourcePools.legacyRouting"), value: 0 },
   ...resourcePools.value.map(pool => ({
@@ -149,6 +158,14 @@ const resourcePoolOptions = computed(() => [
     value: pool.id,
   })),
 ]);
+const resourceEndpointOptions = computed(() =>
+  resourceEndpoints.value
+    .filter(endpoint => endpoint.enabled && endpoint.channel_type === formData.channel_type)
+    .map(endpoint => ({
+      label: `${endpoint.name} · ${endpoint.base_url}`,
+      value: endpoint.id,
+    }))
+);
 const schedulerConfigKeys = new Set([
   "key_selection_strategy",
   "key_affinity_scope",
@@ -313,6 +330,22 @@ watch(
   }
 );
 
+watch([() => formData.resource_pool_id, () => formData.channel_type], async ([poolID]) => {
+  if (!poolID) {
+    resourceEndpoints.value = [];
+    formData.resource_endpoint_id = null;
+    return;
+  }
+  const endpoints = await resourcePoolsApi.listEndpoints(poolID);
+  resourceEndpoints.value = endpoints;
+  const matching = endpoints.filter(
+    endpoint => endpoint.enabled && endpoint.channel_type === formData.channel_type
+  );
+  if (!matching.some(endpoint => endpoint.id === formData.resource_endpoint_id)) {
+    formData.resource_endpoint_id = matching.length === 1 ? matching[0].id : null;
+  }
+});
+
 // 获取旧渠道类型的默认值（用于比较）
 function getOldDefaultTestModel(channelType: string): string {
   switch (channelType) {
@@ -383,6 +416,7 @@ function resetForm() {
     proxy_keys: "",
     group_type: "standard",
     resource_pool_id: null,
+    resource_endpoint_id: null,
   });
 
   // 重置用户修改状态追踪
@@ -466,6 +500,7 @@ function loadGroupData() {
     proxy_keys: props.group.proxy_keys || "",
     group_type: props.group.group_type || "standard",
     resource_pool_id: props.group.resource_pool_id ?? null,
+    resource_endpoint_id: props.group.resource_endpoint_id ?? null,
   });
 }
 
@@ -662,6 +697,9 @@ async function handleSubmit() {
         })),
       proxy_keys: formData.proxy_keys,
       resource_pool_id: formData.resource_pool_id || null,
+      resource_endpoint_id: formData.resource_pool_id
+        ? formData.resource_endpoint_id || null
+        : null,
     };
 
     const upstreams = formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim());
@@ -956,6 +994,19 @@ function buildSchedulerConfig(): Record<string, number | string> {
               clearable
             />
           </n-form-item>
+          <n-form-item
+            v-if="formData.resource_pool_id"
+            :label="t('resourcePools.boundEndpoint')"
+            path="resource_endpoint_id"
+            required
+          >
+            <n-select
+              v-model:value="formData.resource_endpoint_id"
+              :options="resourceEndpointOptions"
+              :placeholder="t('resourcePools.selectEndpoint')"
+              filterable
+            />
+          </n-form-item>
           <n-alert v-if="formData.resource_pool_id" type="info" :bordered="false">
             {{ t("resourcePools.boundPoolHelp") }}
           </n-alert>
@@ -1095,10 +1146,7 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     :label="t('keys.autoRestoreStatusCodes')"
                     class="form-item-half"
                   >
-                    <n-input
-                      v-model:value="formData.auto_restore_status_codes"
-                      placeholder="429"
-                    />
+                    <n-input v-model:value="formData.auto_restore_status_codes" placeholder="429" />
                   </n-form-item>
                 </div>
                 <div v-if="showFillFirstFields" class="scheduler-grid">

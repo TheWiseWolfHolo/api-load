@@ -114,6 +114,7 @@ type Group struct {
 	Description         string               `gorm:"type:varchar(512)" json:"description"`
 	GroupType           string               `gorm:"type:varchar(50);default:'standard'" json:"group_type"` // 'standard' or 'aggregate'
 	ResourcePoolID      *uint                `gorm:"index" json:"resource_pool_id,omitempty"`
+	ResourceEndpointID  *uint                `gorm:"index" json:"resource_endpoint_id,omitempty"`
 	Upstreams           datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
 	ValidationEndpoint  string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
 	ChannelType         string               `gorm:"type:varchar(50);not null" json:"channel_type"`
@@ -139,8 +140,8 @@ type Group struct {
 	FailoverStatusCodeMatcher failover.StatusCodeMatcher `gorm:"-" json:"-"`
 }
 
-// ResourcePool groups physical upstream resources that can be shared by multiple
-// protocol-specific Groups. Groups remain request routes; the pool owns scheduling.
+// ResourcePool owns credentials and their shared health/scheduling state.
+// Protocol-specific upstream addresses are represented by ResourcePoolEndpoint.
 type ResourcePool struct {
 	ID                   uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name                 string `gorm:"type:varchar(255);not null;unique" json:"name"`
@@ -150,19 +151,34 @@ type ResourcePool struct {
 	BusyWaitMilliseconds int    `gorm:"not null;default:2000" json:"busy_wait_milliseconds"`
 	// AutoRestoreSchedule 控制配额/账单类失败资源的自动恢复;空串(默认)表示
 	// 不自动恢复,此类失败直接标记 invalid,语法与分组 auto_restore_schedule 一致。
-	AutoRestoreSchedule string             `gorm:"type:varchar(64);not null;default:''" json:"auto_restore_schedule"`
-	Resources           []UpstreamResource `gorm:"foreignKey:ResourcePoolID" json:"resources,omitempty"`
-	CreatedAt           time.Time          `json:"created_at"`
-	UpdatedAt           time.Time          `json:"updated_at"`
+	AutoRestoreSchedule string                 `gorm:"type:varchar(64);not null;default:''" json:"auto_restore_schedule"`
+	Resources           []UpstreamResource     `gorm:"foreignKey:ResourcePoolID" json:"resources,omitempty"`
+	Endpoints           []ResourcePoolEndpoint `gorm:"foreignKey:ResourcePoolID" json:"endpoints,omitempty"`
+	CreatedAt           time.Time              `json:"created_at"`
+	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
-// UpstreamResource is the atomic scheduling unit: one upstream URL paired with
-// one official credential. Its status and quota state are shared across routes.
+// ResourcePoolEndpoint is a protocol-specific address through which a group's
+// requests use the credentials owned by the containing resource pool.
+type ResourcePoolEndpoint struct {
+	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ResourcePoolID uint      `gorm:"not null;index;uniqueIndex:idx_pool_endpoint_name;uniqueIndex:idx_pool_endpoint_identity" json:"resource_pool_id"`
+	Name           string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_pool_endpoint_name" json:"name"`
+	ChannelType    string    `gorm:"type:varchar(50);not null;index;uniqueIndex:idx_pool_endpoint_identity" json:"channel_type"`
+	BaseURL        string    `gorm:"type:varchar(1000);not null;uniqueIndex:idx_pool_endpoint_identity" json:"base_url"`
+	Enabled        *bool     `gorm:"not null;default:true;index" json:"enabled"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// UpstreamResource is the scheduling unit for one credential. The deprecated
+// UpstreamURL column remains only so existing databases and imports can migrate
+// without data loss; request routing uses ResourcePoolEndpoint.BaseURL.
 type UpstreamResource struct {
 	ID                  uint       `gorm:"primaryKey;autoIncrement" json:"id"`
 	ResourcePoolID      uint       `gorm:"not null;index;uniqueIndex:idx_resource_pool_identity" json:"resource_pool_id"`
 	Name                string     `gorm:"type:varchar(255)" json:"name"`
-	UpstreamURL         string     `gorm:"type:varchar(1000);not null" json:"upstream_url"`
+	UpstreamURL         string     `gorm:"type:varchar(1000);not null;default:''" json:"upstream_url,omitempty"`
 	KeyValue            string     `gorm:"type:text;not null" json:"key_value"`
 	KeyHash             string     `gorm:"type:varchar(128);not null;index" json:"key_hash"`
 	IdentityHash        string     `gorm:"type:varchar(128);not null;uniqueIndex:idx_resource_pool_identity" json:"identity_hash"`
@@ -191,14 +207,15 @@ const (
 // resource that created them. Batch and file identifiers are not portable
 // across official upstream credentials.
 type UpstreamObjectBinding struct {
-	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	GroupID        uint      `gorm:"not null;index;uniqueIndex:idx_upstream_object_owner" json:"group_id"`
-	ResourcePoolID uint      `gorm:"not null;index" json:"resource_pool_id"`
-	ResourceID     uint      `gorm:"not null;index" json:"resource_id"`
-	ObjectType     string    `gorm:"type:varchar(32);not null;uniqueIndex:idx_upstream_object_owner" json:"object_type"`
-	ObjectID       string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_upstream_object_owner" json:"object_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                 uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	GroupID            uint      `gorm:"not null;index;uniqueIndex:idx_upstream_object_owner" json:"group_id"`
+	ResourcePoolID     uint      `gorm:"not null;index" json:"resource_pool_id"`
+	ResourceEndpointID uint      `gorm:"not null;default:0;index" json:"resource_endpoint_id"`
+	ResourceID         uint      `gorm:"not null;index" json:"resource_id"`
+	ObjectType         string    `gorm:"type:varchar(32);not null;uniqueIndex:idx_upstream_object_owner" json:"object_type"`
+	ObjectID           string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_upstream_object_owner" json:"object_id"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // APIKey 对应 api_keys 表

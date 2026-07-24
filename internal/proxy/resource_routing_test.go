@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -38,8 +39,8 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 	var serverBHits atomic.Int64
 	serverA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serverAHits.Add(1)
-		if got := r.Header.Get("x-api-key"); got != "key-a" {
-			t.Errorf("server A received crossed key %q", got)
+		if got := r.Header.Get("x-api-key"); got != "key-a" && got != "key-b" {
+			t.Errorf("endpoint received unknown key %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/files" && failFileUpload.Load() {
@@ -74,12 +75,19 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.ResourcePool{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}); err != nil {
+	if err := db.AutoMigrate(&models.ResourcePool{}, &models.ResourcePoolEndpoint{}, &models.UpstreamResource{}, &models.UpstreamObjectBinding{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	pool := models.ResourcePool{Name: "batch-shared", Strategy: "round_robin", AffinityTTLSeconds: 3600, BusyWaitMilliseconds: 0}
 	if err := db.Create(&pool).Error; err != nil {
 		t.Fatalf("create pool: %v", err)
+	}
+	endpoint := models.ResourcePoolEndpoint{
+		ResourcePoolID: pool.ID, Name: "openai", ChannelType: "openai",
+		BaseURL: serverA.URL, Enabled: models.Bool(true),
+	}
+	if err := db.Create(&endpoint).Error; err != nil {
+		t.Fatalf("create endpoint: %v", err)
 	}
 	crypto, err := encryption.NewService("")
 	if err != nil {
@@ -100,7 +108,7 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 		t.Fatalf("load resource A: %v", err)
 	}
 	if err := provider.BindObject(context.Background(), models.UpstreamObjectBinding{
-		GroupID: 1, ResourcePoolID: pool.ID, ResourceID: resourceA.ID,
+		GroupID: 1, ResourcePoolID: pool.ID, ResourceEndpointID: endpoint.ID, ResourceID: resourceA.ID,
 		ObjectType: models.UpstreamObjectTypeFile, ObjectID: "file-input",
 	}); err != nil {
 		t.Fatalf("bind input file owner: %v", err)
@@ -111,7 +119,7 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 		t.Fatalf("parse matcher: %v", err)
 	}
 	group := &models.Group{
-		ID: 1, Name: "batch-route", ChannelType: "openai", ResourcePoolID: &pool.ID,
+		ID: 1, Name: "batch-route", ChannelType: "openai", ResourcePoolID: &pool.ID, ResourceEndpointID: &endpoint.ID,
 		FailoverStatusCodeMatcher: matcher,
 		EffectiveConfig:           types.SystemSettings{MaxRetries: 2, RequestTimeout: 5},
 	}
@@ -139,11 +147,11 @@ func TestBAT001BatchAndFilesStayOnCreatingPhysicalResource(t *testing.T) {
 		t.Fatalf("batch create failed: status=%d body=%s", createRecorder.Code, createRecorder.Body.String())
 	}
 	batchBinding, err := provider.FindObjectBinding(context.Background(), group.ID, models.UpstreamObjectTypeBatch, "batch-1")
-	if err != nil || batchBinding.ResourceID != resourceA.ID {
+	if err != nil || batchBinding.ResourceID != resourceA.ID || batchBinding.ResourceEndpointID != endpoint.ID {
 		t.Fatalf("batch owner was not persisted: %#v %v", batchBinding, err)
 	}
 	outputBinding, err := provider.FindObjectBinding(context.Background(), group.ID, models.UpstreamObjectTypeFile, "file-output")
-	if err != nil || outputBinding.ResourceID != resourceA.ID {
+	if err != nil || outputBinding.ResourceID != resourceA.ID || outputBinding.ResourceEndpointID != endpoint.ID {
 		t.Fatalf("batch output file owner was not persisted: %#v %v", outputBinding, err)
 	}
 
@@ -210,7 +218,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			actualKey := r.Header.Get("x-api-key")
 			mu.Lock()
-			if actualKey != expectedKey {
+			if expectedKey != "" && actualKey != expectedKey {
 				mismatches = append(mismatches, fmt.Sprintf("%s received %s want %s", name, actualKey, expectedKey))
 			}
 			shouldFail := actualKey == failingKey
@@ -225,7 +233,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 			_, _ = w.Write([]byte(`{"ok":true,"upstream":"` + name + `"}`))
 		}))
 	}
-	serverA := newUpstream("a", "key-a")
+	serverA := newUpstream("a", "")
 	defer serverA.Close()
 	serverB := newUpstream("b", "key-b")
 	defer serverB.Close()
@@ -234,12 +242,19 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.ResourcePool{}, &models.UpstreamResource{}); err != nil {
+	if err := db.AutoMigrate(&models.ResourcePool{}, &models.ResourcePoolEndpoint{}, &models.UpstreamResource{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	pool := models.ResourcePool{Name: "shared", Strategy: "round_robin", AffinityTTLSeconds: 3600, BusyWaitMilliseconds: 2000}
 	if err := db.Create(&pool).Error; err != nil {
 		t.Fatalf("create pool: %v", err)
+	}
+	endpoint := models.ResourcePoolEndpoint{
+		ResourcePoolID: pool.ID, Name: "anthropic", ChannelType: "anthropic",
+		BaseURL: serverA.URL, Enabled: models.Bool(true),
+	}
+	if err := db.Create(&endpoint).Error; err != nil {
+		t.Fatalf("create endpoint: %v", err)
 	}
 	crypto, err := encryption.NewService("")
 	if err != nil {
@@ -274,6 +289,7 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 		Name:                      "shared-route",
 		ChannelType:               "anthropic",
 		ResourcePoolID:            &pool.ID,
+		ResourceEndpointID:        &endpoint.ID,
 		Upstreams:                 datatypes.JSON(`[]`),
 		FailoverStatusCodeMatcher: matcher,
 		EffectiveConfig: types.SystemSettings{
@@ -299,6 +315,9 @@ func TestRES005ProxyFailoverKeepsURLAndKeyAtomicAndMigratesAffinity(t *testing.T
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"upstream":"a"`) {
+		t.Fatalf("credential failover changed the selected endpoint: %s", recorder.Body.String())
 	}
 	mu.Lock()
 	observedMismatches := append([]string(nil), mismatches...)

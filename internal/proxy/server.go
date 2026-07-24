@@ -150,6 +150,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		ExcludeKeyIDs: excludedKeyIDs,
 	}
 	var selectedResource *models.UpstreamResource
+	var selectedEndpoint *models.ResourcePoolEndpoint
 	var selectedPoolConfig resourcepool.PoolConfig
 	var apiKey *models.APIKey
 	var err error
@@ -159,6 +160,16 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		affinityInfo, _ := affinity.(requestAffinity)
 		selectedPoolConfig, err = ps.resourceProvider.GetPoolConfig(*group.ResourcePoolID)
 		objectRouting := objectRoutingFromContext(c)
+		endpointID := uint(0)
+		if group.ResourceEndpointID != nil {
+			endpointID = *group.ResourceEndpointID
+		}
+		if objectRouting.ForcedEndpointID > 0 {
+			endpointID = objectRouting.ForcedEndpointID
+		}
+		if err == nil {
+			selectedEndpoint, err = ps.resourceProvider.ResolveEndpoint(*group.ResourcePoolID, endpointID, group.ChannelType)
+		}
 		if err == nil && objectRouting.ForcedResourceID > 0 {
 			selectedResource, err = ps.resourceProvider.SelectBoundResource(
 				objectRouting.ForcedPoolID,
@@ -199,7 +210,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 
 	var upstreamURL string
 	if selectedResource != nil {
-		upstreamURL, err = channelHandler.BuildUpstreamURLWithBase(c.Request.URL, originalGroup.Name, selectedResource.UpstreamURL)
+		upstreamURL, err = channelHandler.BuildUpstreamURLWithBase(c.Request.URL, originalGroup.Name, selectedEndpoint.BaseURL)
 	} else {
 		upstreamURL, err = channelHandler.BuildUpstreamURL(c.Request.URL, originalGroup.Name)
 	}
@@ -398,7 +409,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			return
 		}
 		bindingBody := handleGzipCompression(resp, responseBody)
-		if bindErr := ps.persistUpstreamObjectBindings(c.Request.Context(), originalGroup.ID, objectRouting, selectedResource, bindingBody); bindErr != nil {
+		if bindErr := ps.persistUpstreamObjectBindings(c.Request.Context(), originalGroup.ID, objectRouting, selectedEndpoint.ID, selectedResource, bindingBody); bindErr != nil {
 			logrus.WithError(bindErr).WithField("resourceID", selectedResource.ID).Error("failed to persist upstream object ownership")
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrDatabase, "failed to persist upstream object ownership; response was withheld to prevent unsafe cross-key routing"))
 			ps.logRequest(c, originalGroup, group, apiKey, startTime, http.StatusInternalServerError, bindErr, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
