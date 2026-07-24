@@ -36,7 +36,9 @@ export const resourcePoolsApi = {
   },
 
   async addResources(id: number, payload: UpstreamResourceInput[]): Promise<UpstreamResource[]> {
-    const response = await http.post(`/resource-pools/${id}/resources`, payload);
+    const response = await http.post(`/resource-pools/${id}/resources`, payload, {
+      hideMessage: true,
+    });
     return response.data || [];
   },
 
@@ -120,7 +122,11 @@ export const resourcePoolsApi = {
   },
 
   async importResources(poolId: number, content: string): Promise<UpstreamResource[]> {
-    const response = await http.post(`/resource-pools/${poolId}/resources/import`, { content });
+    const response = await http.post(
+      `/resource-pools/${poolId}/resources/import`,
+      { content },
+      { hideMessage: true }
+    );
     return response.data || [];
   },
 

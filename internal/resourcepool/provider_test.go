@@ -73,18 +73,75 @@ func TestBAT000UpstreamObjectOwnerCannotMoveBetweenResources(t *testing.T) {
 
 func TestRES000ResourceIdentityIsURLAndKeyPair(t *testing.T) {
 	provider, db, pool := newTestProvider(t)
-	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://other.example.invalid", KeyValue: "key-a"}}); err != nil {
-		t.Fatalf("same key at different URL should be accepted: %v", err)
+	created, err := provider.AddResources(pool.ID, []models.UpstreamResource{
+		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-c"},
+		{UpstreamURL: "https://other.example.invalid", KeyValue: "key-a"},
+	})
+	if err != nil {
+		t.Fatalf("same URL with a new key and same key at a new URL should be accepted: %v", err)
 	}
-	if _, err := provider.AddResources(pool.ID, []models.UpstreamResource{{UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"}}); err == nil {
-		t.Fatal("duplicate URL+key pair should be rejected")
+	if len(created) != 2 {
+		t.Fatalf("unexpected newly created resource count: got %d want 2", len(created))
+	}
+	created, err = provider.AddResources(pool.ID, []models.UpstreamResource{
+		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-a"},
+		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-c"},
+		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-d"},
+		{UpstreamURL: "https://a.example.invalid", KeyValue: "key-d"},
+	})
+	if err != nil {
+		t.Fatalf("idempotent resource append failed: %v", err)
+	}
+	if len(created) != 1 || created[0].UpstreamURL != "https://a.example.invalid" {
+		t.Fatalf("duplicate resources were not skipped: %#v", created)
 	}
 	var count int64
 	if err := db.Model(&models.UpstreamResource{}).Where("resource_pool_id = ?", pool.ID).Count(&count).Error; err != nil {
 		t.Fatalf("count resources: %v", err)
 	}
-	if count != 3 {
-		t.Fatalf("unexpected resource count: got %d want 3", count)
+	if count != 5 {
+		t.Fatalf("unexpected resource count: got %d want 5", count)
+	}
+}
+
+func TestRES000LargeResourceAppendIsBatchedAndIdempotent(t *testing.T) {
+	provider, db, pool := newTestProvider(t)
+	const initialCount = 1200
+	resources := make([]models.UpstreamResource, 0, initialCount)
+	for i := range initialCount {
+		resources = append(resources, models.UpstreamResource{
+			UpstreamURL: "https://bulk.example.invalid",
+			KeyValue:    fmt.Sprintf("bulk-key-%04d", i),
+		})
+	}
+	created, err := provider.AddResources(pool.ID, resources)
+	if err != nil {
+		t.Fatalf("add large resource batch: %v", err)
+	}
+	if len(created) != initialCount {
+		t.Fatalf("unexpected large batch count: got %d want %d", len(created), initialCount)
+	}
+
+	repeatedAndNew := append([]models.UpstreamResource(nil), resources[:600]...)
+	for i := initialCount; i < initialCount+25; i++ {
+		repeatedAndNew = append(repeatedAndNew, models.UpstreamResource{
+			UpstreamURL: "https://bulk.example.invalid",
+			KeyValue:    fmt.Sprintf("bulk-key-%04d", i),
+		})
+	}
+	created, err = provider.AddResources(pool.ID, repeatedAndNew)
+	if err != nil {
+		t.Fatalf("append mixed existing and new resources: %v", err)
+	}
+	if len(created) != 25 {
+		t.Fatalf("unexpected appended resource count: got %d want 25", len(created))
+	}
+	var count int64
+	if err := db.Model(&models.UpstreamResource{}).Where("resource_pool_id = ?", pool.ID).Count(&count).Error; err != nil {
+		t.Fatalf("count appended resources: %v", err)
+	}
+	if count != initialCount+27 {
+		t.Fatalf("unexpected total resource count: got %d want %d", count, initialCount+27)
 	}
 }
 
@@ -106,31 +163,25 @@ func TestRES001AffinityUsesAtomicURLKeyResource(t *testing.T) {
 	}
 }
 
-func TestRES002RouteCooldownMigratesOnlyAffectedRoute(t *testing.T) {
-	provider, _, pool := newTestProvider(t)
-	first, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: "project-a"})
+func TestRES002NotFoundDoesNotCountOrDisableResource(t *testing.T) {
+	provider, db, pool := newTestProvider(t)
+	resource, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic"})
 	if err != nil {
-		t.Fatalf("first select: %v", err)
+		t.Fatalf("select resource: %v", err)
 	}
-	if err := provider.BindAffinity(pool.ID, "project-a", first.ID, time.Hour); err != nil {
-		t.Fatalf("bind successful selection: %v", err)
+	if err := provider.HandleFailure(resource, "anthropic", http.StatusNotFound, "model not found", nil); err != nil {
+		t.Fatalf("ignore 404: %v", err)
 	}
-	if err := provider.SetRouteCooldown(first.ID, "anthropic", time.Minute); err != nil {
-		t.Fatalf("set route cooldown: %v", err)
+	var stored models.UpstreamResource
+	if err := db.First(&stored, resource.ID).Error; err != nil {
+		t.Fatalf("reload resource: %v", err)
 	}
-	migrated, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", Affinity: "project-a"})
-	if err != nil {
-		t.Fatalf("select migrated resource: %v", err)
+	if stored.Status != models.ResourceStatusActive || stored.FailureCount != 0 {
+		t.Fatalf("404 changed resource health: %#v", stored)
 	}
-	if migrated.ID == first.ID {
-		t.Fatal("anthropic route remained on cooled resource")
-	}
-	openAI, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "openai", Affinity: "chat-a", ExcludeResourceIDs: []uint{migrated.ID}})
-	if err != nil {
-		t.Fatalf("select unaffected route: %v", err)
-	}
-	if openAI.ID != first.ID {
-		t.Fatalf("route cooldown leaked across protocols: got %d want %d", openAI.ID, first.ID)
+	selected, err := provider.SelectBoundResource(pool.ID, resource.ID, "openai")
+	if err != nil || selected.ID != resource.ID {
+		t.Fatalf("404 removed resource from another route: %#v %v", selected, err)
 	}
 }
 
@@ -151,31 +202,45 @@ func TestRES003InvalidResourceStopsAllRoutes(t *testing.T) {
 	}
 }
 
-func TestRES004FailureClassificationSeparatesRouteAndGlobalState(t *testing.T) {
-	provider, _, pool := newTestProvider(t)
-	resource, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic"})
-	if err != nil {
-		t.Fatalf("select resource: %v", err)
+func TestRES004EveryNon404FailureAutoDisablesAllRoutes(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		message    string
+	}{
+		{name: "bad request", statusCode: http.StatusBadRequest, message: "bad request"},
+		{name: "unauthorized", statusCode: http.StatusUnauthorized, message: "credential rejected"},
+		{name: "rate limit", statusCode: http.StatusTooManyRequests, message: "rate limited"},
+		{name: "upstream failure", statusCode: http.StatusBadGateway, message: "upstream failed"},
+		{name: "network failure", statusCode: 0, message: "connection reset"},
 	}
-	otherID := otherResourceID(t, provider, pool.ID, resource.ID)
-
-	headers := make(http.Header)
-	headers.Set("Retry-After", "60")
-	if err := provider.HandleFailure(resource, "anthropic", http.StatusTooManyRequests, "rate limited", headers); err != nil {
-		t.Fatalf("handle route rate limit: %v", err)
-	}
-	if selected, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic", ExcludeResourceIDs: []uint{otherID}}); err == nil || selected != nil {
-		t.Fatalf("route-cooled resource remained available to anthropic: %#v %v", selected, err)
-	}
-	if selected, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "openai", ExcludeResourceIDs: []uint{otherID}}); err != nil || selected.ID != resource.ID {
-		t.Fatalf("route cooldown leaked to openai: %#v %v", selected, err)
-	}
-
-	if err := provider.HandleFailure(resource, "openai", http.StatusTooManyRequests, "credit balance is too low", nil); err != nil {
-		t.Fatalf("handle global quota failure: %v", err)
-	}
-	if selected, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "openai", ExcludeResourceIDs: []uint{otherID}}); err == nil || selected != nil {
-		t.Fatalf("globally cooled resource remained selectable: %#v %v", selected, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, db, pool := newTestProvider(t)
+			resource, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic"})
+			if err != nil {
+				t.Fatalf("select resource: %v", err)
+			}
+			otherID := otherResourceID(t, provider, pool.ID, resource.ID)
+			if err := provider.HandleFailure(resource, "anthropic", tc.statusCode, tc.message, nil); err != nil {
+				t.Fatalf("handle resource failure: %v", err)
+			}
+			var stored models.UpstreamResource
+			if err := db.First(&stored, resource.ID).Error; err != nil {
+				t.Fatalf("reload resource: %v", err)
+			}
+			if stored.Status != models.ResourceStatusInvalid || stored.FailureCount != 1 || stored.GlobalCooldownUntil != nil {
+				t.Fatalf("failure did not immediately disable resource: %#v", stored)
+			}
+			for _, route := range []string{"anthropic", "openai"} {
+				selected, selectErr := provider.SelectResource(pool.ID, SelectionRequest{
+					Route: route, ExcludeResourceIDs: []uint{otherID},
+				})
+				if selectErr == nil || selected != nil {
+					t.Fatalf("auto-disabled resource remained selectable for %s: %#v %v", route, selected, selectErr)
+				}
+			}
+		})
 	}
 }
 
