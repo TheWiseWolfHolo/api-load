@@ -657,7 +657,7 @@ export default {
     subtitle:
       "公式アップストリーム URL とキーを1つの物理リソースとして、複数プロトコルのルートで共有します。",
     routingNote:
-      "リソースプールが実キーの唯一のスケジューラです。OpenAI と Anthropic はクォータ状態を共有し、通常の 429 は該当プロトコルのみをクールダウンします。",
+      "リソースプールが実キーの唯一のスケジューラです。404 を除く上流エラーでは URL + キー全体を自動停止し、OpenAI と Anthropic の両方で使用を止めます。",
     createPool: "プールを作成",
     createFirst: "最初のプールを作成",
     editPool: "プールを編集",
@@ -720,7 +720,7 @@ export default {
     status: "状態",
     lastUsed: "最終使用",
     status_active: "有効",
-    status_invalid: "無効な認証情報",
+    status_invalid: "自動停止",
     status_disabled: "停止中",
     manualDisabled: "手動停止",
     availabilityAll: "すべての有効状態",
@@ -757,7 +757,8 @@ export default {
     restore: "復元",
     deleteResourceConfirm:
       "この物理リソースを完全に削除しますか？Batch/File を所有している場合は拒否されます。",
-    importHelp: "上流 URL は一度だけ入力し、下にキーをまとめて貼り付けます。",
+    importHelp:
+      "上流 URL を入力してキーをまとめて貼り付けます。同じ URL へ繰り返し追加でき、既存の URL + キーは自動的に無視されます。",
     upstreamURL: "upstream URL",
     upstreamPlaceholder: "https://api.example.com",
     bulkKeys: "キー一括入力",
@@ -766,6 +767,9 @@ export default {
     keySeparatorHelp: "改行または半角カンマで区切ります。空欄と重複は自動的に無視されます。",
     keysDetected: "{count} 個のキーを検出",
     duplicateKeysIgnored: "重複した {count} 個のキーを無視しました",
+    resourceAppendResult:
+      "{added} 個の新しいキーを追加し、プール内の既存リソース {skipped} 個を無視しました。",
+    configImportResult: "{added} 個の新しいリソースをインポートし、既存リソースは無視しました。",
     secretNote:
       "生のキーは今回の送信時のみ使用されます。保存後はマスクのみ表示され、再表示できません。",
     importResources: "リソースをインポート",

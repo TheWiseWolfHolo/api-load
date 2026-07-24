@@ -23,8 +23,8 @@ import (
 const DefaultAffinityTTL = time.Hour
 
 const (
-	defaultRouteCooldown   = time.Minute
-	transientRouteCooldown = 5 * time.Second
+	resourceIdentityLookupBatchSize = 500
+	resourceInsertBatchSize         = 100
 )
 
 type SelectionRequest struct {
@@ -153,7 +153,8 @@ func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource
 	if len(resources) == 0 {
 		return []models.UpstreamResource{}, nil
 	}
-	prepared := make([]models.UpstreamResource, len(resources))
+	prepared := make([]models.UpstreamResource, 0, len(resources))
+	seenIdentities := make(map[string]struct{}, len(resources))
 	for i := range resources {
 		resource := resources[i]
 		resource.ResourcePoolID = poolID
@@ -163,10 +164,45 @@ func (p *Provider) AddResources(poolID uint, resources []models.UpstreamResource
 		if resource.Status == "" {
 			resource.Status = models.ResourceStatusActive
 		}
-		prepared[i] = resource
+		if _, duplicate := seenIdentities[resource.IdentityHash]; duplicate {
+			continue
+		}
+		seenIdentities[resource.IdentityHash] = struct{}{}
+		prepared = append(prepared, resource)
 	}
 
-	if err := p.db.Create(&prepared).Error; err != nil {
+	identityHashes := make([]string, 0, len(prepared))
+	for i := range prepared {
+		identityHashes = append(identityHashes, prepared[i].IdentityHash)
+	}
+	existingIdentityHashes := make([]string, 0)
+	for start := 0; start < len(identityHashes); start += resourceIdentityLookupBatchSize {
+		end := min(start+resourceIdentityLookupBatchSize, len(identityHashes))
+		var batch []string
+		if err := p.db.Model(&models.UpstreamResource{}).
+			Where("resource_pool_id = ? AND identity_hash IN ?", poolID, identityHashes[start:end]).
+			Pluck("identity_hash", &batch).Error; err != nil {
+			return nil, fmt.Errorf("persist upstream resources: load existing identities: %w", err)
+		}
+		existingIdentityHashes = append(existingIdentityHashes, batch...)
+	}
+	existingIdentities := make(map[string]struct{}, len(existingIdentityHashes))
+	for _, identityHash := range existingIdentityHashes {
+		existingIdentities[identityHash] = struct{}{}
+	}
+	newResources := prepared[:0]
+	for i := range prepared {
+		if _, exists := existingIdentities[prepared[i].IdentityHash]; exists {
+			continue
+		}
+		newResources = append(newResources, prepared[i])
+	}
+	prepared = newResources
+	if len(prepared) == 0 {
+		return []models.UpstreamResource{}, nil
+	}
+
+	if err := p.db.CreateInBatches(&prepared, resourceInsertBatchSize).Error; err != nil {
 		return nil, fmt.Errorf("persist upstream resources: %w", err)
 	}
 	for i := range prepared {
@@ -426,24 +462,11 @@ func (p *Provider) BindAffinity(poolID uint, affinity string, resourceID uint, t
 	)
 }
 
-func (p *Provider) SetRouteCooldown(resourceID uint, route string, ttl time.Duration) error {
-	if resourceID == 0 || strings.TrimSpace(route) == "" || ttl <= 0 {
-		return nil
-	}
-	return p.store.Set(routeCooldownKey(resourceID, route), []byte("1"), ttl)
-}
-
-func (p *Provider) ClearRouteCooldown(resourceID uint, route string) error {
-	if resourceID == 0 || strings.TrimSpace(route) == "" {
-		return nil
-	}
-	return p.store.Delete(routeCooldownKey(resourceID, route))
-}
-
-// HandleFailure classifies resource failures into global state and route-local
-// cooldowns. Credential and explicit quota failures affect every protocol;
-// ordinary rate limits and transient upstream failures affect only one route.
-func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string, statusCode int, message string, headers http.Header) error {
+// HandleFailure disables a physical resource after every upstream failure
+// except 404. A failed URL+key pair must leave both protocol routes together;
+// only an explicitly configured quota auto-restore schedule may cool and
+// restore it later.
+func (p *Provider) HandleFailure(resource *models.UpstreamResource, _ string, statusCode int, message string, _ http.Header) error {
 	if resource == nil {
 		return nil
 	}
@@ -453,19 +476,10 @@ func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string
 	if err := p.recordHealthFailure(resource); err != nil {
 		return err
 	}
-	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
-		return p.MarkInvalid(resource, message)
-	}
 	if statusCode == http.StatusPaymentRequired || keypool.IsQuotaOrBillingFailure(message, nil) {
 		return p.handleQuotaExhausted(resource, message)
 	}
-	if statusCode == http.StatusTooManyRequests {
-		return p.SetRouteCooldown(resource.ID, route, cooldownFromHeaders(headers, defaultRouteCooldown))
-	}
-	if statusCode == 0 || statusCode >= http.StatusInternalServerError {
-		return p.SetRouteCooldown(resource.ID, route, transientRouteCooldown)
-	}
-	return nil
+	return p.MarkInvalid(resource, message)
 }
 
 // handleQuotaExhausted applies the pool's auto-restore policy to quota and
@@ -517,16 +531,28 @@ func (p *Provider) MarkInvalid(resource *models.UpstreamResource, reason string)
 	if resource == nil || resource.ID == 0 {
 		return errors.New("resource is required")
 	}
-	updates := map[string]any{"status": models.ResourceStatusInvalid, "disabled_reason": reason}
+	updates := map[string]any{
+		"status":                models.ResourceStatusInvalid,
+		"global_cooldown_until": nil,
+		"disabled_reason":       reason,
+	}
 	if err := p.db.Model(&models.UpstreamResource{}).Where("id = ?", resource.ID).Updates(updates).Error; err != nil {
 		return fmt.Errorf("mark resource %d invalid: %w", resource.ID, err)
 	}
-	if err := p.store.HSet(resourceKey(resource.ID), updates); err != nil {
+	cacheUpdates := map[string]any{
+		"status":                models.ResourceStatusInvalid,
+		"global_cooldown_until": 0,
+		"disabled_reason":       reason,
+	}
+	if err := p.store.HSet(resourceKey(resource.ID), cacheUpdates); err != nil {
 		return fmt.Errorf("cache invalid resource %d: %w", resource.ID, err)
 	}
 	if err := p.store.LRem(activeResourcesKey(resource.ResourcePoolID), 0, resource.ID); err != nil {
 		return err
 	}
+	resource.Status = models.ResourceStatusInvalid
+	resource.GlobalCooldownUntil = nil
+	resource.DisabledReason = reason
 	return p.syncSchedulerSnapshot(resource.ResourcePoolID)
 }
 
@@ -553,18 +579,14 @@ func (p *Provider) MarkHealthy(resource *models.UpstreamResource) error {
 	return p.SyncResourceToStore(resource)
 }
 
-func (p *Provider) isSelectable(resource *models.UpstreamResource, route string) bool {
+func (p *Provider) isSelectable(resource *models.UpstreamResource, _ string) bool {
 	if resource == nil || !models.CredentialEnabled(resource.Enabled) || resource.Status != models.ResourceStatusActive {
 		return false
 	}
 	if resource.GlobalCooldownUntil != nil && resource.GlobalCooldownUntil.After(time.Now()) {
 		return false
 	}
-	if strings.TrimSpace(route) == "" {
-		return true
-	}
-	onCooldown, err := p.store.Exists(routeCooldownKey(resource.ID, route))
-	return err == nil && !onCooldown
+	return true
 }
 
 func (p *Provider) resourceFromStore(resourceID uint) (*models.UpstreamResource, error) {
@@ -639,44 +661,4 @@ func resourceKey(resourceID uint) string {
 
 func affinityKey(poolID uint, affinity string) string {
 	return fmt.Sprintf("resource_affinity:%d:%s", poolID, affinity)
-}
-
-func routeCooldownKey(resourceID uint, route string) string {
-	return fmt.Sprintf("resource_route_cooldown:%d:%s", resourceID, strings.ToLower(strings.TrimSpace(route)))
-}
-
-func cooldownFromHeaders(headers http.Header, fallback time.Duration) time.Duration {
-	if headers == nil {
-		return fallback
-	}
-	if raw := strings.TrimSpace(headers.Get("Retry-After")); raw != "" {
-		if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 0 {
-			return time.Duration(seconds) * time.Second
-		}
-		if when, err := http.ParseTime(raw); err == nil {
-			if duration := time.Until(when); duration > 0 {
-				return duration
-			}
-		}
-	}
-	for _, name := range []string{"anthropic-ratelimit-requests-reset", "x-ratelimit-reset-requests", "x-ratelimit-reset"} {
-		raw := strings.TrimSpace(headers.Get(name))
-		if raw == "" {
-			continue
-		}
-		if duration, err := time.ParseDuration(raw); err == nil && duration > 0 {
-			return duration
-		}
-		if when, err := time.Parse(time.RFC3339, raw); err == nil {
-			if duration := time.Until(when); duration > 0 {
-				return duration
-			}
-		}
-		if unix, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if duration := time.Until(time.Unix(unix, 0)); duration > 0 {
-				return duration
-			}
-		}
-	}
-	return fallback
 }

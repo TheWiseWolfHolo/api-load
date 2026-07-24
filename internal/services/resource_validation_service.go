@@ -140,9 +140,6 @@ func (s *ResourceValidationService) TestResource(ctx context.Context, poolID, re
 		if err := s.provider.MarkHealthy(&resource); err != nil {
 			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 		}
-		if err := s.provider.ClearRouteCooldown(resource.ID, group.ChannelType); err != nil {
-			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
-		}
 	} else {
 		if err := s.provider.HandleFailure(&resource, group.ChannelType, validationStatusCode(errorMessage), errorMessage, nil); err != nil {
 			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())

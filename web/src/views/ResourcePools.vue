@@ -185,13 +185,20 @@ async function addResources() {
         message.warning(t("resourcePools.importContentRequired"));
         return;
       }
-      await resourcePoolsApi.importResources(poolID, resourceImportContent.value);
+      const created = await resourcePoolsApi.importResources(poolID, resourceImportContent.value);
+      message.success(t("resourcePools.configImportResult", { added: created.length }));
     } else {
       const resources = parseResources();
       if (!resources) {
         return;
       }
-      await resourcePoolsApi.addResources(poolID, resources);
+      const created = await resourcePoolsApi.addResources(poolID, resources);
+      message.success(
+        t("resourcePools.resourceAppendResult", {
+          added: created.length,
+          skipped: resources.length - created.length,
+        })
+      );
     }
     resourcesModalVisible.value = false;
     resourceUpstreamURL.value = "";

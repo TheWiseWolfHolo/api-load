@@ -657,7 +657,7 @@ export default {
     subtitle:
       "Keep each official upstream URL and key as one physical resource shared by protocol routes.",
     routingNote:
-      "The pool is the only real-key scheduler. OpenAI and Anthropic groups share quota state, while an ordinary 429 cools only the affected protocol route.",
+      "The pool is the only real-key scheduler. Except for 404, an upstream failure auto-disables the whole URL + key across both OpenAI and Anthropic groups.",
     createPool: "Create pool",
     createFirst: "Create the first pool",
     editPool: "Edit pool",
@@ -720,7 +720,7 @@ export default {
     status: "Status",
     lastUsed: "Last used",
     status_active: "Active",
-    status_invalid: "Invalid credential",
+    status_invalid: "Auto-disabled",
     status_disabled: "Disabled",
     manualDisabled: "Manually disabled",
     availabilityAll: "All availability",
@@ -758,7 +758,8 @@ export default {
     restore: "Restore",
     deleteResourceConfirm:
       "Permanently delete this resource? The server refuses while it owns Batch/File objects.",
-    importHelp: "Enter the upstream once, then paste the entire batch of keys below.",
+    importHelp:
+      "Enter the upstream once and paste the keys below. Reuse the same URL to append keys; existing URL + key pairs are skipped.",
     upstreamURL: "upstream URL",
     upstreamPlaceholder: "https://api.example.com",
     bulkKeys: "Keys",
@@ -767,6 +768,9 @@ export default {
     keySeparatorHelp: "Separate with new lines or commas. Blanks and duplicates are ignored.",
     keysDetected: "{count} keys detected",
     duplicateKeysIgnored: "{count} duplicate keys ignored",
+    resourceAppendResult:
+      "Added {added} new keys; skipped {skipped} resources already in the pool.",
+    configImportResult: "Imported {added} new resources; existing resources were skipped.",
     secretNote:
       "Raw keys are sent only with this submission. After saving, the UI receives a mask and cannot reveal the secret again.",
     importResources: "Import resources",
