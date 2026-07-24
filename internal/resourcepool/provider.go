@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +24,6 @@ const DefaultAffinityTTL = time.Hour
 
 const (
 	defaultRouteCooldown   = time.Minute
-	defaultGlobalCooldown  = time.Hour
 	transientRouteCooldown = 5 * time.Second
 )
 
@@ -35,8 +35,9 @@ type SelectionRequest struct {
 }
 
 type PoolConfig struct {
-	AffinityTTL time.Duration
-	BusyWait    time.Duration
+	AffinityTTL         time.Duration
+	BusyWait            time.Duration
+	AutoRestoreSchedule string
 }
 
 type Provider struct {
@@ -89,6 +90,7 @@ func (p *Provider) SyncPoolToStore(pool *models.ResourcePool) error {
 	return p.store.HSet(poolKey(pool.ID), map[string]any{
 		"affinity_ttl_seconds":   pool.AffinityTTLSeconds,
 		"busy_wait_milliseconds": pool.BusyWaitMilliseconds,
+		"auto_restore_schedule":  pool.AutoRestoreSchedule,
 	})
 }
 
@@ -124,6 +126,7 @@ func (p *Provider) GetPoolConfig(poolID uint) (PoolConfig, error) {
 		details = map[string]string{
 			"affinity_ttl_seconds":   strconv.Itoa(pool.AffinityTTLSeconds),
 			"busy_wait_milliseconds": strconv.Itoa(pool.BusyWaitMilliseconds),
+			"auto_restore_schedule":  pool.AutoRestoreSchedule,
 		}
 	}
 	ttlSeconds, _ := strconv.Atoi(details["affinity_ttl_seconds"])
@@ -135,8 +138,9 @@ func (p *Provider) GetPoolConfig(poolID uint) (PoolConfig, error) {
 		busyWaitMilliseconds = 0
 	}
 	return PoolConfig{
-		AffinityTTL: time.Duration(ttlSeconds) * time.Second,
-		BusyWait:    time.Duration(busyWaitMilliseconds) * time.Millisecond,
+		AffinityTTL:         time.Duration(ttlSeconds) * time.Second,
+		BusyWait:            time.Duration(busyWaitMilliseconds) * time.Millisecond,
+		AutoRestoreSchedule: strings.TrimSpace(details["auto_restore_schedule"]),
 	}, nil
 }
 
@@ -453,8 +457,7 @@ func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string
 		return p.MarkInvalid(resource, message)
 	}
 	if statusCode == http.StatusPaymentRequired || keypool.IsQuotaOrBillingFailure(message, nil) {
-		cooldown := cooldownFromHeaders(headers, defaultGlobalCooldown)
-		return p.SetGlobalCooldown(resource.ID, time.Now().Add(cooldown), message)
+		return p.handleQuotaExhausted(resource, message)
 	}
 	if statusCode == http.StatusTooManyRequests {
 		return p.SetRouteCooldown(resource.ID, route, cooldownFromHeaders(headers, defaultRouteCooldown))
@@ -463,6 +466,28 @@ func (p *Provider) HandleFailure(resource *models.UpstreamResource, route string
 		return p.SetRouteCooldown(resource.ID, route, transientRouteCooldown)
 	}
 	return nil
+}
+
+// handleQuotaExhausted applies the pool's auto-restore policy to quota and
+// billing failures. Without a schedule (the default) the resource is marked
+// invalid and stays out of rotation until it is validated or re-enabled
+// manually; with a schedule the resource cools down until the next restore
+// point and then re-enters rotation lazily via isSelectable.
+func (p *Provider) handleQuotaExhausted(resource *models.UpstreamResource, message string) error {
+	config, err := p.GetPoolConfig(resource.ResourcePoolID)
+	if err != nil {
+		return fmt.Errorf("load pool config for quota failure on resource %d: %w", resource.ID, err)
+	}
+	if config.AutoRestoreSchedule == "" {
+		return p.MarkInvalid(resource, message)
+	}
+	until, err := keypool.NextAutoRestoreTime(config.AutoRestoreSchedule, time.Now())
+	if err != nil {
+		logrus.WithFields(logrus.Fields{"poolID": resource.ResourcePoolID, "error": err}).
+			Warn("Invalid resource pool auto_restore_schedule, marking quota-exhausted resource invalid")
+		return p.MarkInvalid(resource, message)
+	}
+	return p.SetGlobalCooldown(resource.ID, until, message)
 }
 
 func (p *Provider) recordHealthFailure(resource *models.UpstreamResource) error {

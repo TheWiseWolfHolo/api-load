@@ -18,6 +18,7 @@ type ResourcePoolCreateRequest struct {
 	Strategy             string `json:"strategy"`
 	AffinityTTLSeconds   int    `json:"affinity_ttl_seconds"`
 	BusyWaitMilliseconds int    `json:"busy_wait_milliseconds"`
+	AutoRestoreSchedule  string `json:"auto_restore_schedule"`
 }
 
 type ResourcePoolUpdateRequest struct {
@@ -25,6 +26,7 @@ type ResourcePoolUpdateRequest struct {
 	Description          *string `json:"description,omitempty"`
 	AffinityTTLSeconds   *int    `json:"affinity_ttl_seconds,omitempty"`
 	BusyWaitMilliseconds *int    `json:"busy_wait_milliseconds,omitempty"`
+	AutoRestoreSchedule  *string `json:"auto_restore_schedule,omitempty"`
 }
 
 type ResourceStatusUpdateRequest struct {
@@ -92,6 +94,7 @@ func (s *Server) CreateResourcePool(c *gin.Context) {
 		Strategy:             req.Strategy,
 		AffinityTTLSeconds:   req.AffinityTTLSeconds,
 		BusyWaitMilliseconds: req.BusyWaitMilliseconds,
+		AutoRestoreSchedule:  req.AutoRestoreSchedule,
 	})
 	if s.handleResourcePoolError(c, err) {
 		return
@@ -134,6 +137,7 @@ func (s *Server) UpdateResourcePool(c *gin.Context) {
 		Description:          req.Description,
 		AffinityTTLSeconds:   req.AffinityTTLSeconds,
 		BusyWaitMilliseconds: req.BusyWaitMilliseconds,
+		AutoRestoreSchedule:  req.AutoRestoreSchedule,
 	})
 	if s.handleResourcePoolError(c, err) {
 		return

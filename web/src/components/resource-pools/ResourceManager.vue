@@ -87,6 +87,7 @@ const exportOptions = computed(() => [
     children: [
       { label: t("resourcePools.exportAllKeys"), key: "keys-all" },
       { label: t("resourcePools.exportValidKeys"), key: "keys-active" },
+      { label: t("resourcePools.exportCoolingKeys"), key: "keys-cooling" },
       { label: t("resourcePools.exportInvalidKeys"), key: "keys-invalid" },
       { label: t("resourcePools.exportDisabledKeys"), key: "keys-disabled" },
     ],
@@ -344,7 +345,7 @@ function handleExport(key: string | number) {
     return;
   }
   if (value.startsWith("keys-")) {
-    const status = value.slice(5) as "all" | "active" | "invalid" | "disabled";
+    const status = value.slice(5) as "all" | "active" | "cooling" | "invalid" | "disabled";
     resourcePoolsApi.exportResources(props.poolId, { content: "keys", format: "txt", status });
   }
 }

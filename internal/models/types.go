@@ -142,15 +142,18 @@ type Group struct {
 // ResourcePool groups physical upstream resources that can be shared by multiple
 // protocol-specific Groups. Groups remain request routes; the pool owns scheduling.
 type ResourcePool struct {
-	ID                   uint               `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name                 string             `gorm:"type:varchar(255);not null;unique" json:"name"`
-	Description          string             `gorm:"type:varchar(512)" json:"description"`
-	Strategy             string             `gorm:"type:varchar(50);not null;default:'round_robin'" json:"strategy"`
-	AffinityTTLSeconds   int                `gorm:"not null;default:3600" json:"affinity_ttl_seconds"`
-	BusyWaitMilliseconds int                `gorm:"not null;default:2000" json:"busy_wait_milliseconds"`
-	Resources            []UpstreamResource `gorm:"foreignKey:ResourcePoolID" json:"resources,omitempty"`
-	CreatedAt            time.Time          `json:"created_at"`
-	UpdatedAt            time.Time          `json:"updated_at"`
+	ID                   uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name                 string `gorm:"type:varchar(255);not null;unique" json:"name"`
+	Description          string `gorm:"type:varchar(512)" json:"description"`
+	Strategy             string `gorm:"type:varchar(50);not null;default:'round_robin'" json:"strategy"`
+	AffinityTTLSeconds   int    `gorm:"not null;default:3600" json:"affinity_ttl_seconds"`
+	BusyWaitMilliseconds int    `gorm:"not null;default:2000" json:"busy_wait_milliseconds"`
+	// AutoRestoreSchedule 控制配额/账单类失败资源的自动恢复;空串(默认)表示
+	// 不自动恢复,此类失败直接标记 invalid,语法与分组 auto_restore_schedule 一致。
+	AutoRestoreSchedule string             `gorm:"type:varchar(64);not null;default:''" json:"auto_restore_schedule"`
+	Resources           []UpstreamResource `gorm:"foreignKey:ResourcePoolID" json:"resources,omitempty"`
+	CreatedAt           time.Time          `json:"created_at"`
+	UpdatedAt           time.Time          `json:"updated_at"`
 }
 
 // UpstreamResource is the atomic scheduling unit: one upstream URL paired with
@@ -200,26 +203,26 @@ type UpstreamObjectBinding struct {
 
 // APIKey 对应 api_keys 表
 type APIKey struct {
-	ID                uint       `gorm:"primaryKey;autoIncrement;index:idx_api_keys_group_last_used_id,priority:3" json:"id"`
-	KeyValue          string     `gorm:"type:text;not null" json:"key_value"`
-	KeyHash           string     `gorm:"type:varchar(128);index" json:"key_hash"`
-	GroupID           uint       `gorm:"not null;index;index:idx_api_keys_group_last_used_id,priority:1" json:"group_id"`
-	Enabled           *bool      `gorm:"not null;default:true;index" json:"enabled"`
-	Status            string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
-	Priority          int        `gorm:"not null;default:10;index" json:"priority"`
-	Weight            int        `gorm:"not null;default:1" json:"weight"`
-	Notes             string     `gorm:"type:varchar(255);default:''" json:"notes"`
-	RequestCount      int64      `gorm:"not null;default:0" json:"request_count"`
-	TotalFailureCount int64      `gorm:"not null;default:0" json:"total_failure_count"`
-	FailureCount      int64      `gorm:"not null;default:0" json:"failure_count"`
+	ID                uint   `gorm:"primaryKey;autoIncrement;index:idx_api_keys_group_last_used_id,priority:3" json:"id"`
+	KeyValue          string `gorm:"type:text;not null" json:"key_value"`
+	KeyHash           string `gorm:"type:varchar(128);index" json:"key_hash"`
+	GroupID           uint   `gorm:"not null;index;index:idx_api_keys_group_last_used_id,priority:1" json:"group_id"`
+	Enabled           *bool  `gorm:"not null;default:true;index" json:"enabled"`
+	Status            string `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
+	Priority          int    `gorm:"not null;default:10;index" json:"priority"`
+	Weight            int    `gorm:"not null;default:1" json:"weight"`
+	Notes             string `gorm:"type:varchar(255);default:''" json:"notes"`
+	RequestCount      int64  `gorm:"not null;default:0" json:"request_count"`
+	TotalFailureCount int64  `gorm:"not null;default:0" json:"total_failure_count"`
+	FailureCount      int64  `gorm:"not null;default:0" json:"failure_count"`
 	// LastFailureStatusCode 记录最近一次失败的上游状态码,用于自动恢复的原因过滤
 	LastFailureStatusCode int        `gorm:"not null;default:0" json:"last_failure_status_code"`
 	CooldownUntil         *time.Time `gorm:"index" json:"cooldown_until,omitempty"`
 	LastUsedAt            *time.Time `gorm:"index:idx_api_keys_group_last_used_id,priority:2" json:"last_used_at"`
-	LastSuccessAt     *time.Time `gorm:"index" json:"last_success_at"`
-	LastFailureAt     *time.Time `gorm:"index" json:"last_failure_at"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	LastSuccessAt         *time.Time `gorm:"index" json:"last_success_at"`
+	LastFailureAt         *time.Time `gorm:"index" json:"last_failure_at"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 // RequestType 请求类型常量

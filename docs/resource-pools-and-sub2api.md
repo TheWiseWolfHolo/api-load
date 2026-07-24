@@ -96,7 +96,7 @@ curl -N https://sub2api.example.com/v1/messages \
 | 上游结果 | api-load 行为 |
 | --- | --- |
 | 普通 429 | 只冷却当前物理资源的当前协议通道；有粘性时最多等待配置值，再迁移并重绑 |
-| 明确 quota / credit / billing exhausted，或 402 | 全局冷却该 URL + Key，Chat 与 Coding 都暂停使用 |
+| 明确 quota / credit / billing exhausted，或 402 | 默认把该 URL + Key 标为凭据失效，Chat 与 Coding 都停止使用，需手动测试或启用恢复；池配置了配额自动恢复调度时改为全局冷却到下一个恢复点，到点自动回到轮转 |
 | 401 / 403 | 把该物理资源标为凭据失效，所有协议停止使用，需管理员恢复 |
 | 网络错误 / 5xx | 当前协议短暂冷却；普通可重放请求可以迁移 |
 | SSE 已经开始 | 绝不跨 Key 续写；把已产生内容拼到另一响应会破坏协议与语义 |

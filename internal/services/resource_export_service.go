@@ -7,9 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	"gorm.io/gorm"
 )
+
+// ResourceExportStatusCooling 是导出过滤的虚拟状态:status 仍为 active、
+// 但 global_cooldown_until 在未来的资源。它们当下不可用,不随 active 导出。
+const ResourceExportStatusCooling = "cooling"
 
 type ResourceExportResult struct {
 	ExportedCount int `json:"exported_count"`
@@ -41,19 +46,30 @@ func (s *ResourcePoolService) ExportResourcesToWriter(ctx context.Context, poolI
 	}
 
 	query := s.db.WithContext(ctx).Model(&models.UpstreamResource{}).Where("resource_pool_id = ?", poolID)
-	if status == models.ResourceStatusDisabled {
+	now := time.Now()
+	switch status {
+	case models.ResourceStatusDisabled:
 		disabled := false
 		enabled = &disabled
-	} else if status != "" && status != "all" {
-		if status != models.ResourceStatusActive && status != models.ResourceStatusInvalid {
-			return nil, resourcePoolValidationError("invalid resource status filter")
-		}
+	case models.ResourceStatusActive:
+		// 冷却中的资源 status 仍是 active,但当下不可调度,不算可用 key。
+		query = query.Where("status = ?", models.ResourceStatusActive).
+			Where("global_cooldown_until IS NULL OR global_cooldown_until <= ?", now)
+	case ResourceExportStatusCooling:
+		query = query.Where("status = ? AND global_cooldown_until IS NOT NULL AND global_cooldown_until > ?",
+			models.ResourceStatusActive, now)
+	case models.ResourceStatusInvalid:
 		query = query.Where("status = ?", status)
+	case "", "all":
+	default:
+		return nil, resourcePoolValidationError("invalid resource status filter")
 	}
 	if enabled != nil {
 		query = query.Where("enabled = ?", *enabled)
 	}
-	if (status == models.ResourceStatusActive || status == models.ResourceStatusInvalid) && enabled == nil {
+	statusImpliesEnabled := status == models.ResourceStatusActive ||
+		status == models.ResourceStatusInvalid || status == ResourceExportStatusCooling
+	if statusImpliesEnabled && enabled == nil {
 		query = query.Where("enabled = ?", true)
 	}
 

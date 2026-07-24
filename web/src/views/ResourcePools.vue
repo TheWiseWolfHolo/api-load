@@ -68,6 +68,7 @@ const poolForm = reactive<ResourcePoolInput>({
   strategy: "round_robin",
   affinity_ttl_seconds: 3600,
   busy_wait_milliseconds: 2000,
+  auto_restore_schedule: "",
 });
 
 const poolRules: FormRules = {
@@ -113,6 +114,7 @@ function openPoolEditor(pool?: ResourcePool) {
     strategy: "round_robin",
     affinity_ttl_seconds: pool?.affinity_ttl_seconds ?? 3600,
     busy_wait_milliseconds: pool?.busy_wait_milliseconds ?? 2000,
+    auto_restore_schedule: pool?.auto_restore_schedule ?? "",
   });
   poolModalVisible.value = true;
 }
@@ -343,6 +345,10 @@ function formatTTL(seconds: number): string {
             <dt>{{ t("resourcePools.strategy") }}</dt>
             <dd>{{ t("resourcePools.roundRobin") }}</dd>
           </div>
+          <div>
+            <dt>{{ t("resourcePools.autoRestoreSchedule") }}</dt>
+            <dd>{{ pool.auto_restore_schedule || t("resourcePools.autoRestoreDisabled") }}</dd>
+          </div>
         </dl>
 
         <resource-manager
@@ -403,6 +409,13 @@ function formatTTL(seconds: number): string {
               />
             </n-form-item>
           </div>
+          <n-form-item :label="t('resourcePools.autoRestoreSchedule')" path="auto_restore_schedule">
+            <n-input
+              v-model:value="poolForm.auto_restore_schedule"
+              :placeholder="t('resourcePools.autoRestoreSchedulePlaceholder')"
+            />
+            <template #feedback>{{ t("resourcePools.autoRestoreScheduleHint") }}</template>
+          </n-form-item>
         </n-form>
         <template #footer>
           <div class="modal-actions">
