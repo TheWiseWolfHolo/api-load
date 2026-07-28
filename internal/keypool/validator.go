@@ -6,6 +6,7 @@ import (
 	"api-load/internal/encryption"
 	"api-load/internal/models"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +54,16 @@ func NewKeyValidator(params KeyValidatorParams) *KeyValidator {
 
 // ValidateSingleKey performs a validation check on a single API key.
 func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group) (bool, error) {
+	return s.validateSingleKey(key, group, false)
+}
+
+// ValidateSingleKeyAndRecordUsage performs a user-initiated validation and
+// records its successful or failed upstream probe in the key usage counters.
+func (s *KeyValidator) ValidateSingleKeyAndRecordUsage(key *models.APIKey, group *models.Group) (bool, error) {
+	return s.validateSingleKey(key, group, true)
+}
+
+func (s *KeyValidator) validateSingleKey(key *models.APIKey, group *models.Group, recordUsage bool) (bool, error) {
 	if group.EffectiveConfig.AppUrl == "" {
 		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
 	}
@@ -74,6 +85,11 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	if strings.HasPrefix(errorMsg, "[status ") {
 		_, _ = fmt.Sscanf(errorMsg, "[status %d]", &statusCode)
 	}
+	if recordUsage {
+		if err := s.recordValidationUsage(key.ID, isValid, statusCode, time.Now()); err != nil {
+			validationErr = errors.Join(validationErr, fmt.Errorf("record key validation usage: %w", err))
+		}
+	}
 	s.keypoolProvider.UpdateStatus(key, group, isValid, statusCode, errorMsg)
 
 	if !isValid {
@@ -90,7 +106,35 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 		"is_valid": isValid,
 	}).Debug("Key validation successful")
 
-	return true, nil
+	return true, validationErr
+}
+
+func (s *KeyValidator) recordValidationUsage(keyID uint, isValid bool, statusCode int, recordedAt time.Time) error {
+	if keyID == 0 {
+		return errors.New("key ID is required")
+	}
+	if !isValid && statusCode == 404 {
+		return nil
+	}
+
+	updates := map[string]any{}
+	if isValid {
+		updates["request_count"] = gorm.Expr("request_count + ?", 1)
+		updates["last_used_at"] = recordedAt
+		updates["last_success_at"] = recordedAt
+	} else {
+		updates["total_failure_count"] = gorm.Expr("total_failure_count + ?", 1)
+		updates["last_failure_at"] = recordedAt
+	}
+
+	result := s.DB.Model(&models.APIKey{}).Where("id = ?", keyID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("key %d not found", keyID)
+	}
+	return nil
 }
 
 // TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.
@@ -135,7 +179,7 @@ func (s *KeyValidator) TestMultipleKeys(group *models.Group, keyValues []string)
 
 		apiKey.KeyValue = kv
 
-		isValid, validationErr := s.ValidateSingleKey(&apiKey, group)
+		isValid, validationErr := s.ValidateSingleKeyAndRecordUsage(&apiKey, group)
 
 		results[i] = KeyTestResult{
 			KeyValue: kv,

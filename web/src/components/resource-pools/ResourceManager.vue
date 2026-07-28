@@ -33,7 +33,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-const props = defineProps<{ poolId: number; refreshToken?: number }>();
+const props = defineProps<{ poolId: number; poolName: string; refreshToken?: number }>();
 const emit = defineEmits<{ resourcesDeleted: [count: number] }>();
 const { t } = useI18n();
 const message = useMessage();
@@ -333,15 +333,23 @@ async function runBulkDelete(payload: { resource_ids?: number[]; keys?: string[]
 function handleExport(key: string | number) {
   const value = String(key);
   if (value === "full-jsonl" || value === "full-csv") {
-    resourcePoolsApi.exportResources(props.poolId, {
-      content: "full",
-      format: value === "full-jsonl" ? "jsonl" : "csv",
-    });
+    resourcePoolsApi.exportResources(
+      props.poolId,
+      {
+        content: "full",
+        format: value === "full-jsonl" ? "jsonl" : "csv",
+      },
+      props.poolName
+    );
     return;
   }
   if (value.startsWith("keys-")) {
     const status = value.slice(5) as "all" | "active" | "cooling" | "invalid" | "disabled";
-    resourcePoolsApi.exportResources(props.poolId, { content: "keys", format: "txt", status });
+    resourcePoolsApi.exportResources(
+      props.poolId,
+      { content: "keys", format: "txt", status },
+      props.poolName
+    );
   }
 }
 async function testResource(resource: UpstreamResource, selectedGroupID?: number) {
