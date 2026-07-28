@@ -170,7 +170,10 @@ func (s *KeyManualValidationService) validationWorker(wg *sync.WaitGroup, group 
 		keyForValidation := key
 		keyForValidation.KeyValue = decryptedKey
 
-		isValid, _ := s.Validator.ValidateSingleKey(&keyForValidation, group)
+		isValid, validationErr := s.Validator.ValidateSingleKeyAndRecordUsage(&keyForValidation, group)
+		if validationErr != nil {
+			logrus.WithError(validationErr).WithField("key_id", key.ID).Warn("Manual validation completed with an error")
+		}
 		results <- isValid
 	}
 }

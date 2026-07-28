@@ -15,7 +15,7 @@ import type {
   UpstreamResourceInput,
   UpstreamResourceUpdateInput,
 } from "@/types/models";
-import { downloadAuthenticatedFile } from "@/utils/download";
+import { createExportFilename, downloadAuthenticatedFile } from "@/utils/download";
 import http from "@/utils/http";
 
 export const resourcePoolsApi = {
@@ -166,7 +166,8 @@ export const resourcePoolsApi = {
       format: "jsonl" | "csv" | "txt";
       status?: "all" | "active" | "cooling" | "invalid" | "disabled";
       enabled?: boolean;
-    }
+    },
+    poolName?: string
   ): void {
     const authKey = localStorage.getItem("authKey");
     if (!authKey) {
@@ -182,7 +183,10 @@ export const resourcePoolsApi = {
     }
     downloadAuthenticatedFile(
       `/resource-pools/${poolId}/resources/export`,
-      `resource-pool-${poolId}-${options.content}-${options.status ?? "all"}-${Date.now()}.${options.format}`,
+      createExportFilename(
+        ["api-load", "pool", poolName || poolId, options.content, options.status ?? "all"],
+        options.format
+      ),
       params
     );
   },

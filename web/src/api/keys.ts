@@ -8,7 +8,7 @@ import type {
   ParentAggregateGroup,
   TaskInfo,
 } from "@/types/models";
-import { downloadAuthenticatedFile } from "@/utils/download";
+import { createExportFilename, downloadAuthenticatedFile } from "@/utils/download";
 import http from "@/utils/http";
 
 export const keysApi = {
@@ -278,7 +278,8 @@ export const keysApi = {
   exportKeys(
     groupId: number,
     status: "all" | "active" | "invalid" | "disabled" = "all",
-    format: "txt" | "jsonl" | "csv" = "txt"
+    format: "txt" | "jsonl" | "csv" = "txt",
+    groupName?: string
   ): void {
     const authKey = localStorage.getItem("authKey");
     if (!authKey) {
@@ -297,7 +298,10 @@ export const keysApi = {
 
     downloadAuthenticatedFile(
       "/keys/export",
-      `keys-group_${groupId}-${status}-${Date.now()}.${format}`,
+      createExportFilename(
+        ["api-load", "group", groupName || groupId, format === "txt" ? "keys" : "config", status],
+        format
+      ),
       params
     );
   },

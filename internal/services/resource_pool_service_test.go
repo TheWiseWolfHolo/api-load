@@ -205,7 +205,7 @@ func TestRES023PoolAutoRestoreScheduleConfigValidation(t *testing.T) {
 	}
 }
 
-func TestRES018SingleResourceValidationUsesBoundRouteWithoutCountingUsage(t *testing.T) {
+func TestRES018SingleResourceValidationUsesBoundRouteAndCountsSuccessfulUsage(t *testing.T) {
 	const rawKey = "sk-resource-validation"
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer "+rawKey {
@@ -258,20 +258,21 @@ func TestRES018SingleResourceValidationUsesBoundRouteWithoutCountingUsage(t *tes
 	if models.CredentialEnabled(stored.Enabled) {
 		t.Fatal("successful test silently enabled a manually disabled resource")
 	}
-	if stored.RequestCount != 0 || stored.TotalFailureCount != 0 {
-		t.Fatalf("validation probe changed usage counters: %#v", stored)
+	if stored.RequestCount != 1 || stored.TotalFailureCount != 0 || stored.LastUsedAt == nil || stored.LastSuccessAt == nil {
+		t.Fatalf("successful validation did not update usage counters: %#v", stored)
 	}
 }
 
 func TestRES019SingleResourceValidationAppliesFailurePolicyExcept404(t *testing.T) {
 	tests := []struct {
-		name        string
-		statusCode  int
-		wantStatus  string
-		wantFailure int64
+		name             string
+		statusCode       int
+		wantStatus       string
+		wantFailure      int64
+		wantTotalFailure int64
 	}{
-		{name: "credential rejection", statusCode: http.StatusUnauthorized, wantStatus: models.ResourceStatusInvalid, wantFailure: 1},
-		{name: "missing endpoint", statusCode: http.StatusNotFound, wantStatus: models.ResourceStatusActive, wantFailure: 0},
+		{name: "credential rejection", statusCode: http.StatusUnauthorized, wantStatus: models.ResourceStatusInvalid, wantFailure: 1, wantTotalFailure: 1},
+		{name: "missing endpoint", statusCode: http.StatusNotFound, wantStatus: models.ResourceStatusActive, wantFailure: 0, wantTotalFailure: 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -294,8 +295,11 @@ func TestRES019SingleResourceValidationAppliesFailurePolicyExcept404(t *testing.
 			if stored.Status != tc.wantStatus || stored.FailureCount != tc.wantFailure {
 				t.Fatalf("status %d applied wrong health policy: %#v", tc.statusCode, stored)
 			}
-			if stored.RequestCount != 0 || stored.TotalFailureCount != 0 {
-				t.Fatalf("failed validation changed usage counters: %#v", stored)
+			if stored.RequestCount != 0 || stored.TotalFailureCount != tc.wantTotalFailure {
+				t.Fatalf("failed validation applied wrong usage counters: %#v", stored)
+			}
+			if tc.wantTotalFailure > 0 && stored.LastFailureAt == nil {
+				t.Fatalf("failed validation did not record last failure: %#v", stored)
 			}
 		})
 	}

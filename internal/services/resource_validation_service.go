@@ -78,7 +78,7 @@ func (s *ResourceValidationService) ListValidationGroups(ctx context.Context, po
 }
 
 // TestResource validates one resource through one group bound to the same pool.
-// Validation probes update health state but never usage counters.
+// User-initiated probes update both health state and usage counters.
 func (s *ResourceValidationService) TestResource(ctx context.Context, poolID, resourceID, groupID uint) (*ResourceValidationResult, error) {
 	var resource models.UpstreamResource
 	if err := s.db.WithContext(ctx).
@@ -143,13 +143,17 @@ func (s *ResourceValidationService) TestResource(ctx context.Context, poolID, re
 	if validationErr != nil {
 		errorMessage = validationErr.Error()
 	}
+	statusCode := validationStatusCode(errorMessage)
+	if err := s.recordValidationUsage(ctx, resource.ID, isValid, statusCode, time.Now()); err != nil {
+		return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
+	}
 
 	if isValid {
 		if err := s.provider.MarkHealthy(&resource); err != nil {
 			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 		}
 	} else {
-		if err := s.provider.HandleFailure(&resource, group.ChannelType, validationStatusCode(errorMessage), errorMessage, nil); err != nil {
+		if err := s.provider.HandleFailure(&resource, group.ChannelType, statusCode, errorMessage, nil); err != nil {
 			return nil, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error())
 		}
 	}
@@ -163,6 +167,31 @@ func (s *ResourceValidationService) TestResource(ctx context.Context, poolID, re
 		Error:       errorMessage,
 		DurationMS:  durationMS,
 	}, nil
+}
+
+func (s *ResourceValidationService) recordValidationUsage(ctx context.Context, resourceID uint, isValid bool, statusCode int, recordedAt time.Time) error {
+	if !isValid && statusCode == 404 {
+		return nil
+	}
+
+	updates := map[string]any{}
+	if isValid {
+		updates["request_count"] = gorm.Expr("request_count + ?", 1)
+		updates["last_used_at"] = recordedAt
+		updates["last_success_at"] = recordedAt
+	} else {
+		updates["total_failure_count"] = gorm.Expr("total_failure_count + ?", 1)
+		updates["last_failure_at"] = recordedAt
+	}
+
+	result := s.db.WithContext(ctx).Model(&models.UpstreamResource{}).Where("id = ?", resourceID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("record resource validation usage: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("record resource validation usage: resource %d not found", resourceID)
+	}
+	return nil
 }
 
 func (s *ResourceValidationService) ensurePoolExists(ctx context.Context, poolID uint) error {

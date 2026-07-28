@@ -357,6 +357,7 @@ function formatTTL(seconds: number): string {
         <resource-manager
           v-if="expandedPoolIDs.has(pool.id)"
           :pool-id="pool.id"
+          :pool-name="pool.name"
           :refresh-token="managerRefreshTokens[pool.id] ?? 0"
           @resources-deleted="count => handleResourcesDeleted(pool, count)"
         />

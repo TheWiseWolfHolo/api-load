@@ -560,12 +560,22 @@ async function copyAllKeys() {
     return;
   }
 
-  keysApi.exportKeys(props.selectedGroup.id, "all");
+  keysApi.exportKeys(
+    props.selectedGroup.id,
+    "all",
+    "txt",
+    getGroupDisplayName(props.selectedGroup)
+  );
 }
 
 function exportFullConfig() {
   if (props.selectedGroup?.id) {
-    keysApi.exportKeys(props.selectedGroup.id, "all", "jsonl");
+    keysApi.exportKeys(
+      props.selectedGroup.id,
+      "all",
+      "jsonl",
+      getGroupDisplayName(props.selectedGroup)
+    );
   }
 }
 
@@ -574,7 +584,12 @@ async function copyValidKeys() {
     return;
   }
 
-  keysApi.exportKeys(props.selectedGroup.id, "active");
+  keysApi.exportKeys(
+    props.selectedGroup.id,
+    "active",
+    "txt",
+    getGroupDisplayName(props.selectedGroup)
+  );
 }
 
 async function copyInvalidKeys() {
@@ -582,7 +597,12 @@ async function copyInvalidKeys() {
     return;
   }
 
-  keysApi.exportKeys(props.selectedGroup.id, "invalid");
+  keysApi.exportKeys(
+    props.selectedGroup.id,
+    "invalid",
+    "txt",
+    getGroupDisplayName(props.selectedGroup)
+  );
 }
 
 async function copyDisabledKeys() {
@@ -590,7 +610,12 @@ async function copyDisabledKeys() {
     return;
   }
 
-  keysApi.exportKeys(props.selectedGroup.id, "disabled");
+  keysApi.exportKeys(
+    props.selectedGroup.id,
+    "disabled",
+    "txt",
+    getGroupDisplayName(props.selectedGroup)
+  );
 }
 
 async function restoreAllInvalid() {
