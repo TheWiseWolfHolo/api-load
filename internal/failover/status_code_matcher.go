@@ -2,10 +2,18 @@ package failover
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+// IsRequestShapeFailure reports whether the upstream rejected the request
+// itself rather than the selected credential. Retrying the same payload with a
+// different key cannot fix these responses and must not damage key health.
+func IsRequestShapeFailure(statusCode int) bool {
+	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity
+}
 
 // StatusCodeRange represents an inclusive HTTP status code interval [Start, End].
 type StatusCodeRange struct {

@@ -89,7 +89,7 @@ func TestSCH010ManualEnablementIsIndependentFromHealth(t *testing.T) {
 	}
 }
 
-func TestKEY006HTTP404DoesNotAffectHealthFailureCount(t *testing.T) {
+func TestKEY006RequestFailuresDoNotAffectHealthFailureCount(t *testing.T) {
 	provider, db, _ := newTestProvider(t)
 	group := createTestGroup(t, db)
 	key := models.APIKey{GroupID: group.ID, KeyValue: "sk-health", KeyHash: "health", Status: models.KeyStatusActive, Enabled: models.Bool(true), Priority: 10, Weight: 1}
@@ -114,12 +114,20 @@ func TestKEY006HTTP404DoesNotAffectHealthFailureCount(t *testing.T) {
 		t.Fatalf("non-404 failure was not counted: %#v", stored)
 	}
 
-	if err := provider.updateStatus(&key, &group, false, 400, "resource has been exhausted"); err != nil {
-		t.Fatalf("record formerly uncounted failure: %v", err)
+	if err := provider.updateStatus(&key, &group, false, 400, "invalid reasoning_effort"); err != nil {
+		t.Fatalf("record 400: %v", err)
 	}
 	stored = keyWithID(t, db, "health")
-	if stored.FailureCount != 2 {
-		t.Fatalf("only 404 may bypass failure counting: %#v", stored)
+	if stored.FailureCount != 1 {
+		t.Fatalf("400 request-shape failure changed key health: %#v", stored)
+	}
+
+	if err := provider.updateStatus(&key, &group, false, 422, "invalid request body"); err != nil {
+		t.Fatalf("record 422: %v", err)
+	}
+	stored = keyWithID(t, db, "health")
+	if stored.FailureCount != 1 {
+		t.Fatalf("422 request-shape failure changed key health: %#v", stored)
 	}
 }
 

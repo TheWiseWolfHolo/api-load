@@ -15,6 +15,7 @@ import (
 	"api-load/internal/config"
 	"api-load/internal/encryption"
 	app_errors "api-load/internal/errors"
+	"api-load/internal/failover"
 	"api-load/internal/keypool"
 	"api-load/internal/models"
 	"api-load/internal/resourcepool"
@@ -280,10 +281,11 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		defer resp.Body.Close()
 	}
 
-	// Unified error handling for retries.
-	// Retry policy is fully defined by group.FailoverStatusCodeMatcher (derived from EffectiveConfig).
-	shouldRetryByStatus := resp != nil && (shouldFailoverOnStatusCode(resp.StatusCode, group) ||
-		(selectedResource != nil && shouldResourceFailoverOnStatusCode(resp.StatusCode)))
+	// Unified error handling for retries. The configured status matcher applies
+	// after deterministic request-shape failures have been excluded.
+	shouldRetryByStatus := resp != nil && !failover.IsRequestShapeFailure(resp.StatusCode) &&
+		(shouldFailoverOnStatusCode(resp.StatusCode, group) ||
+			(selectedResource != nil && shouldResourceFailoverOnStatusCode(resp.StatusCode)))
 	if err != nil || shouldRetryByStatus {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
