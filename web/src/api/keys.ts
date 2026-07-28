@@ -8,6 +8,7 @@ import type {
   ParentAggregateGroup,
   TaskInfo,
 } from "@/types/models";
+import { downloadAuthenticatedFile } from "@/utils/download";
 import http from "@/utils/http";
 
 export const keysApi = {
@@ -285,25 +286,20 @@ export const keysApi = {
       return;
     }
 
-    const params = new URLSearchParams({
+    const params: Record<string, string> = {
       group_id: groupId.toString(),
-      key: authKey,
-    });
+      format,
+    };
 
     if (status !== "all") {
-      params.append("status", status);
+      params.status = status;
     }
 
-    params.append("format", format);
-
-    const url = `${http.defaults.baseURL}/keys/export?${params.toString()}`;
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `keys-group_${groupId}-${status}-${Date.now()}.${format}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadAuthenticatedFile(
+      "/keys/export",
+      `keys-group_${groupId}-${status}-${Date.now()}.${format}`,
+      params
+    );
   },
 
   // 验证分组密钥

@@ -6,18 +6,19 @@ import {
   ServerOutline,
   SettingsOutline,
 } from "@vicons/ionicons5";
-import { NIcon, type MenuOption } from "naive-ui";
+import { NIcon, NMenu, type MenuOption } from "naive-ui";
 import { computed, h, type Component, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
 
-const props = defineProps({
-  mode: {
-    type: String,
-    default: "horizontal",
-  },
+interface Props {
+  mode?: "horizontal" | "vertical";
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  mode: "horizontal",
 });
 
 const emit = defineEmits(["close"]);
@@ -35,7 +36,9 @@ const menuOptions = computed<MenuOption[]>(() => {
 });
 
 const route = useRoute();
-const activeMenu = computed(() => route.name);
+const activeMenu = computed<string | undefined>(() =>
+  typeof route.name === "string" ? route.name : undefined
+);
 
 watch(activeMenu, () => {
   if (props.mode === "vertical") {

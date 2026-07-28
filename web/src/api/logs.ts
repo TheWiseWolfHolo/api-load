@@ -1,5 +1,6 @@
 import i18n from "@/locales";
 import type { ApiResponse, Group, LogFilter, LogsResponse } from "@/types/models";
+import { downloadAuthenticatedFile } from "@/utils/download";
 import http from "@/utils/http";
 
 export const logApi = {
@@ -21,26 +22,16 @@ export const logApi = {
       return;
     }
 
-    const queryParams = new URLSearchParams(
-      Object.entries(params).reduce(
-        (acc, [key, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            acc[key] = String(value);
-          }
-          return acc;
-        },
-        {} as Record<string, string>
-      )
+    const queryParams = Object.entries(params).reduce(
+      (acc, [key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          acc[key] = String(value);
+        }
+        return acc;
+      },
+      {} as Record<string, string>
     );
-    queryParams.append("key", authKey);
 
-    const url = `${http.defaults.baseURL}/logs/export?${queryParams.toString()}`;
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `logs-${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadAuthenticatedFile("/logs/export", `logs-${Date.now()}.csv`, queryParams);
   },
 };
