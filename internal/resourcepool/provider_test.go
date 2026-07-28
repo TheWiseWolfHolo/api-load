@@ -202,13 +202,12 @@ func TestRES003InvalidResourceStopsAllRoutes(t *testing.T) {
 	}
 }
 
-func TestRES004EveryNon404FailureAutoDisablesAllRoutes(t *testing.T) {
+func TestRES004CredentialAndUpstreamFailuresAutoDisableAllRoutes(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
 		message    string
 	}{
-		{name: "bad request", statusCode: http.StatusBadRequest, message: "bad request"},
 		{name: "unauthorized", statusCode: http.StatusUnauthorized, message: "credential rejected"},
 		{name: "rate limit", statusCode: http.StatusTooManyRequests, message: "rate limited"},
 		{name: "upstream failure", statusCode: http.StatusBadGateway, message: "upstream failed"},
@@ -239,6 +238,29 @@ func TestRES004EveryNon404FailureAutoDisablesAllRoutes(t *testing.T) {
 				if selectErr == nil || selected != nil {
 					t.Fatalf("auto-disabled resource remained selectable for %s: %#v %v", route, selected, selectErr)
 				}
+			}
+		})
+	}
+}
+
+func TestRES004ARequestShapeFailuresKeepAllRoutesActive(t *testing.T) {
+	for _, statusCode := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			provider, db, pool := newTestProvider(t)
+			resource, err := provider.SelectResource(pool.ID, SelectionRequest{Route: "anthropic"})
+			if err != nil {
+				t.Fatalf("select resource: %v", err)
+			}
+			if err := provider.HandleFailure(resource, "anthropic", statusCode, "invalid request body", nil); err != nil {
+				t.Fatalf("handle request-shape failure: %v", err)
+			}
+
+			var stored models.UpstreamResource
+			if err := db.First(&stored, resource.ID).Error; err != nil {
+				t.Fatalf("reload resource: %v", err)
+			}
+			if stored.Status != models.ResourceStatusActive || stored.FailureCount != 0 {
+				t.Fatalf("request-shape failure changed resource health: %#v", stored)
 			}
 		})
 	}

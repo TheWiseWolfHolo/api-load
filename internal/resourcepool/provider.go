@@ -3,6 +3,7 @@ package resourcepool
 import (
 	"api-load/internal/encryption"
 	app_errors "api-load/internal/errors"
+	"api-load/internal/failover"
 	"api-load/internal/keypool"
 	"api-load/internal/models"
 	"api-load/internal/scheduler"
@@ -525,15 +526,14 @@ func (p *Provider) BindAffinity(poolID uint, affinity string, resourceID uint, t
 	)
 }
 
-// HandleFailure disables a physical resource after every upstream failure
-// except 404. A failed URL+key pair must leave both protocol routes together;
-// only an explicitly configured quota auto-restore schedule may cool and
-// restore it later.
+// HandleFailure disables a physical resource after credential, quota, rate
+// limit, transport, or upstream failures. Request-shape failures belong to the
+// caller and must not damage a credential shared by multiple protocol routes.
 func (p *Provider) HandleFailure(resource *models.UpstreamResource, _ string, statusCode int, message string, _ http.Header) error {
 	if resource == nil {
 		return nil
 	}
-	if statusCode == http.StatusNotFound {
+	if statusCode == http.StatusNotFound || failover.IsRequestShapeFailure(statusCode) {
 		return nil
 	}
 	if err := p.recordHealthFailure(resource); err != nil {

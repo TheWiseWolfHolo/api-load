@@ -3,6 +3,7 @@ package keypool
 import (
 	"api-load/internal/config"
 	"api-load/internal/encryption"
+	"api-load/internal/failover"
 	"api-load/internal/models"
 	"api-load/internal/scheduler"
 	"api-load/internal/store"
@@ -60,7 +61,7 @@ func (p *KeyProvider) updateStatus(apiKey *models.APIKey, group *models.Group, i
 	if isSuccess {
 		return p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey)
 	}
-	if statusCode == 404 {
+	if statusCode == 404 || failover.IsRequestShapeFailure(statusCode) {
 		return nil
 	}
 	return p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey, statusCode)
