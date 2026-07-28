@@ -112,7 +112,7 @@ func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 		return
 	}
 
-	isStream := channelHandler.IsStreamRequest(c, bodyBytes)
+	isStream := channelHandler.IsStreamRequest(c, finalBodyBytes)
 	objectRouting, objectRoutingErr := ps.resolveUpstreamObjectRouting(c, originalGroup, group, finalBodyBytes)
 	if objectRoutingErr != nil {
 		response.Error(c, objectRoutingErr)

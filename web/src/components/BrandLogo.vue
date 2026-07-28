@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { actualTheme } from "@/utils/theme";
 import darkLogoUrl from "@/assets/logo-dark.svg";
 import lightLogoUrl from "@/assets/logo-light.svg";
+import { computed } from "vue";
+
+const logoUrl = computed(() => (actualTheme.value === "dark" ? darkLogoUrl : lightLogoUrl));
 </script>
 
 <template>
   <span class="brand-logo" aria-hidden="true">
-    <img class="brand-logo__image brand-logo__image--light" :src="lightLogoUrl" alt="" />
-    <img class="brand-logo__image brand-logo__image--dark" :src="darkLogoUrl" alt="" />
+    <img class="brand-logo__image" :src="logoUrl" alt="" />
   </span>
 </template>
 
@@ -25,17 +28,5 @@ import lightLogoUrl from "@/assets/logo-light.svg";
   height: 100%;
   object-fit: contain;
   pointer-events: none;
-}
-
-.brand-logo__image--dark {
-  display: none;
-}
-
-:global(:root.dark) .brand-logo__image--light {
-  display: none;
-}
-
-:global(:root.dark) .brand-logo__image--dark {
-  display: block;
 }
 </style>

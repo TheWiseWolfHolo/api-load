@@ -10,7 +10,7 @@ import {
   TimeOutline,
   WarningOutline,
 } from "@vicons/ionicons5";
-import { NIcon, NTooltip } from "naive-ui";
+import { NDivider, NIcon, NTooltip } from "naive-ui";
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -236,8 +236,8 @@ onMounted(() => {
 }
 
 .project-logo {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .project-info a:hover {

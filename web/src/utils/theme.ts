@@ -78,12 +78,18 @@ watch(
   actualTheme,
   theme => {
     const html = document.documentElement;
+    const favicon = document.querySelector<HTMLLinkElement>("#app-favicon");
+
     if (theme === "dark") {
       html.classList.add("dark");
       html.classList.remove("light");
     } else {
       html.classList.add("light");
       html.classList.remove("dark");
+    }
+
+    if (favicon) {
+      favicon.href = `${import.meta.env.BASE_URL}favicon-${theme}.svg`;
     }
   },
   { immediate: true }

@@ -7,6 +7,7 @@ import Logout from "@/components/Logout.vue";
 import NavBar from "@/components/NavBar.vue";
 import ThemeToggle from "@/components/ThemeToggle.vue";
 import { useMediaQuery } from "@vueuse/core";
+import { NButton, NDrawer, NDrawerContent, NLayout, NLayoutContent, NLayoutHeader } from "naive-ui";
 import { ref, watch } from "vue";
 
 const isMenuOpen = ref(false);
@@ -129,8 +130,8 @@ const toggleMenu = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
 }
 
 .brand-title {

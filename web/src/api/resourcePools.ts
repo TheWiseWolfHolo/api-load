@@ -15,6 +15,7 @@ import type {
   UpstreamResourceInput,
   UpstreamResourceUpdateInput,
 } from "@/types/models";
+import { downloadAuthenticatedFile } from "@/utils/download";
 import http from "@/utils/http";
 
 export const resourcePoolsApi = {
@@ -171,20 +172,18 @@ export const resourcePoolsApi = {
     if (!authKey) {
       return;
     }
-    const params = new URLSearchParams({
-      key: authKey,
+    const params: Record<string, string> = {
       content: options.content,
       format: options.format,
       status: options.status ?? "all",
-    });
+    };
     if (options.enabled !== undefined) {
-      params.set("enabled", String(options.enabled));
+      params.enabled = String(options.enabled);
     }
-    const link = document.createElement("a");
-    link.href = `${http.defaults.baseURL}/resource-pools/${poolId}/resources/export?${params}`;
-    link.download = `resource-pool-${poolId}-${options.content}-${options.status ?? "all"}-${Date.now()}.${options.format}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadAuthenticatedFile(
+      `/resource-pools/${poolId}/resources/export`,
+      `resource-pool-${poolId}-${options.content}-${options.status ?? "all"}-${Date.now()}.${options.format}`,
+      params
+    );
   },
 };
