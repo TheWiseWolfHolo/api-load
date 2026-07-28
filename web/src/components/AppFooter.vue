@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BrandLogo from "@/components/BrandLogo.vue";
 import { appLinks } from "@/config/appLinks";
 import { versionService, type VersionInfo } from "@/services/version";
 import {
@@ -101,9 +102,13 @@ onMounted(() => {
       <div class="footer-main">
         <span class="project-info">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noopener noreferrer">
+            <brand-logo class="project-logo" />
             <b>API-Load</b>
           </a>
-          <b v-else>API-Load</b>
+          <span v-else class="project-name">
+            <brand-logo class="project-logo" />
+            <b>API-Load</b>
+          </span>
         </span>
 
         <n-divider vertical />
@@ -127,10 +132,7 @@ onMounted(() => {
           />
           <span class="version-text">
             {{ formatVersion(versionInfo.currentVersion) }}
-            <span
-              v-if="canCheckVersion"
-              :style="{ color: statusConfig[versionInfo.status].color }"
-            >
+            <span v-if="canCheckVersion" :style="{ color: statusConfig[versionInfo.status].color }">
               -
               {{ statusConfig[versionInfo.status].text }}
               <template v-if="versionInfo.status === 'update-available'">
@@ -146,12 +148,7 @@ onMounted(() => {
         <div v-if="hasFooterLinks" class="links-container">
           <n-tooltip v-if="docsUrl" trigger="hover" placement="top">
             <template #trigger>
-              <a
-                :href="docsUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="footer-link"
-              >
+              <a :href="docsUrl" target="_blank" rel="noopener noreferrer" class="footer-link">
                 <n-icon :component="DocumentTextOutline" :size="14" class="link-icon" />
                 <span>{{ t("footer.docs") }}</span>
               </a>
@@ -176,12 +173,7 @@ onMounted(() => {
 
           <n-tooltip v-if="feedbackUrl" trigger="hover" placement="top">
             <template #trigger>
-              <a
-                :href="feedbackUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="footer-link"
-              >
+              <a :href="feedbackUrl" target="_blank" rel="noopener noreferrer" class="footer-link">
                 <n-icon :component="BugOutline" :size="14" class="link-icon" />
                 <span>{{ t("footer.feedback") }}</span>
               </a>
@@ -194,9 +186,7 @@ onMounted(() => {
 
         <!-- 版权信息 -->
         <div class="copyright-container">
-          <span class="copyright-text">
-            © 2025 API-Load
-          </span>
+          <span class="copyright-text">© 2025 API-Load</span>
           <span class="license-text">MIT License</span>
         </div>
       </div>
@@ -236,6 +226,18 @@ onMounted(() => {
   color: var(--primary-color);
   text-decoration: none;
   font-weight: 600;
+}
+
+.project-info a,
+.project-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-logo {
+  width: 20px;
+  height: 20px;
 }
 
 .project-info a:hover {

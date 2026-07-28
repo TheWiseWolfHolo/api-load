@@ -1,6 +1,11 @@
 # API-Load
 
-<p align="center"><img src="web/src/assets/logo.svg" width="96" alt="API-Load logo"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/src/assets/logo-dark.svg">
+    <img src="web/src/assets/logo-light.svg" width="128" alt="API-Load logo">
+  </picture>
+</p>
 
 [English](README.md) | 中文 | [日本語](README_JP.md)
 
