@@ -1,17 +1,19 @@
 # API-Load
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="web/src/assets/logo-dark.svg">
-    <img src="web/src/assets/logo-light.svg" width="128" alt="API-Load logo">
-  </picture>
+  <a href="https://github.com/TheWiseWolfHolo/api-load">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/main/web/src/assets/logo-dark.svg">
+      <img src="https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/main/web/src/assets/logo-light.svg" width="128" alt="API-Load logo">
+    </picture>
+  </a>
 </p>
 
 English | [中文](README_CN.md) | [日本語](README_JP.md)
 
-[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load)](https://github.com/TheWiseWolfHolo/api-load/releases)
-![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/github/v/tag/TheWiseWolfHolo/api-load?sort=semver&label=version)](https://github.com/TheWiseWolfHolo/api-load/tags)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8.svg?logo=go&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/blob/main/go.mod)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheWiseWolfHolo/api-load/blob/main/LICENSE)
 
 API-Load is a high-performance, enterprise-grade AI API transparent proxy service designed specifically for enterprises and developers who need to integrate multiple AI services. Built with Go, it features intelligent key management, load balancing, and comprehensive monitoring capabilities for high-concurrency production environments.
 
@@ -54,7 +56,7 @@ API-Load serves as a transparent proxy service, completely preserving the native
 
 ### System Requirements
 
-- Go 1.24+ (for source builds)
+- Go 1.25+ (for source builds)
 - Docker (for containerized deployment)
 - MySQL, PostgreSQL, or SQLite (for database storage)
 - Redis (for caching and distributed coordination, optional)
@@ -611,7 +613,3 @@ This project continues to extend multi-provider management, scheduling strategie
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## Star History
-
-[![Stargazers over time](https://starchart.cc/TheWiseWolfHolo/api-load.svg?variant=adaptive)](https://starchart.cc/TheWiseWolfHolo/api-load)

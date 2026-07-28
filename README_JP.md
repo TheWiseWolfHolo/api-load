@@ -1,17 +1,19 @@
 # API-Load
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="web/src/assets/logo-dark.svg">
-    <img src="web/src/assets/logo-light.svg" width="128" alt="API-Load logo">
-  </picture>
+  <a href="https://github.com/TheWiseWolfHolo/api-load">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/main/web/src/assets/logo-dark.svg">
+      <img src="https://raw.githubusercontent.com/TheWiseWolfHolo/api-load/main/web/src/assets/logo-light.svg" width="128" alt="API-Load logo">
+    </picture>
+  </a>
 </p>
 
 [English](README.md) | [中文](README_CN.md) | 日本語
 
-[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load)](https://github.com/TheWiseWolfHolo/api-load/releases)
-![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/github/v/tag/TheWiseWolfHolo/api-load?sort=semver&label=version)](https://github.com/TheWiseWolfHolo/api-load/tags)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8.svg?logo=go&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/blob/main/go.mod)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheWiseWolfHolo/api-load/blob/main/LICENSE)
 
 API-Load は、複数のAIサービスを統合する必要がある企業や開発者向けに特別に設計された、高性能でエンタープライズグレードのAI APIトランスペアレントプロキシサービスです。Goで構築され、インテリジェントなキー管理、ロードバランシング、包括的な監視機能を備え、高並行性の本番環境向けに設計されています。
 
@@ -52,7 +54,7 @@ API-Loadは、さまざまなAIサービスプロバイダーのネイティブA
 
 ### システム要件
 
-- Go 1.24+（ソースビルド用）
+- Go 1.25+（ソースビルド用）
 - Docker（コンテナ化デプロイメント用）
 - MySQL、PostgreSQL、またはSQLite（データベースストレージ用）
 - Redis（キャッシュと分散調整用、オプション）
@@ -609,7 +611,3 @@ API-Load は [tbphp/gpt-load](https://github.com/tbphp/gpt-load) を基盤とし
 ## ライセンス
 
 MITライセンス - 詳細は[LICENSE](LICENSE)ファイルを参照してください。
-
-## スター履歴
-
-[![Stargazers over time](https://starchart.cc/TheWiseWolfHolo/api-load.svg?variant=adaptive)](https://starchart.cc/TheWiseWolfHolo/api-load)
