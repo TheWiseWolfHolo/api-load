@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppFooter from "@/components/AppFooter.vue";
+import BrandLogo from "@/components/BrandLogo.vue";
 import GlobalTaskProgressBar from "@/components/GlobalTaskProgressBar.vue";
 import LanguageSelector from "@/components/LanguageSelector.vue";
 import Logout from "@/components/Logout.vue";
@@ -28,7 +29,7 @@ const toggleMenu = () => {
       <div class="header-content">
         <div class="header-brand">
           <div class="brand-icon">
-            <img src="@/assets/logo.svg" alt="API-Load" />
+            <brand-logo />
           </div>
           <h1 v-if="!isMobile" class="brand-title">API-Load</h1>
         </div>
@@ -128,21 +129,17 @@ const toggleMenu = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 35px;
-  height: 35px;
-  img {
-    height: 100%;
-    width: 100%;
-  }
+  width: 36px;
+  height: 36px;
 }
 
 .brand-title {
   font-family: var(--font-display);
   font-size: 1.4rem;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--text-primary);
   margin: 0;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .header-actions {

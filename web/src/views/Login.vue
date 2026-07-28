@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppFooter from "@/components/AppFooter.vue";
+import BrandLogo from "@/components/BrandLogo.vue";
 import LanguageSelector from "@/components/LanguageSelector.vue";
 import { useAuthService } from "@/services/auth";
 import { LockClosedSharp } from "@vicons/ionicons5";
@@ -42,6 +43,7 @@ const handleLogin = async () => {
 
     <div class="login-content">
       <div class="login-header">
+        <brand-logo class="login-logo" />
         <h1 class="login-title">{{ t("login.title") }}</h1>
         <p class="login-subtitle">{{ t("login.subtitle") }}</p>
       </div>
@@ -143,14 +145,21 @@ const handleLogin = async () => {
 
 .login-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
+}
+
+.login-logo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 18px;
 }
 
 .login-title {
   font-family: var(--font-brand);
   font-size: 2.5rem;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--text-primary);
   margin-bottom: 8px;
   letter-spacing: 0;
 }
