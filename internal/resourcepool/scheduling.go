@@ -53,6 +53,10 @@ func (p *Provider) schedulerCandidates(poolID uint) ([]scheduler.Candidate, erro
 }
 
 func (p *Provider) selectWeightedResource(poolID uint, route string, excluded map[uint]struct{}) (*models.UpstreamResource, error) {
+	return p.selectWeightedResourceForScope(poolID, "", route, excluded)
+}
+
+func (p *Provider) selectWeightedResourceForScope(poolID uint, scope, route string, excluded map[uint]struct{}) (*models.UpstreamResource, error) {
 	candidates, err := p.schedulerCandidates(poolID)
 	if err != nil {
 		return nil, err
@@ -65,7 +69,38 @@ func (p *Provider) selectWeightedResource(poolID uint, route string, excluded ma
 			}
 		}
 		for len(eligible) > 0 {
-			resourceID, ok := p.weightedPicker.Pick(fmt.Sprintf("resource_pool:%d", poolID), eligible)
+			pickerScope := fmt.Sprintf("resource_pool:%d", poolID)
+			if scope != "" {
+				pickerScope += ":" + scope
+			}
+			resourceID, ok := p.weightedPicker.Pick(pickerScope, eligible)
+			if !ok {
+				break
+			}
+			resource, loadErr := p.resourceFromStore(resourceID)
+			if loadErr == nil && p.isSelectable(resource, route) {
+				return resource, nil
+			}
+			eligible = removeResourceCandidate(eligible, resourceID)
+		}
+	}
+	return nil, app_errors.ErrNoActiveKeys
+}
+
+func (p *Provider) selectRandomResource(poolID uint, route string, excluded map[uint]struct{}) (*models.UpstreamResource, error) {
+	candidates, err := p.schedulerCandidates(poolID)
+	if err != nil {
+		return nil, err
+	}
+	for _, tier := range scheduler.PriorityTiers(candidates) {
+		eligible := make([]scheduler.Candidate, 0, len(tier))
+		for _, candidate := range tier {
+			if _, skip := excluded[candidate.ID]; !skip {
+				eligible = append(eligible, candidate)
+			}
+		}
+		for len(eligible) > 0 {
+			resourceID, ok := scheduler.PickWeightedRandom(eligible, p.selectionRNG)
 			if !ok {
 				break
 			}

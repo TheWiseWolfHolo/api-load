@@ -1,5 +1,8 @@
 # API-Load Refactor Progress
 
+> Historical record for the completed 2026-06 refactor. It is not the current
+> implementation plan.
+
 Source spec: `docs/superpowers/specs/2026-06-18-api-load-refactor-tdd-spec.md`
 
 ## Baseline Verification

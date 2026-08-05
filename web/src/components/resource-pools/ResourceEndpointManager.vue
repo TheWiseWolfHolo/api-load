@@ -2,7 +2,13 @@
 import { resourcePoolsApi } from "@/api/resourcePools";
 import { settingsApi } from "@/api/settings";
 import type { ChannelType, ResourcePoolEndpoint, ResourcePoolEndpointInput } from "@/types/models";
-import { AddOutline, CreateOutline, RefreshOutline, TrashOutline } from "@vicons/ionicons5";
+import {
+  AddOutline,
+  CreateOutline,
+  RefreshOutline,
+  SearchOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {
   NButton,
   NCard,
@@ -33,6 +39,11 @@ const loading = ref(false);
 const saving = ref(false);
 const modalVisible = ref(false);
 const editingID = ref<number | null>(null);
+const discoveringEndpointID = ref<number | null>(null);
+const modelsVisible = ref(false);
+const discoveredModels = ref<string[]>([]);
+const modelsEndpointName = ref("");
+const modelSearch = ref("");
 const form = reactive({
   name: "",
   channel_type: "openai",
@@ -50,6 +61,12 @@ const channelOptions = computed(() => {
     });
   }
   return options;
+});
+const filteredModels = computed(() => {
+  const query = modelSearch.value.trim().toLowerCase();
+  return query
+    ? discoveredModels.value.filter(model => model.toLowerCase().includes(query))
+    : discoveredModels.value;
 });
 
 onMounted(async () => {
@@ -128,6 +145,24 @@ async function deleteEndpoint(endpoint: ResourcePoolEndpoint) {
   await resourcePoolsApi.deleteEndpoint(props.poolId, endpoint.id);
   await loadEndpoints();
 }
+
+async function discoverModels(endpoint: ResourcePoolEndpoint) {
+  if (discoveringEndpointID.value !== null) {
+    return;
+  }
+  discoveringEndpointID.value = endpoint.id;
+  try {
+    const result = await resourcePoolsApi.discoverEndpointModels(props.poolId, endpoint.id);
+    discoveredModels.value = result.models ?? [];
+    modelsEndpointName.value = endpoint.name;
+    modelSearch.value = "";
+    modelsVisible.value = true;
+  } catch {
+    message.error(t("resourcePools.endpointModelDiscoveryFailed"));
+  } finally {
+    discoveringEndpointID.value = null;
+  }
+}
 </script>
 
 <template>
@@ -162,6 +197,16 @@ async function deleteEndpoint(endpoint: ResourcePoolEndpoint) {
             <code :title="endpoint.base_url">{{ endpoint.base_url }}</code>
           </div>
           <div class="endpoint-row-actions">
+            <n-button
+              size="tiny"
+              secondary
+              :disabled="!endpoint.enabled || discoveringEndpointID !== null"
+              :loading="discoveringEndpointID === endpoint.id"
+              @click="discoverModels(endpoint)"
+            >
+              <template #icon><n-icon :component="SearchOutline" /></template>
+              {{ t("resourcePools.queryModels") }}
+            </n-button>
             <n-button size="tiny" secondary @click="toggleEndpoint(endpoint)">
               {{ endpoint.enabled ? t("common.disable") : t("resourcePools.enable") }}
             </n-button>
@@ -227,6 +272,38 @@ async function deleteEndpoint(endpoint: ResourcePoolEndpoint) {
             <n-button type="primary" :loading="saving" @click="saveEndpoint">
               {{ t("common.save") }}
             </n-button>
+          </div>
+        </template>
+      </n-card>
+    </n-modal>
+
+    <n-modal v-model:show="modelsVisible">
+      <n-card
+        class="endpoint-modal"
+        :bordered="false"
+        :title="t('resourcePools.endpointModelsTitle', { endpoint: modelsEndpointName })"
+      >
+        <n-input
+          v-model:value="modelSearch"
+          clearable
+          :placeholder="t('resourcePools.searchEndpointModels')"
+        >
+          <template #prefix><n-icon :component="SearchOutline" /></template>
+        </n-input>
+        <div v-if="filteredModels.length" class="model-results">
+          <code v-for="model in filteredModels" :key="model">{{ model }}</code>
+        </div>
+        <n-empty
+          v-else
+          class="model-results-empty"
+          :description="t('resourcePools.noEndpointModels')"
+        />
+        <template #footer>
+          <div class="modal-actions model-modal-actions">
+            <span class="model-count">
+              {{ t("resourcePools.endpointModelCount", { count: filteredModels.length }) }}
+            </span>
+            <n-button @click="modelsVisible = false">{{ t("common.close") }}</n-button>
           </div>
         </template>
       </n-card>
@@ -306,6 +383,30 @@ async function deleteEndpoint(endpoint: ResourcePoolEndpoint) {
 }
 .modal-actions {
   justify-content: flex-end;
+}
+.model-modal-actions {
+  justify-content: space-between;
+}
+.model-results {
+  display: grid;
+  gap: 6px;
+  max-height: min(52vh, 440px);
+  margin-top: 14px;
+  overflow: auto;
+}
+.model-results code {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.model-results-empty {
+  padding: 36px 12px;
+}
+.model-count {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
 }
 @media (max-width: 720px) {
   .endpoint-header,

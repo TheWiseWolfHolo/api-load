@@ -101,6 +101,8 @@ interface GroupFormData {
   fill_max_consecutive_requests: number;
   fill_max_consecutive_tokens: number;
   fill_sticky_ttl_seconds: number;
+  resource_affinity_ttl_seconds: number;
+  resource_busy_wait_milliseconds: number;
   auto_restore_schedule: string;
   auto_restore_status_codes: string;
   header_rules: HeaderRuleItem[];
@@ -138,6 +140,8 @@ const formData = reactive<GroupFormData>({
   fill_max_consecutive_requests: 0,
   fill_max_consecutive_tokens: 0,
   fill_sticky_ttl_seconds: 0,
+  resource_affinity_ttl_seconds: 3600,
+  resource_busy_wait_milliseconds: 2000,
   auto_restore_schedule: "",
   auto_restore_status_codes: "",
   header_rules: [] as HeaderRuleItem[],
@@ -177,6 +181,8 @@ const schedulerConfigKeys = new Set([
   "fill_max_consecutive_requests",
   "fill_max_consecutive_tokens",
   "fill_sticky_ttl_seconds",
+  "resource_affinity_ttl_seconds",
+  "resource_busy_wait_milliseconds",
   "auto_restore_schedule",
   "auto_restore_status_codes",
 ]);
@@ -195,6 +201,9 @@ const showAffinityFields = computed(() =>
   ["sticky", "fill_first"].includes(formData.key_selection_strategy)
 );
 const showFillFirstFields = computed(() => formData.key_selection_strategy === "fill_first");
+const selectedResourcePool = computed(() =>
+  resourcePools.value.find(pool => pool.id === formData.resource_pool_id)
+);
 
 // 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
 const userModifiedFields = ref({
@@ -338,6 +347,12 @@ watch([() => formData.resource_pool_id, () => formData.channel_type], async ([po
     formData.resource_endpoint_id = null;
     return;
   }
+  const pool = resourcePools.value.find(item => item.id === poolID);
+  const isNewBinding = !props.group || props.group.resource_pool_id !== poolID;
+  if (pool && isNewBinding) {
+    formData.resource_affinity_ttl_seconds = pool.affinity_ttl_seconds;
+    formData.resource_busy_wait_milliseconds = pool.busy_wait_milliseconds;
+  }
   const endpoints = await resourcePoolsApi.listEndpoints(poolID);
   resourceEndpoints.value = endpoints;
   const matching = endpoints.filter(
@@ -412,6 +427,8 @@ function resetForm() {
     fill_max_consecutive_requests: 0,
     fill_max_consecutive_tokens: 0,
     fill_sticky_ttl_seconds: 0,
+    resource_affinity_ttl_seconds: 3600,
+    resource_busy_wait_milliseconds: 2000,
     auto_restore_schedule: "",
     auto_restore_status_codes: "",
     header_rules: [],
@@ -492,6 +509,12 @@ function loadGroupData() {
       groupConfig.fill_max_consecutive_tokens
     ),
     fill_sticky_ttl_seconds: normalizeNonNegativeNumber(groupConfig.fill_sticky_ttl_seconds),
+    resource_affinity_ttl_seconds: normalizeNonNegativeNumber(
+      groupConfig.resource_affinity_ttl_seconds || 3600
+    ),
+    resource_busy_wait_milliseconds: normalizeNonNegativeNumber(
+      groupConfig.resource_busy_wait_milliseconds ?? 2000
+    ),
     auto_restore_schedule: String(groupConfig.auto_restore_schedule || ""),
     auto_restore_status_codes: String(groupConfig.auto_restore_status_codes || ""),
     header_rules: (props.group.header_rules || []).map((rule: HeaderRuleItem) => ({
@@ -508,6 +531,13 @@ function loadGroupData() {
 
 async function fetchResourcePools() {
   resourcePools.value = await resourcePoolsApi.listPools();
+  if (formData.resource_pool_id && !props.group?.config?.resource_affinity_ttl_seconds) {
+    const pool = resourcePools.value.find(item => item.id === formData.resource_pool_id);
+    if (pool) {
+      formData.resource_affinity_ttl_seconds = pool.affinity_ttl_seconds;
+      formData.resource_busy_wait_milliseconds = pool.busy_wait_milliseconds;
+    }
+  }
 }
 
 async function fetchChannelTypes() {
@@ -741,9 +771,27 @@ function validateSchedulerConfig(): boolean {
     formData.fill_max_consecutive_requests,
     formData.fill_max_consecutive_tokens,
     formData.fill_sticky_ttl_seconds,
+    formData.resource_affinity_ttl_seconds,
+    formData.resource_busy_wait_milliseconds,
   ];
   if (numericFields.some(value => value < 0)) {
     message.error(t("keys.schedulerInvalidNumber"));
+    return false;
+  }
+  if (
+    formData.resource_pool_id &&
+    formData.key_selection_strategy === "sticky" &&
+    (formData.resource_affinity_ttl_seconds < 60 || formData.resource_affinity_ttl_seconds > 604800)
+  ) {
+    message.error(t("resourcePools.ttlRange"));
+    return false;
+  }
+  if (
+    formData.resource_pool_id &&
+    formData.key_selection_strategy === "sticky" &&
+    formData.resource_busy_wait_milliseconds > 10000
+  ) {
+    message.error(t("resourcePools.waitRange"));
     return false;
   }
   return true;
@@ -755,6 +803,10 @@ function buildSchedulerConfig(): Record<string, number | string> {
   };
   if (showAffinityFields.value) {
     config.key_affinity_scope = formData.key_affinity_scope;
+  }
+  if (formData.resource_pool_id && formData.key_selection_strategy === "sticky") {
+    config.resource_affinity_ttl_seconds = formData.resource_affinity_ttl_seconds;
+    config.resource_busy_wait_milliseconds = formData.resource_busy_wait_milliseconds;
   }
   if (showFillFirstFields.value) {
     config.fill_cooldown_minutes = formData.fill_cooldown_minutes;
@@ -1094,10 +1146,7 @@ function buildSchedulerConfig(): Record<string, number | string> {
           <n-collapse>
             <n-collapse-item name="advanced">
               <template #header>{{ t("keys.advancedConfig") }}</template>
-              <div
-                v-if="formData.group_type !== 'aggregate' && !formData.resource_pool_id"
-                class="config-section"
-              >
+              <div v-if="formData.group_type !== 'aggregate'" class="config-section">
                 <h5 class="config-title-with-tooltip">
                   {{ t("keys.schedulerConfig") }}
                   <n-tooltip trigger="hover" placement="top">
@@ -1107,6 +1156,18 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     {{ t("keys.schedulerConfigTooltip") }}
                   </n-tooltip>
                 </h5>
+                <n-alert
+                  v-if="formData.resource_pool_id"
+                  type="info"
+                  :bordered="false"
+                  class="scheduler-pool-hint"
+                >
+                  {{
+                    t("keys.pooledSchedulerHint", {
+                      pool: selectedResourcePool?.name || t("resourcePools.boundPool"),
+                    })
+                  }}
+                </n-alert>
                 <div class="form-row">
                   <n-form-item :label="t('keys.keySelectionStrategy')" class="form-item-half">
                     <n-select
@@ -1115,7 +1176,7 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     />
                   </n-form-item>
                   <n-form-item
-                    v-if="showAffinityFields"
+                    v-if="showAffinityFields && !formData.resource_pool_id"
                     :label="t('keys.keyAffinityScope')"
                     class="form-item-half"
                   >
@@ -1125,7 +1186,36 @@ function buildSchedulerConfig(): Record<string, number | string> {
                     />
                   </n-form-item>
                 </div>
-                <div class="form-row">
+                <div
+                  v-if="formData.resource_pool_id && formData.key_selection_strategy === 'sticky'"
+                  class="form-row"
+                >
+                  <n-form-item
+                    :label="t('resourcePools.affinityTTLSeconds')"
+                    class="form-item-half"
+                  >
+                    <n-input-number
+                      v-model:value="formData.resource_affinity_ttl_seconds"
+                      :min="60"
+                      :max="604800"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    :label="t('resourcePools.busyWaitMilliseconds')"
+                    class="form-item-half"
+                  >
+                    <n-input-number
+                      v-model:value="formData.resource_busy_wait_milliseconds"
+                      :min="0"
+                      :max="10000"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                </div>
+                <div v-if="!formData.resource_pool_id" class="form-row">
                   <n-form-item class="form-item-half">
                     <template #label>
                       <div class="form-label-with-tooltip">
@@ -1152,14 +1242,6 @@ function buildSchedulerConfig(): Record<string, number | string> {
                   </n-form-item>
                 </div>
                 <div v-if="showFillFirstFields" class="scheduler-grid">
-                  <n-form-item :label="t('keys.fillCooldownMinutes')">
-                    <n-input-number
-                      v-model:value="formData.fill_cooldown_minutes"
-                      :min="0"
-                      :precision="0"
-                      style="width: 100%"
-                    />
-                  </n-form-item>
                   <n-form-item :label="t('keys.fillMaxConsecutiveRequests')">
                     <n-input-number
                       v-model:value="formData.fill_max_consecutive_requests"
@@ -1168,7 +1250,21 @@ function buildSchedulerConfig(): Record<string, number | string> {
                       style="width: 100%"
                     />
                   </n-form-item>
-                  <n-form-item :label="t('keys.fillMaxConsecutiveTokens')">
+                  <n-form-item
+                    v-if="!formData.resource_pool_id"
+                    :label="t('keys.fillCooldownMinutes')"
+                  >
+                    <n-input-number
+                      v-model:value="formData.fill_cooldown_minutes"
+                      :min="0"
+                      :precision="0"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    v-if="!formData.resource_pool_id"
+                    :label="t('keys.fillMaxConsecutiveTokens')"
+                  >
                     <n-input-number
                       v-model:value="formData.fill_max_consecutive_tokens"
                       :min="0"
@@ -1176,7 +1272,10 @@ function buildSchedulerConfig(): Record<string, number | string> {
                       style="width: 100%"
                     />
                   </n-form-item>
-                  <n-form-item :label="t('keys.fillStickyTtlSeconds')">
+                  <n-form-item
+                    v-if="!formData.resource_pool_id"
+                    :label="t('keys.fillStickyTtlSeconds')"
+                  >
                     <n-input-number
                       v-model:value="formData.fill_sticky_ttl_seconds"
                       :min="0"
@@ -1184,19 +1283,34 @@ function buildSchedulerConfig(): Record<string, number | string> {
                       style="width: 100%"
                     />
                   </n-form-item>
-                  <n-form-item :label="t('keys.fillSwitchStatusCodes')">
+                  <n-form-item
+                    v-if="!formData.resource_pool_id"
+                    :label="t('keys.fillSwitchStatusCodes')"
+                  >
                     <n-input
                       v-model:value="formData.fill_switch_status_codes"
                       placeholder="429,500-599"
                     />
                   </n-form-item>
-                  <n-form-item :label="t('keys.fillQuotaPatterns')">
+                  <n-form-item
+                    v-if="!formData.resource_pool_id"
+                    :label="t('keys.fillQuotaPatterns')"
+                  >
                     <n-input
                       v-model:value="formData.fill_quota_patterns"
                       placeholder="insufficient_quota,quota_exceeded"
                     />
                   </n-form-item>
                 </div>
+                <n-alert
+                  v-if="
+                    formData.resource_pool_id && formData.key_selection_strategy === 'fill_first'
+                  "
+                  type="info"
+                  :bordered="false"
+                >
+                  {{ t("keys.pooledFillFirstHint") }}
+                </n-alert>
               </div>
               <div class="config-section">
                 <h5 class="config-title-with-tooltip">

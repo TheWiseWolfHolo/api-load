@@ -2,9 +2,11 @@ package services
 
 import (
 	"api-load/internal/models"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -23,10 +25,14 @@ func NewModelDiscoveryService(client *http.Client) *ModelDiscoveryService {
 }
 
 func (s *ModelDiscoveryService) DiscoverModels(group *models.Group, keys []models.APIKey) ([]string, error) {
-	if group.ChannelType == "anthropic" {
-		return nil, fmt.Errorf("%w: Anthropic model discovery is manual-only in this phase", ErrModelDiscoveryUnsupported)
-	}
+	return s.DiscoverModelsWithContext(context.Background(), group, keys)
+}
 
+func (s *ModelDiscoveryService) DiscoverModelsWithContext(
+	ctx context.Context,
+	group *models.Group,
+	keys []models.APIKey,
+) ([]string, error) {
 	activeKey, ok := firstActiveDiscoveryKey(keys)
 	if !ok {
 		return nil, fmt.Errorf("no active keys available for model discovery")
@@ -36,13 +42,24 @@ func (s *ModelDiscoveryService) DiscoverModels(group *models.Group, keys []model
 		return nil, err
 	}
 
-	switch group.ChannelType {
+	return s.DiscoverEndpointModels(ctx, group.ChannelType, baseURL, activeKey.KeyValue)
+}
+
+func (s *ModelDiscoveryService) DiscoverEndpointModels(
+	ctx context.Context,
+	channelType string,
+	baseURL string,
+	key string,
+) ([]string, error) {
+	switch channelType {
 	case "openai", "openai-response", "openrouter", "deepseek", "qwen", "xai", "azure-openai":
-		return s.discoverOpenAICompatible(NormalizeOpenAIModelBaseURL(baseURL), activeKey.KeyValue)
+		return s.discoverOpenAICompatible(ctx, NormalizeOpenAIModelBaseURL(baseURL), key)
 	case "gemini":
-		return s.discoverGemini(strings.TrimRight(baseURL, "/"), activeKey.KeyValue)
+		return s.discoverGemini(ctx, strings.TrimRight(baseURL, "/"), key)
+	case "anthropic":
+		return s.discoverAnthropic(ctx, strings.TrimRight(baseURL, "/"), key)
 	default:
-		return nil, fmt.Errorf("%w: channel type %s", ErrModelDiscoveryUnsupported, group.ChannelType)
+		return nil, fmt.Errorf("%w: channel type %s", ErrModelDiscoveryUnsupported, channelType)
 	}
 }
 
@@ -54,8 +71,8 @@ func NormalizeOpenAIModelBaseURL(baseURL string) string {
 	return normalized
 }
 
-func (s *ModelDiscoveryService) discoverOpenAICompatible(baseURL, key string) ([]string, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
+func (s *ModelDiscoveryService) discoverOpenAICompatible(ctx context.Context, baseURL, key string) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inspectionURL(baseURL, "/v1/models"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +97,8 @@ func (s *ModelDiscoveryService) discoverOpenAICompatible(baseURL, key string) ([
 	return models, nil
 }
 
-func (s *ModelDiscoveryService) discoverGemini(baseURL, key string) ([]string, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1beta/models", nil)
+func (s *ModelDiscoveryService) discoverGemini(ctx context.Context, baseURL, key string) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inspectionURL(baseURL, "/v1beta/models"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +123,42 @@ func (s *ModelDiscoveryService) discoverGemini(baseURL, key string) ([]string, e
 	return models, nil
 }
 
+func (s *ModelDiscoveryService) discoverAnthropic(ctx context.Context, baseURL, key string) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inspectionURL(baseURL, "/v1/models"), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("x-api-key", key)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	var body struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := s.doJSON(req, &body); err != nil {
+		return nil, err
+	}
+	modelIDs := make([]string, 0, len(body.Data))
+	for _, item := range body.Data {
+		if id := strings.TrimSpace(item.ID); id != "" {
+			modelIDs = append(modelIDs, id)
+		}
+	}
+	return modelIDs, nil
+}
+
+func inspectionURL(baseURL, apiPath string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(base, "/v1") && strings.HasPrefix(apiPath, "/v1/") {
+		return base + strings.TrimPrefix(apiPath, "/v1")
+	}
+	if strings.HasSuffix(base, "/v1beta") && strings.HasPrefix(apiPath, "/v1beta/") {
+		return base + strings.TrimPrefix(apiPath, "/v1beta")
+	}
+	return base + apiPath
+}
+
 func (s *ModelDiscoveryService) doJSON(req *http.Request, target any) error {
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -115,12 +168,12 @@ func (s *ModelDiscoveryService) doJSON(req *http.Request, target any) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("model discovery failed with status %d", resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(target)
+	return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(target)
 }
 
 func firstActiveDiscoveryKey(keys []models.APIKey) (models.APIKey, bool) {
 	for _, key := range keys {
-		if key.Status == "" || key.Status == models.KeyStatusActive {
+		if models.CredentialEnabled(key.Enabled) && (key.Status == "" || key.Status == models.KeyStatusActive) {
 			return key, true
 		}
 	}

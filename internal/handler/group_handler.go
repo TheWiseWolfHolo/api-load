@@ -4,7 +4,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	app_errors "api-load/internal/errors"
 	"api-load/internal/i18n"
 	"api-load/internal/models"
-	"api-load/internal/resourcepool"
 	"api-load/internal/response"
 	"api-load/internal/services"
 
@@ -418,26 +416,22 @@ func (s *Server) DiscoverGroupModels(c *gin.Context) {
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "resource pool endpoint is required"))
 			return
 		}
-		endpoint, resolveErr := s.ResourcePoolProvider.ResolveEndpoint(*group.ResourcePoolID, *group.ResourceEndpointID, group.ChannelType)
-		if resolveErr != nil {
-			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, resolveErr.Error()))
+		snapshot, inspectErr := s.UpstreamInspectionService.DiscoverPoolEndpointModels(
+			c.Request.Context(),
+			*group.ResourcePoolID,
+			*group.ResourceEndpointID,
+		)
+		if inspectErr != nil {
+			if errors.Is(inspectErr, services.ErrModelDiscoveryUnsupported) {
+				response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, inspectErr.Error()))
+				return
+			}
+			logrus.WithContext(c.Request.Context()).WithError(inspectErr).Warn("resource endpoint model discovery failed")
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrBadGateway, "model discovery failed"))
 			return
 		}
-		resource, selectErr := s.ResourcePoolProvider.SelectResource(*group.ResourcePoolID, resourcepool.SelectionRequest{Route: group.ChannelType})
-		if selectErr != nil {
-			response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, selectErr.Error()))
-			return
-		}
-		keys = []models.APIKey{{
-			ID: resource.ID, GroupID: group.ID, KeyValue: resource.KeyValue,
-			KeyHash: resource.KeyHash, Status: resource.Status,
-		}}
-		upstreams, marshalErr := json.Marshal([]map[string]any{{"url": endpoint.BaseURL, "weight": 1}})
-		if marshalErr != nil {
-			response.Error(c, app_errors.ErrInternalServer)
-			return
-		}
-		group.Upstreams = upstreams
+		response.Success(c, GroupModelsResponse{Models: snapshot.Models})
+		return
 	} else {
 		if err := s.DB.WithContext(c.Request.Context()).
 			Where("group_id = ? AND status = ?", group.ID, models.KeyStatusActive).
@@ -449,16 +443,19 @@ func (s *Server) DiscoverGroupModels(c *gin.Context) {
 	}
 	for i := range keys {
 		if s.EncryptionSvc == nil {
-			continue
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "model discovery encryption service is unavailable"))
+			return
 		}
 		decrypted, err := s.EncryptionSvc.Decrypt(keys[i].KeyValue)
-		if err == nil {
-			keys[i].KeyValue = decrypted
+		if err != nil {
+			logrus.WithContext(c.Request.Context()).WithError(err).Warn("model discovery key decryption failed")
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, "model discovery credential could not be decrypted"))
+			return
 		}
+		keys[i].KeyValue = decrypted
 	}
 
-	discoverySvc := services.NewModelDiscoveryService(http.DefaultClient)
-	modelIDs, err := discoverySvc.DiscoverModels(&group, keys)
+	modelIDs, err := s.UpstreamInspectionService.DiscoverGroupModels(c.Request.Context(), &group, keys)
 	if err != nil {
 		if errors.Is(err, services.ErrModelDiscoveryUnsupported) {
 			response.Error(c, app_errors.ErrBadRequest)

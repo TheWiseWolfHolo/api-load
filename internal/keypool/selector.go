@@ -98,21 +98,9 @@ func (p *KeyProvider) selectRandomKey(groupID uint, excluded map[uint]struct{}) 
 	for _, tier := range scheduler.PriorityTiers(candidates) {
 		eligible := filterKeyCandidates(tier, excluded)
 		for len(eligible) > 0 {
-			totalWeight := 0
-			for _, candidate := range eligible {
-				totalWeight += candidate.Weight
-			}
-			slot := 0
-			if p.selectionRNG != nil && totalWeight > 0 {
-				slot = p.selectionRNG.Intn(totalWeight)
-			}
-			selectedID := eligible[0].ID
-			for _, candidate := range eligible {
-				if slot < candidate.Weight {
-					selectedID = candidate.ID
-					break
-				}
-				slot -= candidate.Weight
+			selectedID, ok := scheduler.PickWeightedRandom(eligible, p.selectionRNG)
+			if !ok {
+				break
 			}
 			apiKey, loadErr := p.keyFromStore(groupID, selectedID)
 			if loadErr == nil {
