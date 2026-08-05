@@ -28,6 +28,7 @@ var databaseMigrations = []databaseMigration{
 	{id: "v1_1_0_add_key_hash_column", run: V1_1_0_AddKeyHashColumn},
 	{id: "v1_2_0_split_credential_enablement", run: V1_2_0_SplitCredentialEnablement},
 	{id: "v1_3_0_share_pool_credentials_across_endpoints", run: V1_3_0_SharePoolCredentialsAcrossEndpoints},
+	{id: "v1_4_0_group_scoped_pool_scheduling", run: V1_4_0_GroupScopedPoolScheduling},
 }
 
 func MigrateDatabase(db *gorm.DB) error {

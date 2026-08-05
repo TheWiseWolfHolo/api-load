@@ -62,6 +62,8 @@ type GroupConfig struct {
 	FillMaxConsecutiveRequests   *int    `json:"fill_max_consecutive_requests,omitempty"`
 	FillMaxConsecutiveTokens     *int    `json:"fill_max_consecutive_tokens,omitempty"`
 	FillStickyTTLSeconds         *int    `json:"fill_sticky_ttl_seconds,omitempty"`
+	ResourceAffinityTTLSeconds   *int    `json:"resource_affinity_ttl_seconds,omitempty"`
+	ResourceBusyWaitMilliseconds *int    `json:"resource_busy_wait_milliseconds,omitempty"`
 	AutoRestoreSchedule          *string `json:"auto_restore_schedule,omitempty"`
 	AutoRestoreStatusCodes       *string `json:"auto_restore_status_codes,omitempty"`
 }

@@ -2,8 +2,8 @@ package services
 
 import (
 	"api-load/internal/models"
+	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -78,13 +78,55 @@ func TestMOD003GeminiDiscoveryCallsV1BetaModelsAndStripsPrefix(t *testing.T) {
 	}
 }
 
-func TestMOD004AnthropicDiscoveryIsManualOnly(t *testing.T) {
-	service := NewModelDiscoveryService(http.DefaultClient)
-	_, err := service.DiscoverModels(&models.Group{ChannelType: "anthropic"}, []models.APIKey{{KeyValue: "sk-ant-test"}})
-	if !errors.Is(err, ErrModelDiscoveryUnsupported) {
-		t.Fatalf("expected unsupported discovery error, got %v", err)
+func TestMOD004AnthropicModelsUseNativeHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Header.Get("x-api-key") != "sk-ant-test" {
+			t.Fatalf("missing Anthropic key header")
+		}
+		if r.Header.Get("anthropic-version") != "2023-06-01" {
+			t.Fatalf("missing Anthropic version header")
+		}
+		_, _ = w.Write([]byte("{\"data\":[{\"id\":\"claude-test-a\"},{\"id\":\"claude-test-b\"}]}"))
+	}))
+	defer server.Close()
+
+	service := NewModelDiscoveryService(server.Client())
+	modelIDs, err := service.DiscoverEndpointModels(
+		context.Background(),
+		"anthropic",
+		server.URL,
+		"sk-ant-test",
+	)
+	if err != nil {
+		t.Fatalf("discover Anthropic models: %v", err)
 	}
-	if err != nil && strings.Contains(err.Error(), "sk-ant-test") {
-		t.Fatalf("error exposed key: %v", err)
+	if strings.Join(modelIDs, ",") != "claude-test-a,claude-test-b" {
+		t.Fatalf("unexpected Anthropic models: %#v", modelIDs)
+	}
+}
+
+func TestMOD005DiscoverySkipsManuallyDisabledKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-enabled" {
+			t.Fatalf("used disabled discovery key: %q", got)
+		}
+		_, _ = w.Write([]byte("{\"data\":[{\"id\":\"gpt-enabled\"}]}"))
+	}))
+	defer server.Close()
+
+	group := models.Group{ChannelType: "openai", Upstreams: []byte(`[{"url":"` + server.URL + `","weight":1}]`)}
+	service := NewModelDiscoveryService(server.Client())
+	modelIDs, err := service.DiscoverModels(&group, []models.APIKey{
+		{KeyValue: "sk-disabled", Enabled: models.Bool(false), Status: models.KeyStatusActive},
+		{KeyValue: "sk-enabled", Enabled: models.Bool(true), Status: models.KeyStatusActive},
+	})
+	if err != nil {
+		t.Fatalf("discover with enabled key: %v", err)
+	}
+	if strings.Join(modelIDs, ",") != "gpt-enabled" {
+		t.Fatalf("unexpected models: %#v", modelIDs)
 	}
 }

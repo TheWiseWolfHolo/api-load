@@ -1,5 +1,10 @@
 # API-Load Refactor TDD Spec
 
+> Historical record: this document describes the completed 2026-06 refactor
+> and its former execution workflow. It is not an active instruction source.
+> Current resource-pool work is specified in
+> `docs/specs/2026-08-06-resource-pool-scheduling-and-inspection.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL before production changes: use `superpowers:test-driven-development`. Implementation plans should use `superpowers:subagent-driven-development` or `superpowers:executing-plans` task-by-task. Every behavior change below starts with a failing test, verifies the failure reason, then adds minimal production code.
 
 **Goal:** Turn API-Load from a round-robin key proxy into a model-aware, cache-friendly, proxy-controllable, migration-ready AI API scheduler without rewriting the existing Go backend or Vue 3 / Naive UI frontend.

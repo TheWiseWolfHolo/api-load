@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { resourcePoolsApi } from "@/api/resourcePools";
-import type { ResourceStatus, ResourceValidationGroup, UpstreamResource } from "@/types/models";
+import type {
+  ResourceBalanceSnapshot,
+  ResourcePoolEndpoint,
+  ResourceStatus,
+  ResourceValidationGroup,
+  UpstreamResource,
+} from "@/types/models";
 import {
   CreateOutline,
   DownloadOutline,
@@ -9,6 +15,7 @@ import {
   SearchOutline,
   SettingsOutline,
   TrashOutline,
+  WalletOutline,
 } from "@vicons/ionicons5";
 import {
   NButton,
@@ -40,9 +47,14 @@ const message = useMessage();
 
 const resources = ref<UpstreamResource[]>([]);
 const validationGroups = ref<ResourceValidationGroup[]>([]);
+const endpoints = ref<ResourcePoolEndpoint[]>([]);
 const loading = ref(false);
 const validationGroupsLoading = ref(false);
 const testingResourceID = ref<number | null>(null);
+const balanceResourceID = ref<number | null>(null);
+const balanceVisible = ref(false);
+const balanceSnapshot = ref<ResourceBalanceSnapshot | null>(null);
+const balanceResourceLabel = ref("");
 const mutating = ref(false);
 const search = ref("");
 const health = ref<ResourceStatus | "">("");
@@ -98,6 +110,14 @@ const validationRouteOptions = computed(() =>
     key: group.id,
   }))
 );
+const balanceEndpointOptions = computed(() =>
+  endpoints.value
+    .filter(endpoint => endpoint.enabled && balanceProvider(endpoint.base_url))
+    .map(endpoint => ({
+      label: `${endpoint.name} · ${balanceProvider(endpoint.base_url)}`,
+      key: endpoint.id,
+    }))
+);
 const selectedSet = computed(() => new Set(selectedIDs.value));
 const allPageSelected = computed(
   () => resources.value.length > 0 && resources.value.every(item => selectedSet.value.has(item.id))
@@ -117,6 +137,7 @@ const parsedDeleteKeys = computed(() => [
 onMounted(() => {
   void loadResources();
   void loadValidationGroups();
+  void loadEndpoints();
 });
 onBeforeUnmount(() => clearTimeout(searchTimer));
 watch(
@@ -164,6 +185,14 @@ async function loadValidationGroups() {
     validationGroups.value = await resourcePoolsApi.listValidationGroups(props.poolId);
   } finally {
     validationGroupsLoading.value = false;
+  }
+}
+
+async function loadEndpoints() {
+  try {
+    endpoints.value = await resourcePoolsApi.listEndpoints(props.poolId);
+  } catch {
+    endpoints.value = [];
   }
 }
 
@@ -374,6 +403,65 @@ async function testResource(resource: UpstreamResource, selectedGroupID?: number
     testingResourceID.value = null;
   }
 }
+function balanceProvider(baseURL: string): string {
+  try {
+    const host = new URL(baseURL).hostname.toLowerCase();
+    if (host === "api.deepseek.com") {
+      return "DeepSeek";
+    }
+    if (host === "openrouter.ai") {
+      return "OpenRouter";
+    }
+    if (host === "api.siliconflow.com" || host === "api.siliconflow.cn") {
+      return "SiliconFlow";
+    }
+    if (host === "api.moonshot.cn" || host === "api.moonshot.ai") {
+      return "Moonshot";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+async function inspectBalance(resource: UpstreamResource, endpointID?: number) {
+  const selectedEndpointID = endpointID ?? balanceEndpointOptions.value[0]?.key;
+  if (!selectedEndpointID || balanceResourceID.value !== null) {
+    return;
+  }
+  balanceResourceID.value = resource.id;
+  balanceSnapshot.value = null;
+  balanceResourceLabel.value = resource.name || resource.masked_key || `#${resource.id}`;
+  try {
+    balanceSnapshot.value = await resourcePoolsApi.inspectResourceBalance(
+      props.poolId,
+      selectedEndpointID,
+      resource.id
+    );
+    balanceVisible.value = true;
+  } catch {
+    message.error(t("resourcePools.balanceQueryFailed"));
+  } finally {
+    balanceResourceID.value = null;
+  }
+}
+function balanceKindLabel(kind: string): string {
+  const keyByKind: Record<string, string> = {
+    total: "balanceTotal",
+    granted: "balanceGranted",
+    topped_up: "balanceToppedUp",
+    limit_remaining: "balanceRemaining",
+    limit: "balanceLimit",
+    balance: "balanceAvailable",
+    charge: "balanceCharge",
+    available: "balanceAvailable",
+    voucher: "balanceVoucher",
+    cash: "balanceCash",
+    usage: "balanceUsage",
+    usage_daily: "balanceUsageDaily",
+  };
+  const key = keyByKind[kind];
+  return key ? t(`resourcePools.${key}`) : kind;
+}
 function isResourceTestDisabled(): boolean {
   return (
     mutating.value ||
@@ -562,6 +650,33 @@ function formatDate(value?: string): string {
                 <template #icon><n-icon :component="PulseOutline" /></template>
                 {{ t("resourcePools.testKey") }}
               </n-button>
+              <n-dropdown
+                v-if="balanceEndpointOptions.length > 1"
+                :options="balanceEndpointOptions"
+                trigger="click"
+                @select="endpointId => inspectBalance(resource, Number(endpointId))"
+              >
+                <n-button
+                  size="tiny"
+                  secondary
+                  :disabled="balanceResourceID !== null"
+                  :loading="balanceResourceID === resource.id"
+                >
+                  <template #icon><n-icon :component="WalletOutline" /></template>
+                  {{ t("resourcePools.queryBalance") }}
+                </n-button>
+              </n-dropdown>
+              <n-button
+                v-else-if="balanceEndpointOptions.length === 1"
+                size="tiny"
+                secondary
+                :disabled="balanceResourceID !== null"
+                :loading="balanceResourceID === resource.id"
+                @click="inspectBalance(resource)"
+              >
+                <template #icon><n-icon :component="WalletOutline" /></template>
+                {{ t("resourcePools.queryBalance") }}
+              </n-button>
               <n-button
                 v-if="resource.status === 'invalid'"
                 size="tiny"
@@ -705,6 +820,64 @@ function formatDate(value?: string): string {
         </template>
       </n-card>
     </n-modal>
+
+    <n-modal v-model:show="balanceVisible">
+      <n-card
+        class="manager-modal balance-modal"
+        :bordered="false"
+        :title="t('resourcePools.balanceTitle')"
+      >
+        <div v-if="balanceSnapshot" class="balance-content">
+          <div class="balance-summary">
+            <div>
+              <span class="balance-provider">{{ balanceSnapshot.provider }}</span>
+              <strong>{{ balanceResourceLabel }}</strong>
+            </div>
+            <n-tag
+              v-if="balanceSnapshot.available !== undefined"
+              :type="balanceSnapshot.available ? 'success' : 'error'"
+            >
+              {{
+                balanceSnapshot.available
+                  ? t("resourcePools.balanceUsable")
+                  : t("resourcePools.balanceUnavailable")
+              }}
+            </n-tag>
+          </div>
+          <div class="balance-grid">
+            <div
+              v-for="(item, index) in balanceSnapshot.balances"
+              :key="`${item.kind}-${item.currency}-${index}`"
+              class="balance-item"
+            >
+              <span>{{ balanceKindLabel(item.kind) }}</span>
+              <strong>
+                {{ item.amount }}
+                <small>{{ item.currency }}</small>
+              </strong>
+            </div>
+            <div
+              v-for="item in balanceSnapshot.metrics || []"
+              :key="item.kind"
+              class="balance-item"
+            >
+              <span>{{ balanceKindLabel(item.kind) }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+          <small class="balance-checked-at">
+            {{
+              t("resourcePools.balanceCheckedAt", { value: formatDate(balanceSnapshot.checked_at) })
+            }}
+          </small>
+        </div>
+        <template #footer>
+          <div class="modal-actions">
+            <n-button @click="balanceVisible = false">{{ t("common.close") }}</n-button>
+          </div>
+        </template>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
@@ -819,6 +992,64 @@ function formatDate(value?: string): string {
 .manager-modal {
   width: min(600px, calc(100vw - 28px));
 }
+.balance-modal {
+  width: min(560px, calc(100vw - 28px));
+}
+.balance-content {
+  display: grid;
+  gap: 18px;
+}
+.balance-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.balance-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.balance-provider,
+.balance-checked-at,
+.balance-item span {
+  color: var(--text-secondary);
+}
+.balance-provider {
+  text-transform: capitalize;
+  font-size: 0.78rem;
+}
+.balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.balance-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color-light);
+  border-radius: 8px;
+}
+.balance-item span,
+.balance-item small,
+.balance-checked-at {
+  font-size: 0.75rem;
+}
+.balance-item strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.balance-item small {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.balance-checked-at {
+  text-align: right;
+}
 .compact-modal {
   width: min(480px, calc(100vw - 28px));
 }
@@ -869,6 +1100,9 @@ function formatDate(value?: string): string {
   .form-grid.two-equal {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+  .balance-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -153,6 +153,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	var selectedResource *models.UpstreamResource
 	var selectedEndpoint *models.ResourcePoolEndpoint
 	var selectedPoolConfig resourcepool.PoolConfig
+	var selectedPoolPolicy resourcepool.GroupSelectionPolicy
 	var apiKey *models.APIKey
 	var err error
 	if group.ResourcePoolID != nil && *group.ResourcePoolID > 0 {
@@ -160,6 +161,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		affinity, _ := c.Get(requestAffinityContextKey)
 		affinityInfo, _ := affinity.(requestAffinity)
 		selectedPoolConfig, err = ps.resourceProvider.GetPoolConfig(*group.ResourcePoolID)
+		selectedPoolPolicy = resourcepool.SelectionPolicyForGroup(group, selectedPoolConfig)
 		objectRouting := objectRoutingFromContext(c)
 		endpointID := uint(0)
 		if group.ResourceEndpointID != nil {
@@ -179,10 +181,13 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			)
 		} else if err == nil {
 			selectedResource, err = ps.resourceProvider.SelectResource(*group.ResourcePoolID, resourcepool.SelectionRequest{
-				Route:              group.ChannelType,
-				Affinity:           affinityInfo.Hash,
-				ExcludeResourceIDs: excludedKeyIDs,
-				AffinityTTL:        selectedPoolConfig.AffinityTTL,
+				Route:                  group.ChannelType,
+				Strategy:               selectedPoolPolicy.Strategy,
+				SchedulerScope:         selectedPoolPolicy.SchedulerScope,
+				Affinity:               affinityInfo.Hash,
+				ExcludeResourceIDs:     excludedKeyIDs,
+				AffinityTTL:            selectedPoolPolicy.AffinityTTL,
+				MaxConsecutiveRequests: selectedPoolPolicy.MaxConsecutiveRequests,
 			})
 		}
 		if err == nil {
@@ -359,7 +364,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 		}
 		if selectedResource != nil && statusCode == http.StatusTooManyRequests &&
 			!keypool.IsQuotaOrBillingFailure(parsedError, nil) && requestHasAffinity(c) {
-			if waitErr := waitBeforeResourceMigration(c.Request.Context(), resp, selectedPoolConfig.BusyWait); waitErr != nil {
+			if waitErr := waitBeforeResourceMigration(c.Request.Context(), resp, selectedPoolPolicy.BusyWait); waitErr != nil {
 				return
 			}
 		}
@@ -387,16 +392,29 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			logrus.WithError(err).WithField("keyID", apiKey.ID).Warn("failed to update scheduler selection state")
 		}
 	} else if resp.StatusCode < http.StatusBadRequest {
-		if affinityValue, ok := c.Get(requestAffinityContextKey); ok {
-			if affinityInfo, ok := affinityValue.(requestAffinity); ok && affinityInfo.Hash != "" {
-				objectRouting := objectRoutingFromContext(c)
-				if objectRouting.ForcedResourceID == 0 {
-					if bindErr := ps.resourceProvider.BindAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedResource.ID, selectedPoolConfig.AffinityTTL); bindErr != nil {
-						logrus.WithError(bindErr).WithField("resourceID", selectedResource.ID).Warn("failed to bind successful resource affinity")
-					}
-				} else if refreshErr := ps.resourceProvider.RefreshAffinity(*group.ResourcePoolID, affinityInfo.Hash, selectedPoolConfig.AffinityTTL); refreshErr != nil {
-					logrus.WithError(refreshErr).WithField("resourceID", selectedResource.ID).Debug("resource affinity did not need refreshing")
-				}
+		affinityValue, _ := c.Get(requestAffinityContextKey)
+		affinityInfo, _ := affinityValue.(requestAffinity)
+		objectRouting := objectRoutingFromContext(c)
+		if objectRouting.ForcedResourceID == 0 {
+			selection := resourcepool.SelectionRequest{
+				Route:                  group.ChannelType,
+				Strategy:               selectedPoolPolicy.Strategy,
+				SchedulerScope:         selectedPoolPolicy.SchedulerScope,
+				Affinity:               affinityInfo.Hash,
+				AffinityTTL:            selectedPoolPolicy.AffinityTTL,
+				MaxConsecutiveRequests: selectedPoolPolicy.MaxConsecutiveRequests,
+			}
+			if recordErr := ps.resourceProvider.RecordSelectionSuccess(*group.ResourcePoolID, selectedResource.ID, selection); recordErr != nil {
+				logrus.WithError(recordErr).WithField("resourceID", selectedResource.ID).Warn("failed to record successful resource selection")
+			}
+		} else if selectedPoolPolicy.Strategy == keypool.KeySelectionStrategySticky && affinityInfo.Hash != "" {
+			if refreshErr := ps.resourceProvider.RefreshAffinityForScope(
+				*group.ResourcePoolID,
+				selectedPoolPolicy.SchedulerScope,
+				affinityInfo.Hash,
+				selectedPoolPolicy.AffinityTTL,
+			); refreshErr != nil {
+				logrus.WithError(refreshErr).WithField("resourceID", selectedResource.ID).Debug("resource affinity did not need refreshing")
 			}
 		}
 	}

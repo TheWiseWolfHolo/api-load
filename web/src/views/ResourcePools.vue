@@ -65,7 +65,6 @@ const duplicateResourceKeyCount = computed(
 const poolForm = reactive<ResourcePoolInput>({
   name: "",
   description: "",
-  strategy: "round_robin",
   affinity_ttl_seconds: 3600,
   busy_wait_milliseconds: 2000,
   auto_restore_schedule: "",
@@ -111,7 +110,6 @@ function openPoolEditor(pool?: ResourcePool) {
   Object.assign(poolForm, {
     name: pool?.name ?? "",
     description: pool?.description ?? "",
-    strategy: "round_robin",
     affinity_ttl_seconds: pool?.affinity_ttl_seconds ?? 3600,
     busy_wait_milliseconds: pool?.busy_wait_milliseconds ?? 2000,
     auto_restore_schedule: pool?.auto_restore_schedule ?? "",
@@ -332,16 +330,12 @@ function formatTTL(seconds: number): string {
 
         <dl class="pool-policy">
           <div>
-            <dt>{{ t("resourcePools.affinityTTL") }}</dt>
+            <dt>{{ t("resourcePools.defaultAffinityTTL") }}</dt>
             <dd>{{ formatTTL(pool.affinity_ttl_seconds) }}</dd>
           </div>
           <div>
-            <dt>{{ t("resourcePools.busyWait") }}</dt>
+            <dt>{{ t("resourcePools.defaultBusyWait") }}</dt>
             <dd>{{ pool.busy_wait_milliseconds }} ms</dd>
-          </div>
-          <div>
-            <dt>{{ t("resourcePools.strategy") }}</dt>
-            <dd>{{ t("resourcePools.roundRobin") }}</dd>
           </div>
           <div>
             <dt>{{ t("resourcePools.autoRestoreSchedule") }}</dt>
@@ -395,17 +389,14 @@ function formatTTL(seconds: number): string {
             <n-input v-model:value="poolForm.description" type="textarea" :rows="2" />
           </n-form-item>
           <div class="timing-fields">
-            <n-form-item :label="t('resourcePools.affinityTTLSeconds')" path="affinity_ttl_seconds">
+            <n-form-item :label="t('resourcePools.defaultAffinityTTL')" path="affinity_ttl_seconds">
               <n-input-number
                 v-model:value="poolForm.affinity_ttl_seconds"
                 :min="60"
                 :max="604800"
               />
             </n-form-item>
-            <n-form-item
-              :label="t('resourcePools.busyWaitMilliseconds')"
-              path="busy_wait_milliseconds"
-            >
+            <n-form-item :label="t('resourcePools.defaultBusyWait')" path="busy_wait_milliseconds">
               <n-input-number
                 v-model:value="poolForm.busy_wait_milliseconds"
                 :min="0"

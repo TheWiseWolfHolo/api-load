@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -256,6 +257,68 @@ func (s *Server) DeleteResourcePoolEndpoint(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+func (s *Server) DiscoverResourcePoolEndpointModels(c *gin.Context) {
+	poolID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid resource pool ID"))
+		return
+	}
+	endpointID, err := parseUintParam(c, "endpointId")
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid resource endpoint ID"))
+		return
+	}
+	snapshot, err := s.UpstreamInspectionService.DiscoverPoolEndpointModels(
+		c.Request.Context(),
+		poolID,
+		endpointID,
+	)
+	if err != nil {
+		if errors.Is(err, services.ErrModelDiscoveryUnsupported) {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
+			return
+		}
+		logrus.WithContext(c.Request.Context()).WithError(err).Warn("resource endpoint model discovery failed")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadGateway, "model discovery failed"))
+		return
+	}
+	response.Success(c, gin.H{"models": snapshot.Models, "resource_id": snapshot.ResourceID})
+}
+
+func (s *Server) InspectResourcePoolResourceBalance(c *gin.Context) {
+	poolID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid resource pool ID"))
+		return
+	}
+	endpointID, err := parseUintParam(c, "endpointId")
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid resource endpoint ID"))
+		return
+	}
+	resourceID, err := parseUintParam(c, "resourceId")
+	if err != nil {
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "invalid resource ID"))
+		return
+	}
+	snapshot, err := s.UpstreamInspectionService.InspectPoolResourceBalance(
+		c.Request.Context(),
+		poolID,
+		endpointID,
+		resourceID,
+	)
+	if err != nil {
+		if errors.Is(err, services.ErrBalanceInspectionUnsupported) {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "this endpoint does not expose a supported balance API"))
+			return
+		}
+		logrus.WithContext(c.Request.Context()).WithError(err).Warn("resource balance inspection failed")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadGateway, "balance query failed"))
+		return
+	}
+	response.Success(c, snapshot)
+}
+
 func (s *Server) ImportResourcePoolResources(c *gin.Context) {
 	poolID, ok := parseResourceID(c, "id")
 	if !ok {
@@ -499,6 +562,14 @@ func (s *Server) DeleteResourcePoolResource(c *gin.Context) {
 		return
 	}
 	response.Success(c, nil)
+}
+
+func parseUintParam(c *gin.Context, name string) (uint, error) {
+	value, err := strconv.ParseUint(c.Param(name), 10, 64)
+	if err != nil || value == 0 {
+		return 0, fmt.Errorf("invalid %s", name)
+	}
+	return uint(value), nil
 }
 
 func parseResourceID(c *gin.Context, name string) (uint, bool) {

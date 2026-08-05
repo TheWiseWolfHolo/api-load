@@ -2,9 +2,11 @@ import type {
   BulkResourceDeleteResult,
   BulkResourceStatusResult,
   CredentialBatchUpdateInput,
+  EndpointModelsResult,
   ResourceListParams,
   ResourceListResponse,
   ResourcePool,
+  ResourceBalanceSnapshot,
   ResourcePoolEndpoint,
   ResourcePoolEndpointInput,
   ResourcePoolInput,
@@ -62,6 +64,28 @@ export const resourcePoolsApi = {
 
   deleteEndpoint(poolId: number, endpointId: number): Promise<void> {
     return http.delete(`/resource-pools/${poolId}/endpoints/${endpointId}`);
+  },
+
+  async discoverEndpointModels(poolId: number, endpointId: number): Promise<EndpointModelsResult> {
+    const response = await http.post(
+      `/resource-pools/${poolId}/endpoints/${endpointId}/models/discover`,
+      undefined,
+      { hideMessage: true }
+    );
+    return response.data;
+  },
+
+  async inspectResourceBalance(
+    poolId: number,
+    endpointId: number,
+    resourceId: number
+  ): Promise<ResourceBalanceSnapshot> {
+    const response = await http.post(
+      `/resource-pools/${poolId}/endpoints/${endpointId}/resources/${resourceId}/balance`,
+      undefined,
+      { hideMessage: true }
+    );
+    return response.data;
   },
 
   async addResources(id: number, payload: UpstreamResourceInput[]): Promise<UpstreamResource[]> {

@@ -27,6 +27,7 @@ type Server struct {
 	GroupService               *services.GroupService
 	ResourcePoolService        *services.ResourcePoolService
 	ResourceValidationService  *services.ResourceValidationService
+	UpstreamInspectionService  *services.UpstreamInspectionService
 	ResourcePoolProvider       *resourcepool.Provider
 	AggregateGroupService      *services.AggregateGroupService
 	KeyManualValidationService *services.KeyManualValidationService
@@ -49,6 +50,7 @@ type NewServerParams struct {
 	GroupService               *services.GroupService
 	ResourcePoolService        *services.ResourcePoolService
 	ResourceValidationService  *services.ResourceValidationService
+	UpstreamInspectionService  *services.UpstreamInspectionService
 	ResourcePoolProvider       *resourcepool.Provider
 	AggregateGroupService      *services.AggregateGroupService
 	KeyManualValidationService *services.KeyManualValidationService
@@ -71,6 +73,7 @@ func NewServer(params NewServerParams) *Server {
 		GroupService:               params.GroupService,
 		ResourcePoolService:        params.ResourcePoolService,
 		ResourceValidationService:  params.ResourceValidationService,
+		UpstreamInspectionService:  params.UpstreamInspectionService,
 		ResourcePoolProvider:       params.ResourcePoolProvider,
 		AggregateGroupService:      params.AggregateGroupService,
 		KeyManualValidationService: params.KeyManualValidationService,

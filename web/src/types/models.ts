@@ -81,6 +81,8 @@ export interface GroupConfig {
   fill_max_consecutive_requests?: number;
   fill_max_consecutive_tokens?: number;
   fill_sticky_ttl_seconds?: number;
+  resource_affinity_ttl_seconds?: number;
+  resource_busy_wait_milliseconds?: number;
   auto_restore_schedule?: string;
   auto_restore_status_codes?: string;
 }
@@ -221,6 +223,7 @@ export interface ResourcePool {
   id: number;
   name: string;
   description: string;
+  /** @deprecated Scheduling is configured by each bound group. */
   strategy: "round_robin";
   affinity_ttl_seconds: number;
   busy_wait_milliseconds: number;
@@ -234,6 +237,7 @@ export interface ResourcePool {
 export interface ResourcePoolInput {
   name: string;
   description?: string;
+  /** @deprecated Kept for API compatibility; do not expose as pool policy. */
   strategy?: "round_robin";
   affinity_ttl_seconds?: number;
   busy_wait_milliseconds?: number;
@@ -275,6 +279,31 @@ export interface ResourcePoolEndpointInput {
   channel_type: ChannelType;
   base_url: string;
   enabled?: boolean;
+}
+
+export interface EndpointModelsResult {
+  resource_id: number;
+  models: string[];
+}
+
+export interface BalanceAmount {
+  kind: string;
+  amount: string;
+  currency: string;
+}
+
+export interface BalanceMetric {
+  kind: string;
+  value: string;
+}
+
+export interface ResourceBalanceSnapshot {
+  provider: string;
+  resource_id: number;
+  available?: boolean;
+  balances: BalanceAmount[];
+  metrics?: BalanceMetric[];
+  checked_at: string;
 }
 
 export interface ResourceListParams {

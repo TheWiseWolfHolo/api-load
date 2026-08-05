@@ -144,6 +144,8 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 		resourcePools.GET("/:id/endpoints", serverHandler.ListResourcePoolEndpoints)
 		resourcePools.PUT("/:id/endpoints/:endpointId", serverHandler.UpdateResourcePoolEndpoint)
 		resourcePools.DELETE("/:id/endpoints/:endpointId", serverHandler.DeleteResourcePoolEndpoint)
+		resourcePools.POST("/:id/endpoints/:endpointId/models/discover", serverHandler.DiscoverResourcePoolEndpointModels)
+		resourcePools.POST("/:id/endpoints/:endpointId/resources/:resourceId/balance", serverHandler.InspectResourcePoolResourceBalance)
 		resourcePools.POST("/:id/resources", serverHandler.AddResourcePoolResources)
 		resourcePools.POST("/:id/resources/import", serverHandler.ImportResourcePoolResources)
 		resourcePools.GET("/:id/resources", serverHandler.ListResourcePoolResources)

@@ -1063,6 +1063,8 @@ func schedulerConfigOptions() []ConfigOption {
 		{Key: "fill_max_consecutive_requests", Name: "Fill-first max consecutive requests", Description: "0 means unlimited", DefaultValue: 0},
 		{Key: "fill_max_consecutive_tokens", Name: "Fill-first max consecutive tokens", Description: "0 means unlimited", DefaultValue: 0},
 		{Key: "fill_sticky_ttl_seconds", Name: "Fill-first sticky TTL seconds", Description: "0 means no TTL", DefaultValue: 0},
+		{Key: "resource_affinity_ttl_seconds", Name: "Resource affinity TTL seconds", Description: "Pool-bound sticky affinity lifetime", DefaultValue: 3600},
+		{Key: "resource_busy_wait_milliseconds", Name: "Resource migration wait milliseconds", Description: "Maximum wait before moving a sticky request", DefaultValue: 2000},
 		{Key: "auto_restore_schedule", Name: "Auto-restore schedule", Description: "Empty disables. Rolling window like \"24h\" or a daily time like \"00:05 +08:00\"", DefaultValue: ""},
 		{Key: "auto_restore_status_codes", Name: "Auto-restore status codes", Description: "Blacklist causes eligible for scheduled restore without validation", DefaultValue: keypool.DefaultAutoRestoreStatusCodes},
 	}
@@ -1171,6 +1173,14 @@ func validateSchedulerGroupConfig(config models.GroupConfig) error {
 		if value != nil && *value < 0 {
 			return fmt.Errorf("%s must be non-negative", name)
 		}
+	}
+	if config.ResourceAffinityTTLSeconds != nil &&
+		(*config.ResourceAffinityTTLSeconds < 60 || *config.ResourceAffinityTTLSeconds > 604800) {
+		return fmt.Errorf("resource_affinity_ttl_seconds must be between 60 and 604800")
+	}
+	if config.ResourceBusyWaitMilliseconds != nil &&
+		(*config.ResourceBusyWaitMilliseconds < 0 || *config.ResourceBusyWaitMilliseconds > 10000) {
+		return fmt.Errorf("resource_busy_wait_milliseconds must be between 0 and 10000")
 	}
 
 	if config.AutoRestoreSchedule != nil {

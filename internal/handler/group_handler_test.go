@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	"api-load/internal/config"
+	"api-load/internal/httpclient"
 	"api-load/internal/keypool"
 	"api-load/internal/models"
+	"api-load/internal/resourcepool"
 	"api-load/internal/services"
 	"api-load/internal/store"
 
@@ -84,6 +86,7 @@ func TestMOD001GroupModelDiscoveryHandlerReturnsDiscoveredModels(t *testing.T) {
 	}
 	memStore := store.NewMemoryStore()
 	provider := keypool.NewProvider(db, memStore, nil, encryptionSvc)
+	resourceProvider := resourcepool.NewProvider(db, memStore, encryptionSvc)
 	keySvc := services.NewKeyService(db, provider, nil, encryptionSvc)
 	servicesSeedKey(t, keySvc, group.ID, "sk-test-discovery-handler", "", models.KeyStatusActive, 0, 0)
 
@@ -91,6 +94,11 @@ func TestMOD001GroupModelDiscoveryHandlerReturnsDiscoveredModels(t *testing.T) {
 		DB:            db,
 		KeyService:    keySvc,
 		EncryptionSvc: encryptionSvc,
+		UpstreamInspectionService: services.NewUpstreamInspectionService(
+			resourceProvider,
+			httpclient.NewHTTPClientManager(),
+			config.NewSystemSettingsManager(),
+		),
 	}
 
 	recorder := httptest.NewRecorder()

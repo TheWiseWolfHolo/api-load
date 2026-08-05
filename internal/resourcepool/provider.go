@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,10 +29,13 @@ const (
 )
 
 type SelectionRequest struct {
-	Route              string
-	Affinity           string
-	ExcludeResourceIDs []uint
-	AffinityTTL        time.Duration
+	Route                  string
+	Strategy               string
+	SchedulerScope         string
+	Affinity               string
+	ExcludeResourceIDs     []uint
+	AffinityTTL            time.Duration
+	MaxConsecutiveRequests int
 }
 
 type PoolConfig struct {
@@ -44,11 +48,26 @@ type Provider struct {
 	db             *gorm.DB
 	store          store.Store
 	encryptionSvc  encryption.Service
+	selectionRNG   scheduler.IntnSource
 	weightedPicker *scheduler.SmoothPicker
 }
 
+type packageSelectionRNG struct{}
+
+func (packageSelectionRNG) Intn(n int) int { return rand.Intn(n) }
+
 func NewProvider(db *gorm.DB, cacheStore store.Store, encryptionSvc encryption.Service) *Provider {
-	return &Provider{db: db, store: cacheStore, encryptionSvc: encryptionSvc, weightedPicker: scheduler.NewSmoothPicker()}
+	return &Provider{
+		db: db, store: cacheStore, encryptionSvc: encryptionSvc,
+		selectionRNG: packageSelectionRNG{}, weightedPicker: scheduler.NewSmoothPicker(),
+	}
+}
+
+// SetSelectionRNG injects a deterministic source for scheduler tests.
+func (p *Provider) SetSelectionRNG(rng scheduler.IntnSource) {
+	if rng != nil {
+		p.selectionRNG = rng
+	}
 }
 
 func (p *Provider) LoadResourcesFromDB() error {
@@ -335,6 +354,23 @@ func (p *Provider) ResolveEndpoint(poolID, endpointID uint, channelType string) 
 	}, nil
 }
 
+// LoadEndpointForInspection validates pool ownership and enablement without
+// requiring a group channel type. The endpoint's own channel type drives the
+// inspection protocol.
+func (p *Provider) LoadEndpointForInspection(poolID, endpointID uint) (*models.ResourcePoolEndpoint, error) {
+	if poolID == 0 || endpointID == 0 {
+		return nil, errors.New("resource pool endpoint is required")
+	}
+	var endpoint models.ResourcePoolEndpoint
+	if err := p.db.Where("id = ? AND resource_pool_id = ?", endpointID, poolID).First(&endpoint).Error; err != nil {
+		return nil, err
+	}
+	if !models.CredentialEnabled(endpoint.Enabled) {
+		return nil, errors.New("resource pool endpoint is disabled")
+	}
+	return &endpoint, nil
+}
+
 func (p *Provider) SyncResourceToStore(resource *models.UpstreamResource) error {
 	if err := p.syncResourceToStore(resource); err != nil {
 		return err
@@ -402,8 +438,31 @@ func (p *Provider) SelectResource(poolID uint, req SelectionRequest) (*models.Up
 		excluded[id] = struct{}{}
 	}
 
-	if req.Affinity != "" {
-		if raw, err := p.store.Get(affinityKey(poolID, req.Affinity)); err == nil {
+	strategy := strings.TrimSpace(req.Strategy)
+	if strategy == "" {
+		if req.Affinity != "" {
+			strategy = keypool.KeySelectionStrategySticky
+		} else {
+			strategy = keypool.KeySelectionStrategyRoundRobin
+		}
+	}
+
+	if strategy == keypool.KeySelectionStrategyFillFirst {
+		if resource, ok := p.selectCurrentFillFirstResource(poolID, req, excluded); ok {
+			return resource, nil
+		}
+	}
+
+	if strategy == keypool.KeySelectionStrategySticky && req.Affinity != "" {
+		keys := []string{affinityKeyForScope(poolID, req.SchedulerScope, req.Affinity)}
+		if req.SchedulerScope != "" {
+			keys = append(keys, affinityKey(poolID, req.Affinity))
+		}
+		for _, key := range keys {
+			raw, err := p.store.Get(key)
+			if err != nil {
+				continue
+			}
 			if id, parseErr := strconv.ParseUint(string(raw), 10, 64); parseErr == nil {
 				if _, skip := excluded[uint(id)]; !skip {
 					if resource, loadErr := p.resourceFromStore(uint(id)); loadErr == nil && p.isSelectable(resource, req.Route) {
@@ -411,12 +470,36 @@ func (p *Provider) SelectResource(poolID uint, req SelectionRequest) (*models.Up
 					}
 				}
 			} else {
-				_ = p.store.Delete(affinityKey(poolID, req.Affinity))
+				_ = p.store.Delete(key)
 			}
 		}
 	}
 
-	resource, err := p.selectWeightedResource(poolID, req.Route, excluded)
+	selectionExcluded := excluded
+	rotateAwayID := uint(0)
+	if strategy == keypool.KeySelectionStrategyFillFirst {
+		rotateAwayID = p.consumeFillFirstRotateAway(poolID, req.SchedulerScope)
+		if rotateAwayID > 0 {
+			selectionExcluded = make(map[uint]struct{}, len(excluded)+1)
+			for id := range excluded {
+				selectionExcluded[id] = struct{}{}
+			}
+			selectionExcluded[rotateAwayID] = struct{}{}
+		}
+	}
+
+	var resource *models.UpstreamResource
+	var err error
+	if strategy == keypool.KeySelectionStrategyRandom {
+		resource, err = p.selectRandomResource(poolID, req.Route, selectionExcluded)
+	} else {
+		resource, err = p.selectWeightedResourceForScope(poolID, req.SchedulerScope, req.Route, selectionExcluded)
+	}
+	if err != nil && rotateAwayID > 0 {
+		// A one-resource pool must remain usable after reaching the success
+		// limit. Prefer moving away once, then fall back when no peer exists.
+		resource, err = p.selectWeightedResourceForScope(poolID, req.SchedulerScope, req.Route, excluded)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -445,6 +528,25 @@ func (p *Provider) SelectBoundResource(poolID, resourceID uint, route string) (*
 		return nil, app_errors.ErrNoActiveKeys
 	}
 	return resource, nil
+}
+
+// LoadResourceForInspection returns a physical credential even when it is
+// manually disabled or unhealthy. Inspection is an explicit management action
+// and must fail closed when the stored credential cannot be decrypted.
+func (p *Provider) LoadResourceForInspection(poolID, resourceID uint) (*models.UpstreamResource, error) {
+	if poolID == 0 || resourceID == 0 {
+		return nil, errors.New("resource and pool IDs are required")
+	}
+	var resource models.UpstreamResource
+	if err := p.db.Where("id = ? AND resource_pool_id = ?", resourceID, poolID).First(&resource).Error; err != nil {
+		return nil, err
+	}
+	decrypted, err := p.encryptionSvc.Decrypt(resource.KeyValue)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt resource %d: %w", resourceID, err)
+	}
+	resource.KeyValue = decrypted
+	return &resource, nil
 }
 
 func (p *Provider) FindObjectBinding(ctx context.Context, groupID uint, objectType, objectID string) (*models.UpstreamObjectBinding, error) {
@@ -495,10 +597,14 @@ func (p *Provider) BindObject(ctx context.Context, binding models.UpstreamObject
 }
 
 func (p *Provider) RefreshAffinity(poolID uint, affinity string, ttl time.Duration) error {
+	return p.RefreshAffinityForScope(poolID, "", affinity, ttl)
+}
+
+func (p *Provider) RefreshAffinityForScope(poolID uint, scope, affinity string, ttl time.Duration) error {
 	if affinity == "" {
 		return nil
 	}
-	key := affinityKey(poolID, affinity)
+	key := affinityKeyForScope(poolID, scope, affinity)
 	raw, err := p.store.Get(key)
 	if err != nil {
 		return err
@@ -513,6 +619,10 @@ func (p *Provider) RefreshAffinity(poolID uint, affinity string, ttl time.Durati
 // upstream attempt has succeeded. Failed fallback attempts must not move a
 // conversation away from its last known-good resource.
 func (p *Provider) BindAffinity(poolID uint, affinity string, resourceID uint, ttl time.Duration) error {
+	return p.BindAffinityForScope(poolID, "", affinity, resourceID, ttl)
+}
+
+func (p *Provider) BindAffinityForScope(poolID uint, scope, affinity string, resourceID uint, ttl time.Duration) error {
 	if poolID == 0 || resourceID == 0 || affinity == "" {
 		return nil
 	}
@@ -520,10 +630,23 @@ func (p *Provider) BindAffinity(poolID uint, affinity string, resourceID uint, t
 		ttl = DefaultAffinityTTL
 	}
 	return p.store.Set(
-		affinityKey(poolID, affinity),
+		affinityKeyForScope(poolID, scope, affinity),
 		[]byte(strconv.FormatUint(uint64(resourceID), 10)),
 		ttl,
 	)
+}
+
+// RecordSelectionSuccess commits scheduler state only after a successful
+// upstream attempt. Failed retries must not move sticky or fill-first state.
+func (p *Provider) RecordSelectionSuccess(poolID, resourceID uint, req SelectionRequest) error {
+	switch strings.TrimSpace(req.Strategy) {
+	case keypool.KeySelectionStrategySticky:
+		return p.BindAffinityForScope(poolID, req.SchedulerScope, req.Affinity, resourceID, req.AffinityTTL)
+	case keypool.KeySelectionStrategyFillFirst:
+		return p.recordFillFirstSuccess(poolID, resourceID, req)
+	default:
+		return nil
+	}
 }
 
 // HandleFailure disables a physical resource after credential, quota, rate
@@ -682,9 +805,11 @@ func (p *Provider) resourceFromStore(resourceID uint) (*models.UpstreamResource,
 			resource.GlobalCooldownUntil = &value
 		}
 	}
-	if decrypted, decryptErr := p.encryptionSvc.Decrypt(resource.KeyValue); decryptErr == nil {
-		resource.KeyValue = decrypted
+	decrypted, decryptErr := p.encryptionSvc.Decrypt(resource.KeyValue)
+	if decryptErr != nil {
+		return nil, fmt.Errorf("decrypt resource %d: %w", resourceID, decryptErr)
 	}
+	resource.KeyValue = decrypted
 	return resource, nil
 }
 
@@ -728,4 +853,11 @@ func endpointKey(endpointID uint) string {
 
 func affinityKey(poolID uint, affinity string) string {
 	return fmt.Sprintf("resource_affinity:%d:%s", poolID, affinity)
+}
+
+func affinityKeyForScope(poolID uint, scope, affinity string) string {
+	if strings.TrimSpace(scope) == "" {
+		return affinityKey(poolID, affinity)
+	}
+	return fmt.Sprintf("resource_affinity:%d:%s:%s", poolID, scope, affinity)
 }
