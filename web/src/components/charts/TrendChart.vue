@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
-import { formatISOInstant, formatInteger, formatLocalInstant } from '@/lib/format'
+import {
+  formatISOInstant,
+  formatInteger,
+  formatLocalInstant,
+  formatLocalTimeRange,
+  formatPercent,
+} from '@/lib/format'
 
 import {
   buildTrendGeometry,
@@ -21,8 +27,16 @@ const props = withDefaults(
     rangeStart: number
     rangeEnd: number
     locale?: string
+    showBucketRange?: boolean
+    showSinglePoint?: boolean
+    failureRateLabel?: string
   }>(),
-  { locale: 'en-US' },
+  {
+    locale: 'en-US',
+    showBucketRange: false,
+    showSinglePoint: false,
+    failureRateLabel: undefined,
+  },
 )
 
 const chartHeight = 158
@@ -57,6 +71,11 @@ const geometry = computed(() =>
     props.rangeStart,
     props.rangeEnd,
   ),
+)
+const singlePoint = computed(() =>
+  props.showSinglePoint && geometry.value.requestPoints.length === 1
+    ? geometry.value.requestPoints[0]
+    : undefined,
 )
 const activePoint = computed(() => {
   const index = activePointIndex.value
@@ -93,17 +112,26 @@ watch(seriesKey, () => {
 })
 
 function formatBucketTime(datum: TrendDatum): string {
-  return formatLocalInstant(datum.bucket_start_ms, props.locale)
+  return props.showBucketRange
+    ? formatLocalTimeRange(datum.bucket_start_ms, datum.bucket_end_ms, props.locale)
+    : formatLocalInstant(datum.bucket_start_ms, props.locale)
 }
 
 function tooltipValue(value: number): string {
   return formatInteger(value, props.locale)
 }
 
+function failureRateValue(datum: TrendDatum): string {
+  return formatPercent(datum.failure_count, datum.request_count + datum.failure_count, props.locale)
+}
+
 function pointAnnouncement(index: number): string {
   const datum = chartSeries.value[index]
   if (!datum) return ''
-  return `${formatBucketTime(datum)} · ${props.requestLabel} ${tooltipValue(datum.request_count)} · ${props.failureLabel} ${tooltipValue(datum.failure_count)}`
+  const outcomes = `${formatBucketTime(datum)} · ${props.requestLabel} ${tooltipValue(datum.request_count)} · ${props.failureLabel} ${tooltipValue(datum.failure_count)}`
+  return props.failureRateLabel
+    ? `${outcomes} · ${props.failureRateLabel} ${failureRateValue(datum)}`
+    : outcomes
 }
 
 function clearAnnouncement(): void {
@@ -261,6 +289,13 @@ onBeforeUnmount(() => {
                 />
               </g>
               <path class="trend-chart__line" :d="geometry.requestPath" />
+              <circle
+                v-if="singlePoint"
+                class="trend-chart__dot"
+                :cx="singlePoint.x"
+                :cy="singlePoint.y"
+                r="4.5"
+              />
               <Transition name="trend-chart__active">
                 <g v-if="activePoint" class="trend-chart__active-markers">
                   <line
@@ -309,6 +344,14 @@ onBeforeUnmount(() => {
                   </span>
                   <strong class="trend-chart__tooltip-value">
                     {{ tooltipValue(activePoint.datum.failure_count) }}
+                  </strong>
+                </span>
+                <span v-if="failureRateLabel" class="trend-chart__tooltip-row">
+                  <span class="trend-chart__tooltip-key trend-chart__tooltip-key--detail">
+                    {{ failureRateLabel }}
+                  </span>
+                  <strong class="trend-chart__tooltip-value">
+                    {{ failureRateValue(activePoint.datum) }}
                   </strong>
                 </span>
               </div>
@@ -432,6 +475,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   color: var(--color-text-muted);
+}
+
+.trend-chart__tooltip-key--detail {
+  padding-left: 13px;
 }
 
 .trend-chart__tooltip-swatch {
