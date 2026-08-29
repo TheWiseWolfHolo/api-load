@@ -216,11 +216,13 @@ const formatNumber = (value: number) => {
 };
 
 const isErrorDataset = (label: string) => {
-  return label.includes("失败") || label.includes("Error") || label.includes("エラー");
-};
-
-const getDatasetColor = (label: string) => {
-  return isErrorDataset(label) ? failureLineColor : successLineColor;
+  return (
+    label.includes("失败") ||
+    label.includes("Error") ||
+    label.includes("Failed") ||
+    label.includes("失敗") ||
+    label.includes("エラー")
+  );
 };
 
 // 动画相关
@@ -237,12 +239,18 @@ const startAnimation = () => {
   animatedStroke.value = `${totalLength}`;
   animatedOffset.value = `${totalLength}`;
 
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    animatedOffset.value = "0";
+    animationProgress.value = 1;
+    return;
+  }
+
   let start = 0;
   const animate = (timestamp: number) => {
     if (!start) {
       start = timestamp;
     }
-    const progress = Math.min((timestamp - start) / 1500, 1);
+    const progress = Math.min((timestamp - start) / 240, 1);
 
     animatedOffset.value = `${totalLength * (1 - progress)}`;
     animationProgress.value = progress;
@@ -353,16 +361,14 @@ const fetchChartData = async () => {
     const response = await getDashboardChart(selectedGroup.value || undefined);
     chartData.value = {
       ...response.data,
-      datasets: response.data.datasets.map(dataset => ({
+      datasets: response.data.datasets.map((dataset, index) => ({
         ...dataset,
-        color: getDatasetColor(dataset.label),
+        label: index === 0 ? t("dashboard.successRequests") : t("dashboard.failedRequests"),
+        color: index === 0 ? successLineColor : failureLineColor,
       })),
     };
 
-    // 延迟启动动画，确保DOM更新完成
-    setTimeout(() => {
-      startAnimation();
-    }, 100);
+    requestAnimationFrame(startAnimation);
   } catch (error) {
     console.error("Failed to fetch chart data:", error);
   } finally {
@@ -579,7 +585,6 @@ onMounted(() => {
 .chart-container {
   padding: 20px;
   border-radius: var(--border-radius-lg);
-  backdrop-filter: blur(4px);
   border: 1px solid var(--border-color-light);
   background: var(--card-bg-solid);
   box-shadow: var(--shadow-md);
@@ -895,30 +900,6 @@ onMounted(() => {
     width: 100%;
     height: auto;
   }
-}
-
-/* 动画效果 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chart-container {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.legend-item {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.legend-item:nth-child(2) {
-  animation-delay: 0.1s;
 }
 
 .legend-item:nth-child(3) {

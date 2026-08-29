@@ -500,7 +500,11 @@ func (s *ResourcePoolService) UpdateResource(ctx context.Context, poolID, resour
 		updates["status"] = *params.Status
 		if *params.Status == models.ResourceStatusActive {
 			resource.FailureCount = 0
+			resource.DisabledReason = ""
+			resource.GlobalCooldownUntil = nil
 			updates["failure_count"] = 0
+			updates["disabled_reason"] = ""
+			updates["global_cooldown_until"] = nil
 		}
 	}
 	if params.Priority != nil {
@@ -560,6 +564,8 @@ func (s *ResourcePoolService) BulkUpdateResources(ctx context.Context, poolID ui
 		updates["status"] = *params.Status
 		if *params.Status == models.ResourceStatusActive {
 			updates["failure_count"] = 0
+			updates["disabled_reason"] = ""
+			updates["global_cooldown_until"] = nil
 		}
 	}
 	if params.Priority != nil {

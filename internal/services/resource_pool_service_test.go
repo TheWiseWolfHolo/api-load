@@ -578,8 +578,29 @@ func TestRES012ResourcePoolResourcesSupportEditAndSafeBulkOperations(t *testing.
 	if selected, err := provider.SelectResource(pool.ID, resourcepool.SelectionRequest{Route: "openai"}); err == nil || selected != nil {
 		t.Fatalf("bulk-disabled resources remained selectable: %#v %v", selected, err)
 	}
+	future := time.Now().Add(time.Hour)
+	if err := svc.db.Model(&models.UpstreamResource{}).
+		Where("id IN ?", []uint{created[0].ID, created[1].ID}).
+		Updates(map[string]any{
+			"status":                models.ResourceStatusInvalid,
+			"failure_count":         4,
+			"disabled_reason":       "old quota failure",
+			"global_cooldown_until": future,
+		}).Error; err != nil {
+		t.Fatalf("seed unhealthy resources: %v", err)
+	}
 	if _, err := svc.BulkUpdateResourceStatus(ctx, pool.ID, []uint{created[0].ID, created[1].ID}, models.ResourceStatusActive); err != nil {
 		t.Fatalf("bulk enable: %v", err)
+	}
+	var forceRestored []models.UpstreamResource
+	if err := svc.db.Where("id IN ?", []uint{created[0].ID, created[1].ID}).Find(&forceRestored).Error; err != nil {
+		t.Fatalf("reload force-restored resources: %v", err)
+	}
+	for _, resource := range forceRestored {
+		if !models.CredentialEnabled(resource.Enabled) || resource.Status != models.ResourceStatusActive ||
+			resource.FailureCount != 0 || resource.DisabledReason != "" || resource.GlobalCooldownUntil != nil {
+			t.Fatalf("bulk force restore left stale runtime state: %#v", resource)
+		}
 	}
 	if err := provider.BindObject(ctx, models.UpstreamObjectBinding{
 		GroupID: 1, ResourcePoolID: pool.ID, ResourceID: created[0].ID,

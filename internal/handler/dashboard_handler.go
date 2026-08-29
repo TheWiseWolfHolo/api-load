@@ -105,6 +105,11 @@ func (s *Server) Stats(c *gin.Context) {
 
 	// 获取安全警告信息
 	securityWarnings := s.getSecurityWarnings(c)
+	providerCapacity, err := s.getProviderCapacity(now, currentPeriod.TotalRequests)
+	if err != nil {
+		response.ErrorI18nFromAPIError(c, app_errors.ErrDatabase, "database.current_stats_failed")
+		return
+	}
 
 	stats := models.DashboardStatsResponse{
 		KeyCount: models.StatCard{
@@ -124,10 +129,85 @@ func (s *Server) Stats(c *gin.Context) {
 			Trend:         errorRateTrend,
 			TrendIsGrowth: errorRateTrendIsGrowth,
 		},
+		ProviderCapacity: providerCapacity,
 		SecurityWarnings: securityWarnings,
 	}
 
 	response.Success(c, stats)
+}
+
+func (s *Server) getProviderCapacity(now time.Time, finalRequests24H int64) (models.ProviderCapacity, error) {
+	capacity := models.ProviderCapacity{}
+	count := func(model any, where string, args []any, target *int64) error {
+		return s.DB.Model(model).Where(where, args...).Count(target).Error
+	}
+
+	var legacyTotal, resourceTotal int64
+	if err := s.DB.Model(&models.APIKey{}).Count(&legacyTotal).Error; err != nil {
+		return capacity, err
+	}
+	if err := s.DB.Model(&models.UpstreamResource{}).Count(&resourceTotal).Error; err != nil {
+		return capacity, err
+	}
+	capacity.TotalCredentials = legacyTotal + resourceTotal
+
+	var legacyReady, resourceReady int64
+	if err := count(&models.APIKey{}, "enabled = ? AND status = ? AND (cooldown_until IS NULL OR cooldown_until <= ?)", []any{true, models.KeyStatusActive, now}, &legacyReady); err != nil {
+		return capacity, err
+	}
+	if err := count(&models.UpstreamResource{}, "enabled = ? AND status = ? AND (global_cooldown_until IS NULL OR global_cooldown_until <= ?)", []any{true, models.ResourceStatusActive, now}, &resourceReady); err != nil {
+		return capacity, err
+	}
+	capacity.ReadyCredentials = legacyReady + resourceReady
+
+	var legacyInvalid, resourceInvalid int64
+	if err := count(&models.APIKey{}, "enabled = ? AND status = ?", []any{true, models.KeyStatusInvalid}, &legacyInvalid); err != nil {
+		return capacity, err
+	}
+	if err := count(&models.UpstreamResource{}, "enabled = ? AND status = ?", []any{true, models.ResourceStatusInvalid}, &resourceInvalid); err != nil {
+		return capacity, err
+	}
+	capacity.AutoDisabledCredentials = legacyInvalid + resourceInvalid
+
+	var legacyPaused, resourcePaused int64
+	if err := count(&models.APIKey{}, "enabled = ?", []any{false}, &legacyPaused); err != nil {
+		return capacity, err
+	}
+	if err := count(&models.UpstreamResource{}, "enabled = ?", []any{false}, &resourcePaused); err != nil {
+		return capacity, err
+	}
+	capacity.PausedCredentials = legacyPaused + resourcePaused
+
+	var legacyCooling, resourceCooling int64
+	if err := count(&models.APIKey{}, "enabled = ? AND status = ? AND cooldown_until > ?", []any{true, models.KeyStatusActive, now}, &legacyCooling); err != nil {
+		return capacity, err
+	}
+	if err := count(&models.UpstreamResource{}, "enabled = ? AND status = ? AND global_cooldown_until > ?", []any{true, models.ResourceStatusActive, now}, &resourceCooling); err != nil {
+		return capacity, err
+	}
+	capacity.CoolingCredentials = legacyCooling + resourceCooling
+
+	if err := s.DB.Model(&models.ResourcePool{}).Count(&capacity.ResourcePools).Error; err != nil {
+		return capacity, err
+	}
+	if err := s.DB.Model(&models.ResourcePoolEndpoint{}).Count(&capacity.ProtocolEndpoints).Error; err != nil {
+		return capacity, err
+	}
+	if err := s.DB.Model(&models.Group{}).
+		Where("group_type = ? AND resource_pool_id IS NOT NULL", "standard").
+		Count(&capacity.PoolBoundRoutes).Error; err != nil {
+		return capacity, err
+	}
+	if err := s.DB.Model(&models.RequestLog{}).
+		Where("timestamp >= ? AND request_type = ?", now.Add(-24*time.Hour), models.RequestTypeRetry).
+		Count(&capacity.RetryAttempts24H).Error; err != nil {
+		return capacity, err
+	}
+	allAttempts := finalRequests24H + capacity.RetryAttempts24H
+	if allAttempts > 0 {
+		capacity.RetryRate24H = float64(capacity.RetryAttempts24H) / float64(allAttempts) * 100
+	}
+	return capacity, nil
 }
 
 // Chart Get dashboard chart data

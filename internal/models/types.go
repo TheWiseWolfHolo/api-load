@@ -253,6 +253,8 @@ const (
 // RequestLog 对应 request_logs 表
 type RequestLog struct {
 	ID                string    `gorm:"type:varchar(36);primaryKey" json:"id"`
+	TraceID           string    `gorm:"type:varchar(36);not null;default:'';index" json:"trace_id"`
+	Attempt           int       `gorm:"not null;default:1" json:"attempt"`
 	Timestamp         time.Time `gorm:"not null;index" json:"timestamp"`
 	GroupID           uint      `gorm:"not null;index" json:"group_id"`
 	ResourceID        uint      `gorm:"index" json:"resource_id,omitempty"`
@@ -313,7 +315,23 @@ type DashboardStatsResponse struct {
 	RPM              StatCard          `json:"rpm"`
 	RequestCount     StatCard          `json:"request_count"`
 	ErrorRate        StatCard          `json:"error_rate"`
+	ProviderCapacity ProviderCapacity  `json:"provider_capacity"`
 	SecurityWarnings []SecurityWarning `json:"security_warnings"`
+}
+
+// ProviderCapacity summarizes the upstream capacity owned by api-load across
+// both legacy group keys and shared resource-pool credentials.
+type ProviderCapacity struct {
+	TotalCredentials        int64   `json:"total_credentials"`
+	ReadyCredentials        int64   `json:"ready_credentials"`
+	AutoDisabledCredentials int64   `json:"auto_disabled_credentials"`
+	PausedCredentials       int64   `json:"paused_credentials"`
+	CoolingCredentials      int64   `json:"cooling_credentials"`
+	ResourcePools           int64   `json:"resource_pools"`
+	ProtocolEndpoints       int64   `json:"protocol_endpoints"`
+	PoolBoundRoutes         int64   `json:"pool_bound_routes"`
+	RetryAttempts24H        int64   `json:"retry_attempts_24h"`
+	RetryRate24H            float64 `json:"retry_rate_24h"`
 }
 
 // ChartDataset 用于图表的数据集

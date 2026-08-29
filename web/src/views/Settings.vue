@@ -5,6 +5,7 @@ import { setShouldConfirmDisableKey, shouldConfirmDisableKey } from "@/utils/pre
 import { HelpCircle, Save } from "@vicons/ionicons5";
 import {
   NButton,
+  NAlert,
   NCard,
   NForm,
   NFormItem,
@@ -19,7 +20,7 @@ import {
   useMessage,
   type FormItemRule,
 } from "naive-ui";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -27,9 +28,14 @@ const { t } = useI18n();
 const settingList = ref<SettingCategory[]>([]);
 const formRef = ref();
 const form = ref<Record<string, string | number | boolean>>({});
+const savedForm = ref<Record<string, string | number | boolean>>({});
 const isSaving = ref(false);
 const message = useMessage();
 const confirmDisableKey = ref(shouldConfirmDisableKey());
+const hasChanges = computed(() => JSON.stringify(form.value) !== JSON.stringify(savedForm.value));
+const changedCount = computed(
+  () => Object.keys(form.value).filter(key => form.value[key] !== savedForm.value[key]).length
+);
 
 fetchSettings();
 
@@ -53,6 +59,7 @@ function initForm() {
     },
     {}
   );
+  savedForm.value = { ...form.value };
 }
 
 async function handleSubmit() {
@@ -108,10 +115,25 @@ function handleConfirmDisableKeyChange(value: boolean) {
 function isBasicSettingsCategory(category: SettingCategory) {
   return category.settings?.some(setting => setting.key === "app_url");
 }
+
+function discardChanges() {
+  form.value = { ...savedForm.value };
+}
 </script>
 
 <template>
-  <n-space vertical>
+  <div class="settings-shell">
+    <header class="settings-intro">
+      <div>
+        <h1>{{ t("settings.systemDefaults") }}</h1>
+        <p>{{ t("settings.systemDefaultsHelp") }}</p>
+      </div>
+    </header>
+
+    <n-alert type="info" :bordered="false" class="inheritance-note">
+      {{ t("settings.inheritanceNote") }}
+    </n-alert>
+
     <n-form ref="formRef" :model="form" label-placement="top">
       <n-space vertical>
         <n-card
@@ -119,9 +141,13 @@ function isBasicSettingsCategory(category: SettingCategory) {
           v-for="category in settingList"
           :key="category.category_name"
           :title="category.category_name"
-          hoverable
           bordered
         >
+          <template #header-extra>
+            <span class="category-count">
+              {{ t("settings.settingCount", { count: category.settings?.length || 0 }) }}
+            </span>
+          </template>
           <n-grid :x-gap="36" :y-gap="0" responsive="screen" cols="1 s:2 m:2 l:4 xl:4">
             <n-grid-item
               v-for="item in category.settings"
@@ -207,23 +233,97 @@ function isBasicSettingsCategory(category: SettingCategory) {
       </n-space>
     </n-form>
 
-    <div
-      v-if="settingList.length > 0"
-      style="display: flex; justify-content: center; padding-top: 12px"
-    >
-      <n-button
-        type="primary"
-        size="large"
-        :loading="isSaving"
-        :disabled="isSaving"
-        @click="handleSubmit"
-        style="min-width: 200px"
-      >
-        <template #icon>
-          <n-icon :component="Save" />
-        </template>
-        {{ isSaving ? t("settings.saving") : t("settings.saveSettings") }}
-      </n-button>
+    <div v-if="settingList.length > 0" class="settings-savebar">
+      <div>
+        <strong>
+          {{
+            hasChanges
+              ? t("settings.unsavedChanges", { count: changedCount })
+              : t("settings.allChangesSaved")
+          }}
+        </strong>
+        <span>{{ t("settings.savebarHelp") }}</span>
+      </div>
+      <n-space>
+        <n-button :disabled="!hasChanges || isSaving" @click="discardChanges">
+          {{ t("settings.discardChanges") }}
+        </n-button>
+        <n-button
+          type="primary"
+          :loading="isSaving"
+          :disabled="!hasChanges || isSaving"
+          @click="handleSubmit"
+        >
+          <template #icon>
+            <n-icon :component="Save" />
+          </template>
+          {{ isSaving ? t("settings.saving") : t("settings.saveSettings") }}
+        </n-button>
+      </n-space>
     </div>
-  </n-space>
+  </div>
 </template>
+
+<style scoped>
+.settings-shell {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 88px;
+}
+.settings-intro h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.55rem;
+}
+.settings-intro p {
+  max-width: 72ch;
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+.inheritance-note {
+  background: var(--primary-color-suppl);
+}
+.category-count {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.settings-savebar {
+  position: sticky;
+  z-index: 80;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--card-bg-solid);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.settings-savebar > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.settings-savebar strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+.settings-savebar span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+@media (max-width: 640px) {
+  .settings-savebar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-savebar :deep(.n-space) {
+    justify-content: stretch;
+  }
+  .settings-savebar :deep(.n-button) {
+    flex: 1;
+  }
+}
+</style>

@@ -159,3 +159,17 @@ func TestTOK002EstimatedTokenUsageDoesNotOverwriteUpstreamUsage(t *testing.T) {
 		t.Fatalf("estimated usage not recorded separately: %#v", estimatedOnly)
 	}
 }
+
+func TestLOG004RequestLogIdentityGroupsAttemptsWithoutBreakingStandaloneLogs(t *testing.T) {
+	standalone := &models.RequestLog{}
+	normalizeRequestLogIdentity(standalone)
+	if standalone.ID == "" || standalone.TraceID != standalone.ID || standalone.Attempt != 1 {
+		t.Fatalf("standalone log identity was not normalized: %#v", standalone)
+	}
+
+	attempt := &models.RequestLog{TraceID: "trace-1", Attempt: 3}
+	normalizeRequestLogIdentity(attempt)
+	if attempt.ID == "" || attempt.TraceID != "trace-1" || attempt.Attempt != 3 {
+		t.Fatalf("explicit request trace was overwritten: %#v", attempt)
+	}
+}

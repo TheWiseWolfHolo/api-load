@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { resourcePoolsApi } from "@/api/resourcePools";
+import ResourceDiagnosticsDrawer from "@/components/resource-pools/ResourceDiagnosticsDrawer.vue";
 import type {
   ResourceBalanceSnapshot,
   ResourcePoolEndpoint,
@@ -10,6 +11,7 @@ import type {
 import {
   CreateOutline,
   DownloadOutline,
+  InformationCircleOutline,
   PulseOutline,
   RefreshOutline,
   SearchOutline,
@@ -18,6 +20,7 @@ import {
   WalletOutline,
 } from "@vicons/ionicons5";
 import {
+  NAlert,
   NButton,
   NCard,
   NCheckbox,
@@ -51,6 +54,14 @@ const endpoints = ref<ResourcePoolEndpoint[]>([]);
 const loading = ref(false);
 const validationGroupsLoading = ref(false);
 const testingResourceID = ref<number | null>(null);
+const batchTesting = ref(false);
+const selectedValidationGroupID = ref<number | null>(null);
+const batchRecoverySummary = ref<{
+  requested: number;
+  valid: number;
+  invalid: number;
+  errors: number;
+} | null>(null);
 const balanceResourceID = ref<number | null>(null);
 const balanceVisible = ref(false);
 const balanceSnapshot = ref<ResourceBalanceSnapshot | null>(null);
@@ -64,6 +75,8 @@ const pageSize = ref(20);
 const totalItems = ref(0);
 const totalPages = ref(0);
 const selectedIDs = ref<number[]>([]);
+const diagnosticsVisible = ref(false);
+const diagnosticResourceID = ref<number | null>(null);
 const editVisible = ref(false);
 const scheduleVisible = ref(false);
 const deleteKeysVisible = ref(false);
@@ -110,6 +123,12 @@ const validationRouteOptions = computed(() =>
     key: group.id,
   }))
 );
+const validationRouteSelectOptions = computed(() =>
+  validationGroups.value.map(group => ({
+    label: `${group.display_name || group.name} · ${group.channel_type}`,
+    value: group.id,
+  }))
+);
 const balanceEndpointOptions = computed(() =>
   endpoints.value
     .filter(endpoint => endpoint.enabled && balanceProvider(endpoint.base_url))
@@ -133,6 +152,9 @@ const parsedDeleteKeys = computed(() => [
       .filter(Boolean)
   ),
 ]);
+const diagnosticResource = computed(
+  () => resources.value.find(resource => resource.id === diagnosticResourceID.value) ?? null
+);
 
 onMounted(() => {
   void loadResources();
@@ -183,6 +205,9 @@ async function loadValidationGroups() {
   validationGroupsLoading.value = true;
   try {
     validationGroups.value = await resourcePoolsApi.listValidationGroups(props.poolId);
+    if (!validationGroups.value.some(group => group.id === selectedValidationGroupID.value)) {
+      selectedValidationGroupID.value = validationGroups.value[0]?.id ?? null;
+    }
   } finally {
     validationGroupsLoading.value = false;
   }
@@ -240,6 +265,10 @@ function openEditor(resource: UpstreamResource) {
   });
   editVisible.value = true;
 }
+function openDiagnostics(resource: UpstreamResource) {
+  diagnosticResourceID.value = resource.id;
+  diagnosticsVisible.value = true;
+}
 async function saveResource() {
   if (!editingResource.value || mutating.value) {
     return;
@@ -272,13 +301,11 @@ async function toggleEnabled(resource: UpstreamResource) {
     mutating.value = false;
   }
 }
-async function restoreHealth(resource: UpstreamResource) {
+async function forceRestoreHealth(resource: UpstreamResource) {
   mutating.value = true;
   try {
-    await resourcePoolsApi.updateResource(props.poolId, resource.id, {
-      name: resource.name,
-      status: "active",
-    });
+    await resourcePoolsApi.updateResourceStatus(props.poolId, resource.id, "active");
+    message.success(t("resourcePools.forceRecoverCompleted", { count: 1 }));
     await loadResources();
   } finally {
     mutating.value = false;
@@ -291,6 +318,66 @@ async function updateSelectedEnabled(enabled: boolean) {
   mutating.value = true;
   try {
     await resourcePoolsApi.bulkUpdateResources(props.poolId, selectedIDs.value, { enabled });
+    await loadResources();
+  } finally {
+    mutating.value = false;
+  }
+}
+async function validateAndRecoverSelected() {
+  const groupID = selectedValidationGroupID.value;
+  const resourceIDs = [...selectedIDs.value];
+  if (!groupID || resourceIDs.length === 0 || batchTesting.value || mutating.value) {
+    return;
+  }
+  const validationGroupID = groupID;
+
+  batchTesting.value = true;
+  batchRecoverySummary.value = null;
+  const summary = { requested: resourceIDs.length, valid: 0, invalid: 0, errors: 0 };
+  let cursor = 0;
+  const workerCount = Math.min(4, resourceIDs.length);
+
+  async function validateNext() {
+    while (cursor < resourceIDs.length) {
+      const resourceID = resourceIDs[cursor++];
+      try {
+        const result = await resourcePoolsApi.testResource(
+          props.poolId,
+          resourceID,
+          validationGroupID
+        );
+        if (result.is_valid) {
+          summary.valid++;
+        } else {
+          summary.invalid++;
+        }
+      } catch {
+        summary.errors++;
+      }
+    }
+  }
+
+  try {
+    await Promise.all(Array.from({ length: workerCount }, () => validateNext()));
+    batchRecoverySummary.value = summary;
+    await loadResources();
+  } finally {
+    batchTesting.value = false;
+  }
+}
+async function forceRestoreSelected() {
+  const resourceIDs = [...selectedIDs.value];
+  if (resourceIDs.length === 0 || batchTesting.value || mutating.value) {
+    return;
+  }
+  mutating.value = true;
+  try {
+    const result = await resourcePoolsApi.bulkUpdateResourceStatus(
+      props.poolId,
+      resourceIDs,
+      "active"
+    );
+    message.success(t("resourcePools.forceRecoverCompleted", { count: result.updated_count }));
     await loadResources();
   } finally {
     mutating.value = false;
@@ -465,6 +552,7 @@ function balanceKindLabel(kind: string): string {
 function isResourceTestDisabled(): boolean {
   return (
     mutating.value ||
+    batchTesting.value ||
     validationGroupsLoading.value ||
     validationGroups.value.length === 0 ||
     testingResourceID.value !== null
@@ -472,6 +560,13 @@ function isResourceTestDisabled(): boolean {
 }
 function healthType(value: ResourceStatus): "success" | "error" {
   return value === "active" ? "success" : "error";
+}
+function failureReasonPreview(value: string): string {
+  const reason = value.trim();
+  if (/failed to send validation request|connection refused|connectex/i.test(reason)) {
+    return t("resourcePools.upstreamConnectionFailed");
+  }
+  return reason.length > 84 ? `${reason.slice(0, 81)}…` : reason;
 }
 function formatDate(value?: string): string {
   if (!value) {
@@ -524,22 +619,89 @@ function formatDate(value?: string): string {
       </n-button>
     </div>
 
+    <div class="state-guide" role="note">
+      <div>
+        <strong>{{ t("resourcePools.operatorEnablement") }}</strong>
+        <span>{{ t("resourcePools.operatorEnablementHelp") }}</span>
+      </div>
+      <div>
+        <strong>{{ t("resourcePools.runtimeHealth") }}</strong>
+        <span>{{ t("resourcePools.runtimeHealthHelp") }}</span>
+      </div>
+    </div>
+
+    <n-alert
+      v-if="batchRecoverySummary"
+      class="recovery-summary"
+      :type="
+        batchRecoverySummary.invalid === 0 && batchRecoverySummary.errors === 0
+          ? 'success'
+          : 'warning'
+      "
+      :title="t('resourcePools.batchRecoveryComplete')"
+      closable
+      @close="batchRecoverySummary = null"
+    >
+      {{
+        t("resourcePools.batchRecoverySummary", {
+          requested: batchRecoverySummary.requested,
+          valid: batchRecoverySummary.valid,
+          invalid: batchRecoverySummary.invalid,
+          errors: batchRecoverySummary.errors,
+        })
+      }}
+    </n-alert>
+
     <div v-if="selectedIDs.length" class="selection-bar" aria-live="polite">
       <strong>{{ t("resourcePools.selectedCount", { count: selectedIDs.length }) }}</strong>
       <div class="selection-actions">
-        <n-button size="small" :disabled="mutating" @click="updateSelectedEnabled(true)">
+        <n-select
+          v-if="validationGroups.length > 1"
+          v-model:value="selectedValidationGroupID"
+          class="validation-route-select"
+          size="small"
+          :options="validationRouteSelectOptions"
+          :placeholder="t('resourcePools.validationRoute')"
+        />
+        <n-button
+          size="small"
+          type="primary"
+          :disabled="mutating || validationGroupsLoading || validationGroups.length === 0"
+          :loading="batchTesting"
+          @click="validateAndRecoverSelected"
+        >
+          <template #icon><n-icon :component="PulseOutline" /></template>
+          {{ t("resourcePools.bulkValidateAndRecover") }}
+        </n-button>
+        <n-button
+          size="small"
+          :disabled="mutating || batchTesting"
+          @click="updateSelectedEnabled(true)"
+        >
           {{ t("resourcePools.bulkEnable") }}
         </n-button>
-        <n-button size="small" :disabled="mutating" @click="updateSelectedEnabled(false)">
+        <n-button
+          size="small"
+          :disabled="mutating || batchTesting"
+          @click="updateSelectedEnabled(false)"
+        >
           {{ t("resourcePools.bulkDisable") }}
         </n-button>
-        <n-button size="small" :disabled="mutating" @click="openScheduleEditor">
+        <n-button size="small" :disabled="mutating || batchTesting" @click="openScheduleEditor">
           <template #icon><n-icon :component="SettingsOutline" /></template>
           {{ t("resourcePools.setScheduling") }}
         </n-button>
+        <n-popconfirm @positive-click="forceRestoreSelected">
+          <template #trigger>
+            <n-button size="small" type="warning" :disabled="mutating || batchTesting">
+              {{ t("resourcePools.forceRecover") }}
+            </n-button>
+          </template>
+          {{ t("resourcePools.forceRecoverSelectedConfirm", { count: selectedIDs.length }) }}
+        </n-popconfirm>
         <n-popconfirm @positive-click="deleteSelected">
           <template #trigger>
-            <n-button size="small" type="error" :disabled="mutating">
+            <n-button size="small" type="error" :disabled="mutating || batchTesting">
               {{ t("common.delete") }}
             </n-button>
           </template>
@@ -597,7 +759,9 @@ function formatDate(value?: string): string {
                   })
                 }}
               </small>
-              <small v-else-if="resource.disabled_reason">{{ resource.disabled_reason }}</small>
+              <small v-else-if="resource.disabled_reason" :title="resource.disabled_reason">
+                {{ failureReasonPreview(resource.disabled_reason) }}
+              </small>
             </div>
             <div class="stacked compact-data" role="cell">
               <strong>
@@ -612,13 +776,31 @@ function formatDate(value?: string): string {
               <n-button
                 size="tiny"
                 quaternary
+                :aria-label="t('resourcePools.openDiagnostics')"
+                :title="t('resourcePools.openDiagnostics')"
+                :disabled="batchTesting"
+                @click="openDiagnostics(resource)"
+              >
+                <template #icon><n-icon :component="InformationCircleOutline" /></template>
+              </n-button>
+              <n-button
+                size="tiny"
+                quaternary
                 :aria-label="t('common.edit')"
+                :disabled="batchTesting"
                 @click="openEditor(resource)"
               >
                 <template #icon><n-icon :component="CreateOutline" /></template>
               </n-button>
-              <n-button size="tiny" secondary :disabled="mutating" @click="toggleEnabled(resource)">
-                {{ resource.enabled ? t("common.disable") : t("resourcePools.enable") }}
+              <n-button
+                size="tiny"
+                secondary
+                :disabled="mutating || batchTesting"
+                @click="toggleEnabled(resource)"
+              >
+                {{
+                  resource.enabled ? t("resourcePools.pauseScheduling") : t("resourcePools.enable")
+                }}
               </n-button>
               <n-dropdown
                 v-if="validationGroups.length > 1"
@@ -633,7 +815,11 @@ function formatDate(value?: string): string {
                   :loading="testingResourceID === resource.id"
                 >
                   <template #icon><n-icon :component="PulseOutline" /></template>
-                  {{ t("resourcePools.testKey") }}
+                  {{
+                    resource.status === "invalid"
+                      ? t("resourcePools.validateAndRecover")
+                      : t("resourcePools.testKey")
+                  }}
                 </n-button>
               </n-dropdown>
               <n-button
@@ -648,7 +834,11 @@ function formatDate(value?: string): string {
                 @click="testResource(resource)"
               >
                 <template #icon><n-icon :component="PulseOutline" /></template>
-                {{ t("resourcePools.testKey") }}
+                {{
+                  resource.status === "invalid"
+                    ? t("resourcePools.validateAndRecover")
+                    : t("resourcePools.testKey")
+                }}
               </n-button>
               <n-dropdown
                 v-if="balanceEndpointOptions.length > 1"
@@ -677,19 +867,31 @@ function formatDate(value?: string): string {
                 <template #icon><n-icon :component="WalletOutline" /></template>
                 {{ t("resourcePools.queryBalance") }}
               </n-button>
-              <n-button
+              <n-popconfirm
                 v-if="resource.status === 'invalid'"
-                size="tiny"
-                secondary
-                type="success"
-                :disabled="mutating"
-                @click="restoreHealth(resource)"
+                @positive-click="forceRestoreHealth(resource)"
               >
-                {{ t("resourcePools.restoreHealth") }}
-              </n-button>
+                <template #trigger>
+                  <n-button
+                    size="tiny"
+                    quaternary
+                    type="warning"
+                    :disabled="mutating || batchTesting"
+                  >
+                    {{ t("resourcePools.forceRecover") }}
+                  </n-button>
+                </template>
+                {{ t("resourcePools.forceRecoverConfirm") }}
+              </n-popconfirm>
               <n-popconfirm @positive-click="deleteOne(resource.id)">
                 <template #trigger>
-                  <n-button size="tiny" quaternary type="error" :aria-label="t('common.delete')">
+                  <n-button
+                    size="tiny"
+                    quaternary
+                    type="error"
+                    :aria-label="t('common.delete')"
+                    :disabled="batchTesting"
+                  >
                     <template #icon><n-icon :component="TrashOutline" /></template>
                   </n-button>
                 </template>
@@ -878,6 +1080,17 @@ function formatDate(value?: string): string {
         </template>
       </n-card>
     </n-modal>
+
+    <resource-diagnostics-drawer
+      v-model:show="diagnosticsVisible"
+      :resource="diagnosticResource"
+      :validation-groups="validationGroups"
+      :validating="testingResourceID === diagnosticResource?.id"
+      :mutating="mutating"
+      @validate="testResource"
+      @force-recover="forceRestoreHealth"
+      @toggle-scheduling="toggleEnabled"
+    />
   </div>
 </template>
 
@@ -900,6 +1113,32 @@ function formatDate(value?: string): string {
   flex-wrap: wrap;
   padding: 14px 20px;
   border-bottom: 1px solid var(--border-color-light);
+}
+.state-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--bg-secondary);
+}
+.state-guide > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 20px;
+}
+.state-guide > div + div {
+  border-left: 1px solid var(--border-color-light);
+}
+.state-guide strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+.state-guide span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.recovery-summary {
+  margin: 12px 20px 0;
 }
 .toolbar-summary {
   display: flex;
@@ -925,6 +1164,12 @@ function formatDate(value?: string): string {
   color: var(--text-primary);
   background: var(--primary-color-suppl);
   border-bottom: 1px solid var(--border-color-light);
+}
+.selection-actions {
+  flex-wrap: wrap;
+}
+.validation-route-select {
+  width: 210px;
 }
 .resource-table-wrap {
   max-width: 100%;
@@ -1095,6 +1340,17 @@ function formatDate(value?: string): string {
   .selection-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .state-guide {
+    grid-template-columns: 1fr;
+  }
+  .state-guide > div + div {
+    border-top: 1px solid var(--border-color-light);
+    border-left: 0;
+  }
+  .selection-actions,
+  .validation-route-select {
+    width: 100%;
   }
   .form-grid,
   .form-grid.two-equal {

@@ -32,6 +32,7 @@ import {
   NModal,
   NSelect,
   NSwitch,
+  NTag,
   NTooltip,
   useMessage,
   type FormRules,
@@ -203,6 +204,25 @@ const showAffinityFields = computed(() =>
 const showFillFirstFields = computed(() => formData.key_selection_strategy === "fill_first");
 const selectedResourcePool = computed(() =>
   resourcePools.value.find(pool => pool.id === formData.resource_pool_id)
+);
+const selectedResourceEndpoint = computed(() =>
+  resourceEndpoints.value.find(endpoint => endpoint.id === formData.resource_endpoint_id)
+);
+const routeContractReady = computed(() => {
+  if (formData.group_type === "aggregate") {
+    return true;
+  }
+  if (formData.resource_pool_id) {
+    return Boolean(selectedResourcePool.value && selectedResourceEndpoint.value);
+  }
+  return formData.upstreams.some(upstream => upstream.url.trim());
+});
+const overrideCount = computed(
+  () =>
+    formData.configItems.filter(item => item.key).length +
+    formData.header_rules.filter(rule => rule.key.trim()).length +
+    (formData.param_overrides.trim() ? 1 : 0) +
+    (formData.model_redirect_rules.trim() ? 1 : 0)
 );
 
 // 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
@@ -1067,6 +1087,51 @@ function buildSchedulerConfig(): Record<string, number | string> {
           <p v-else class="routing-source-help">{{ t("resourcePools.legacyRoutingHelp") }}</p>
         </div>
 
+        <section v-if="formData.group_type !== 'aggregate'" class="route-contract">
+          <header>
+            <div>
+              <h4>{{ t("keys.routeContract") }}</h4>
+              <p>{{ t("keys.routeContractHelp") }}</p>
+            </div>
+            <n-tag size="small" :type="routeContractReady ? 'success' : 'warning'">
+              {{ routeContractReady ? t("keys.routeReady") : t("keys.routeNeedsAttention") }}
+            </n-tag>
+          </header>
+          <div class="route-flow">
+            <div>
+              <span>1</span>
+              <strong>{{ t("keys.downstreamGateway") }}</strong>
+              <code>/proxy/{{ formData.name || "group-name" }}</code>
+            </div>
+            <div>
+              <span>2</span>
+              <strong>{{ formData.display_name || formData.name || t("keys.groupRoute") }}</strong>
+              <small>{{ formData.channel_type }}</small>
+            </div>
+            <div>
+              <span>3</span>
+              <strong>
+                {{
+                  formData.resource_pool_id
+                    ? selectedResourcePool?.name || t("resourcePools.selectPool")
+                    : t("resourcePools.legacyRouting")
+                }}
+              </strong>
+              <small>
+                {{
+                  formData.resource_pool_id
+                    ? selectedResourceEndpoint?.base_url || t("resourcePools.selectEndpoint")
+                    : formData.upstreams.find(item => item.url.trim())?.url ||
+                      t("keys.enterUpstreamUrl")
+                }}
+              </small>
+            </div>
+          </div>
+          <footer>
+            {{ t("keys.overrideSummary", { count: overrideCount }) }}
+          </footer>
+        </section>
+
         <!-- Upstream addresses -->
         <div v-if="!formData.resource_pool_id" class="form-section" style="margin-top: 10px">
           <h4 class="section-title">{{ t("keys.upstreamAddresses") }}</h4>
@@ -1676,6 +1741,85 @@ function buildSchedulerConfig(): Record<string, number | string> {
   font-size: 0.82rem;
   line-height: 1.5;
 }
+.route-contract {
+  margin-top: 16px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--border-radius-lg);
+}
+.route-contract header,
+.route-contract footer {
+  padding: 12px 14px;
+}
+.route-contract header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color-light);
+}
+.route-contract h4,
+.route-contract p {
+  margin: 0;
+}
+.route-contract h4 {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+.route-contract p,
+.route-contract footer {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+.route-contract p {
+  margin-top: 3px;
+}
+.route-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.route-flow > div {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 14px;
+  border-right: 1px solid var(--border-color-light);
+}
+.route-flow > div:last-child {
+  border-right: 0;
+}
+.route-flow span {
+  grid-row: 1 / 3;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+}
+.route-flow strong,
+.route-flow code,
+.route-flow small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-flow strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+.route-flow code,
+.route-flow small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+.route-contract footer {
+  border-top: 1px solid var(--border-color-light);
+}
 
 :deep(.n-form-item-label) {
   font-weight: 500;
@@ -1961,6 +2105,19 @@ function buildSchedulerConfig(): Record<string, number | string> {
 
   .scheduler-grid {
     grid-template-columns: 1fr;
+  }
+
+  .route-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .route-flow > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color-light);
+  }
+
+  .route-flow > div:last-child {
+    border-bottom: 0;
   }
 
   .upstream-weight {
