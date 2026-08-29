@@ -5,10 +5,15 @@ import EncryptionMismatchAlert from "@/components/EncryptionMismatchAlert.vue";
 import LineChart from "@/components/LineChart.vue";
 import SecurityAlert from "@/components/SecurityAlert.vue";
 import type { DashboardStatsResponse } from "@/types/models";
-import { NSpace } from "naive-ui";
+import { ListOutline, PulseOutline } from "@vicons/ionicons5";
+import { NButton, NIcon, NSpace } from "naive-ui";
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 
 const dashboardStats = ref<DashboardStatsResponse | null>(null);
+const { t } = useI18n();
+const router = useRouter();
 
 onMounted(async () => {
   try {
@@ -23,6 +28,22 @@ onMounted(async () => {
 <template>
   <div class="dashboard-container">
     <n-space vertical size="large" style="gap: 0 16px">
+      <header class="dashboard-intro">
+        <div>
+          <h1>{{ t("dashboard.providerOperations") }}</h1>
+          <p>{{ t("dashboard.providerOperationsHelp") }}</p>
+        </div>
+        <div class="dashboard-actions">
+          <n-button secondary @click="router.push('/logs')">
+            <template #icon><n-icon :component="ListOutline" /></template>
+            {{ t("dashboard.inspectRequests") }}
+          </n-button>
+          <n-button type="primary" @click="router.push('/resource-pools')">
+            <template #icon><n-icon :component="PulseOutline" /></template>
+            {{ t("dashboard.manageCapacity") }}
+          </n-button>
+        </div>
+      </header>
       <!-- 加密配置错误警告（优先级最高） -->
       <encryption-mismatch-alert />
 
@@ -39,38 +60,42 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.dashboard-header-card {
-  background: var(--card-bg);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color-light);
-  animation: fadeInUp 0.2s ease-out;
+.dashboard-container {
+  display: grid;
+  gap: 16px;
 }
-
-.dashboard-title {
-  font-family: var(--font-display);
-  font-size: 2.25rem;
-  font-weight: 700;
+.dashboard-intro,
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dashboard-intro {
+  justify-content: space-between;
+  padding: 4px 0 8px;
+}
+.dashboard-intro h1 {
   margin: 0;
-  letter-spacing: 0;
+  color: var(--text-primary);
+  font-size: 1.55rem;
+  text-wrap: balance;
 }
-
-.dashboard-subtitle {
-  font-size: 1.1rem;
-  font-weight: 500;
+.dashboard-intro p {
+  max-width: 72ch;
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
 }
-
-.dashboard-chart {
-  animation: fadeInUp 0.2s ease-out 0.2s both;
+.dashboard-actions {
+  flex-shrink: 0;
 }
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+@media (max-width: 720px) {
+  .dashboard-intro {
+    align-items: stretch;
+    flex-direction: column;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .dashboard-actions > :deep(*) {
+    flex: 1;
   }
 }
 </style>

@@ -66,3 +66,66 @@ func TestTOK003DashboardAggregatesTokenUsageByModel(t *testing.T) {
 		t.Fatalf("unexpected token aggregate: %#v", item)
 	}
 }
+
+func TestDASH001ProviderCapacityIncludesLegacyAndPooledCredentials(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:dashboard-capacity?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(
+		&models.APIKey{}, &models.UpstreamResource{}, &models.ResourcePool{},
+		&models.ResourcePoolEndpoint{}, &models.Group{}, &models.RequestLog{},
+	); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	future := now.Add(time.Hour)
+	pool := models.ResourcePool{Name: "capacity", Strategy: "round_robin", AffinityTTLSeconds: 3600, BusyWaitMilliseconds: 2000}
+	if err := db.Create(&pool).Error; err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	endpoint := models.ResourcePoolEndpoint{ResourcePoolID: pool.ID, Name: "openai", ChannelType: "openai", BaseURL: "https://api.example.invalid", Enabled: models.Bool(true)}
+	if err := db.Create(&endpoint).Error; err != nil {
+		t.Fatalf("create endpoint: %v", err)
+	}
+	poolID, endpointID := pool.ID, endpoint.ID
+	group := models.Group{Name: "pooled", GroupType: "standard", ResourcePoolID: &poolID, ResourceEndpointID: &endpointID, ChannelType: "openai", Upstreams: []byte("[]")}
+	if err := db.Create(&group).Error; err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	legacy := []models.APIKey{
+		{GroupID: group.ID, KeyValue: "a", Enabled: models.Bool(true), Status: models.KeyStatusActive},
+		{GroupID: group.ID, KeyValue: "b", Enabled: models.Bool(false), Status: models.KeyStatusActive},
+	}
+	resources := []models.UpstreamResource{
+		{ResourcePoolID: pool.ID, KeyValue: "c", KeyHash: "c", IdentityHash: "c", Enabled: models.Bool(true), Status: models.ResourceStatusInvalid},
+		{ResourcePoolID: pool.ID, KeyValue: "d", KeyHash: "d", IdentityHash: "d", Enabled: models.Bool(true), Status: models.ResourceStatusActive, GlobalCooldownUntil: &future},
+	}
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatalf("create legacy keys: %v", err)
+	}
+	if err := db.Create(&resources).Error; err != nil {
+		t.Fatalf("create pooled resources: %v", err)
+	}
+	logs := []models.RequestLog{
+		{ID: "retry", TraceID: "trace", Attempt: 1, Timestamp: now.Add(-time.Hour), GroupID: group.ID, RequestType: models.RequestTypeRetry},
+		{ID: "final", TraceID: "trace", Attempt: 2, Timestamp: now.Add(-time.Hour), GroupID: group.ID, RequestType: models.RequestTypeFinal},
+	}
+	if err := db.Create(&logs).Error; err != nil {
+		t.Fatalf("create request logs: %v", err)
+	}
+
+	server := &Server{DB: db}
+	capacity, err := server.getProviderCapacity(now, 1)
+	if err != nil {
+		t.Fatalf("get provider capacity: %v", err)
+	}
+	if capacity.TotalCredentials != 4 || capacity.ReadyCredentials != 1 ||
+		capacity.AutoDisabledCredentials != 1 || capacity.PausedCredentials != 1 ||
+		capacity.CoolingCredentials != 1 || capacity.ResourcePools != 1 ||
+		capacity.ProtocolEndpoints != 1 || capacity.PoolBoundRoutes != 1 ||
+		capacity.RetryAttempts24H != 1 || capacity.RetryRate24H != 50 {
+		t.Fatalf("unexpected provider capacity: %#v", capacity)
+	}
+}

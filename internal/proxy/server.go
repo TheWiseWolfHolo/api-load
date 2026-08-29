@@ -24,6 +24,7 @@ import (
 	"api-load/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -65,6 +66,7 @@ func NewProxyServer(
 // HandleProxy is the main entry point for proxy requests, refactored based on the stable .bak logic.
 func (ps *ProxyServer) HandleProxy(c *gin.Context) {
 	startTime := time.Now()
+	c.Set(requestTraceIDContextKey, uuid.NewString())
 	groupName := c.Param("group_name")
 
 	originalGroup, err := ps.groupManager.GetGroupByName(groupName)
@@ -143,6 +145,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	retryCount int,
 	excludedKeyIDs []uint,
 ) {
+	c.Set(requestAttemptContextKey, retryCount+1)
 	cfg := group.EffectiveConfig
 
 	selectionReq := keypool.SelectionRequest{
@@ -521,6 +524,8 @@ func extractProxyKeyForAffinity(c *gin.Context) string {
 
 const (
 	requestAffinityContextKey       = "api_load_request_affinity"
+	requestTraceIDContextKey        = "api_load_request_trace_id"
+	requestAttemptContextKey        = "api_load_request_attempt"
 	upstreamResourceIDContextKey    = "api_load_upstream_resource_id"
 	upstreamObjectRoutingContextKey = "api_load_upstream_object_routing"
 )
@@ -566,6 +571,16 @@ func (ps *ProxyServer) logRequest(
 		IsStream:     isStream,
 		UpstreamAddr: utils.TruncateString(upstreamAddr, 500),
 		RequestBody:  requestBodyToLog,
+	}
+	if value, ok := c.Get(requestTraceIDContextKey); ok {
+		if traceID, ok := value.(string); ok {
+			logEntry.TraceID = traceID
+		}
+	}
+	if value, ok := c.Get(requestAttemptContextKey); ok {
+		if attempt, ok := value.(int); ok {
+			logEntry.Attempt = attempt
+		}
 	}
 	if value, ok := c.Get(upstreamResourceIDContextKey); ok {
 		if resourceID, ok := value.(uint); ok {

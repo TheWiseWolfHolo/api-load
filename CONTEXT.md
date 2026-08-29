@@ -6,6 +6,18 @@ api-load is the single scheduler for official upstream credentials. It exposes p
 
 ## Core terms
 
+### Provider scheduler
+
+api-load is the provider scheduler. It owns upstream capacity, credential health, routing affinity, and failover for downstream gateways, but it does not own end-user accounts, balances, or billing.
+
+_Avoid_: distribution platform, billing gateway
+
+### Downstream distribution gateway
+
+A downstream distribution gateway consumes api-load protocol groups and owns end-user authentication, tokens, quotas, model distribution, and billing. New API is the current downstream distribution gateway.
+
+_Avoid_: upstream provider, credential scheduler
+
 ### Resource pool
 
 A resource pool is the ownership boundary for a set of shared credentials. It owns scheduling policy, affinity TTL, busy-wait behavior, and optional quota auto-restore settings.
@@ -15,6 +27,18 @@ A resource pool is the ownership boundary for a set of shared credentials. It ow
 A shared credential is one upstream API key inside a resource pool. Its enabled state, health state, priority, weight, usage counters, failure counters, cooldown, and affinity are global within that pool.
 
 The same credential is never duplicated merely because it can be used through multiple API formats or base URLs.
+
+### Operator enablement
+
+Operator enablement is the administrator's explicit permission for a credential to participate in scheduling. It is independent of whether the credential is currently healthy.
+
+_Avoid_: health, validity
+
+### Runtime health
+
+Runtime health is the scheduler's current assessment of whether a credential can serve requests. Recovery from an unhealthy state requires successful validation unless an administrator uses an explicit force-recovery action.
+
+_Avoid_: enabled, disabled by administrator
 
 ### Protocol endpoint
 

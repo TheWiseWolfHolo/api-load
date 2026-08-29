@@ -38,6 +38,9 @@ func NewLogService(db *gorm.DB, encryptionSvc encryption.Service) *LogService {
 // logFiltersScope returns a GORM scope function that applies filters from the Gin context.
 func (s *LogService) logFiltersScope(c *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
+		if traceID := c.Query("trace_id"); traceID != "" {
+			db = db.Where("trace_id = ?", traceID)
+		}
 		if parentGroupName := c.Query("parent_group_name"); parentGroupName != "" {
 			db = db.Where("parent_group_name LIKE ?", "%"+parentGroupName+"%")
 		}

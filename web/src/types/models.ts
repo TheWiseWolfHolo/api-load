@@ -380,6 +380,8 @@ export interface TaskInfo {
 // Based on backend response
 export interface RequestLog {
   id: string;
+  trace_id: string;
+  attempt: number;
   timestamp: string;
   group_id: number;
   key_id: number;
@@ -422,6 +424,7 @@ export interface LogsResponse {
 export interface LogFilter {
   page?: number;
   page_size?: number;
+  trace_id?: string;
   group_name?: string;
   parent_group_name?: string;
   key_value?: string;
@@ -471,7 +474,21 @@ export interface DashboardStatsResponse {
   rpm: StatCard;
   request_count: StatCard;
   error_rate: StatCard;
+  provider_capacity: ProviderCapacity;
   security_warnings: SecurityWarning[];
+}
+
+export interface ProviderCapacity {
+  total_credentials: number;
+  ready_credentials: number;
+  auto_disabled_credentials: number;
+  paused_credentials: number;
+  cooling_credentials: number;
+  resource_pools: number;
+  protocol_endpoints: number;
+  pool_bound_routes: number;
+  retry_attempts_24h: number;
+  retry_rate_24h: number;
 }
 
 export interface TokenStatsItem {

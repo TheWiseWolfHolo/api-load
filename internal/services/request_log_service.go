@@ -215,7 +215,7 @@ func (s *RequestLogService) Stop(ctx context.Context) {
 
 // Record logs a request to the database and cache
 func (s *RequestLogService) Record(log *models.RequestLog) error {
-	log.ID = uuid.NewString()
+	normalizeRequestLogIdentity(log)
 	log.Timestamp = time.Now()
 
 	if s.settingsManager.GetSettings().RequestLogWriteIntervalMinutes == 0 {
@@ -235,6 +235,21 @@ func (s *RequestLogService) Record(log *models.RequestLog) error {
 	}
 
 	return s.store.SAdd(PendingLogKeysSet, cacheKey)
+}
+
+func normalizeRequestLogIdentity(log *models.RequestLog) {
+	if log == nil {
+		return
+	}
+	if log.ID == "" {
+		log.ID = uuid.NewString()
+	}
+	if log.TraceID == "" {
+		log.TraceID = log.ID
+	}
+	if log.Attempt < 1 {
+		log.Attempt = 1
+	}
 }
 
 // flush data from cache to database
