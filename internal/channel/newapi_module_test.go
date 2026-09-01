@@ -44,7 +44,7 @@ func TestNewAPIChannelContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve(New API) error = %v", err)
 	}
-	if target.ProviderKind != ProviderKind("newapi") || target.CatalogProviderID != "" {
+	if target.ProviderKind != ProviderMultiProtocolGateway || target.CatalogProviderID != "" {
 		t.Fatalf("New API target = %#v", target)
 	}
 	if got := string(target.TargetConfig); got != `{"base_url":"https://relay.example/team-a"}` {

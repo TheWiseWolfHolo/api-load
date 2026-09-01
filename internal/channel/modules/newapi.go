@@ -27,7 +27,7 @@ func NewAPI() spec.Module {
 				Required: true, Sensitive: true, Normalizer: spec.NormalizeNonEmpty,
 			}},
 			Provider: spec.ProviderBinding{
-				ProviderKind:   spec.ProviderNewAPI,
+				ProviderKind:   spec.ProviderMultiProtocolGateway,
 				EndpointPolicy: spec.EndpointRequiredBaseURL,
 			},
 			Routes: []spec.Route{
