@@ -403,8 +403,9 @@ export default {
             s3: '初回インポート後にモデル一覧を取得してください',
           },
           'claude-code': {
-            s1: 'Claude Code を起動するシェルで上のコマンドを実行します',
-            s2: 'ゲートウェイのモデルが /model の From gateway に表示されます',
+            s1: 'YOUR_MODEL をこのアクセスキーで利用可能なモデル ID に置き換え、上のコマンドを実行します',
+            s2: '同じシェルで Claude Code を起動または再起動します。指定モデルが起動時に使われ、/model にカスタム項目として追加されます',
+            s3: '自動検出では ID に claude または anthropic を含むゲートウェイモデルも対象になります（大文字・小文字は区別しません）',
           },
           'open-webui': {
             s1: '管理者設定 → Connections → OpenAI → 接続を追加',
