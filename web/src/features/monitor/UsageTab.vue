@@ -95,6 +95,13 @@ const accessKeysQuery = useQuery({
 })
 const usageQuery = useQuery(usageQueryOptions(client, appliedFilters))
 const report = computed(() => usageQuery.data.value)
+// 切换筛选时的占位报告只用于过渡展示，不能作为跨页导航的时间依据。
+const navigationReport = computed(() =>
+  usageQuery.isPlaceholderData.value ? undefined : report.value,
+)
+const navigationPending = computed(
+  () => usageQuery.isFetching.value && navigationReport.value === undefined,
+)
 const distributionDimension = ref<UsageDistributionDimension>('model')
 const distributionMetric = ref<UsageDistributionMetric>('cost')
 const distribution = computed(() => {
@@ -288,6 +295,7 @@ const barTrendSeries = computed<UsageBarDatum[]>(() => {
 watch(
   [
     () => appliedFilters.value.range,
+    () => appliedFilters.value.access_key_id,
     () => appliedFilters.value.group_id,
     () => appliedFilters.value.channel_id,
     () => appliedFilters.value.credential_id,
@@ -359,7 +367,7 @@ async function applyFilters(): Promise<void> {
   const errors = validateUsageFilterDraft(draft.value)
   filterErrors.value = errors
   if (Object.keys(errors).length > 0) return
-  await navigate(applyUsageFilterDraft(draft.value))
+  await navigate({ ...applyUsageFilterDraft(draft.value), at_ms: appliedFilters.value.at_ms })
 }
 
 async function resetFilters(): Promise<void> {
@@ -417,7 +425,7 @@ async function refresh(): Promise<void> {
   ])
 }
 
-defineExpose({ openFilters, refresh })
+defineExpose({ openFilters, refresh, navigationReport, navigationPending })
 </script>
 
 <template>
@@ -639,6 +647,13 @@ defineExpose({ openFilters, refresh })
             :groups="groupsQuery.data.value ?? []"
             :channels="channelsQuery.data.value?.items ?? []"
             :access-keys="accessKeysQuery.data.value ?? []"
+            @select-access-key="
+              navigate({
+                ...appliedFilters,
+                access_key_id: $event,
+                at_ms: appliedFilters.at_ms ?? report.observed_at_ms,
+              })
+            "
           />
         </section>
 
@@ -693,6 +708,8 @@ defineExpose({ openFilters, refresh })
       :errors="filterErrors"
       :groups="groupsQuery.data.value ?? []"
       :channels="channelsQuery.data.value?.items ?? []"
+      :access-keys="accessKeysQuery.data.value ?? []"
+      :access-keys-failed="accessKeysQuery.isError.value"
       :groups-failed="groupsQuery.isError.value"
       :channels-failed="channelsQuery.isError.value"
       :self-scoped="isAccessKey"
