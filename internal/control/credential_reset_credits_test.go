@@ -71,6 +71,7 @@ func TestConsumeCredentialResetCreditReportsPendingForPartialObservation(t *test
 		context.Context,
 		channel.ID,
 		subscriptionruntime.Credential,
+		subscriptionruntime.Target,
 	) (subscriptionruntime.Observation, error) {
 		return subscriptionruntime.Observation{
 			Payload: []byte(`{"plan_summary":{"name":"Claude Team"},"quota_windows":[]}`),
@@ -410,7 +411,7 @@ func TestConsumeCredentialResetCreditRecoversStalePreparedOperationWithSameKey(t
 	if err := fixture.db.Take(&credential, credentialID).Error; err != nil {
 		t.Fatal(err)
 	}
-	digest := resetCreditRequestDigest(groupID, credentialID, credential.IdentityFingerprint)
+	digest := resetCreditRequestDigest(groupID, credentialID, credential.IdentityFingerprint, "")
 	staleMS := now.Add(-defaultSubscriptionControlTimeout - time.Second).UnixMilli()
 	if err := fixture.db.Create(&models.CredentialResetOperation{
 		IdempotencyKey: resetCreditTestKey, RequestDigest: digest[:], GroupID: groupID,
