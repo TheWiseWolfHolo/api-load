@@ -602,6 +602,15 @@ export default {
         from: 'From',
         to: 'To',
         quickRanges: 'Quick time ranges',
+        quickDisplay: {
+          '1h': 'Last 1 hour',
+          '6h': 'Last 6 hours',
+          '24h': 'Last 24 hours',
+          '3d': 'Last 3 days',
+          '7d': 'Last 7 days',
+          '15d': 'Last 15 days',
+          '30d': 'Last 30 days',
+        },
         quick: {
           today: 'Today',
           yesterday: 'Yesterday',
@@ -666,13 +675,15 @@ export default {
         lastRefreshed: 'Last successful refresh',
         remove: 'Remove filter {value}',
         advancedTitle: 'More filters',
-        advancedDescription: 'Filter by request, retry attempts, final result, and numeric ranges.',
+        advancedDescription:
+          'Filter by request, upstream attempts, response timing, tokens, and cost.',
         closeAdvanced: 'Close more filters',
         sections: {
-          request: 'Request',
-          attempt: 'Retry attempts',
-          result: 'Final result',
-          ranges: 'Numeric ranges',
+          request: 'Request and response',
+          attempt: 'Upstream attempts and retries',
+          timing: 'Response timing',
+          usage: 'Tokens and cache',
+          cost: 'Cost and pricing',
         },
         retryState: { retried: 'Retried', not_retried: 'Not retried' },
         usageState: {

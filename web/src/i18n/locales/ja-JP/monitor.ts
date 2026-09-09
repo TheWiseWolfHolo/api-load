@@ -601,6 +601,15 @@ export default {
         from: '開始時刻',
         to: '終了時刻',
         quickRanges: 'クイック時間範囲',
+        quickDisplay: {
+          '1h': '過去 1 時間',
+          '6h': '過去 6 時間',
+          '24h': '過去 24 時間',
+          '3d': '過去 3 日',
+          '7d': '過去 7 日',
+          '15d': '過去 15 日',
+          '30d': '過去 30 日',
+        },
         quick: {
           today: '今日',
           yesterday: '昨日',
@@ -665,13 +674,15 @@ export default {
         lastRefreshed: '最終成功更新',
         remove: 'フィルター {value} を削除',
         advancedTitle: 'その他のフィルター',
-        advancedDescription: 'リクエスト、再試行、最終結果、数値範囲で絞り込みます。',
+        advancedDescription:
+          'リクエスト、アップストリームの試行、応答時間、トークン、コストで絞り込みます。',
         closeAdvanced: 'その他のフィルターを閉じる',
         sections: {
-          request: 'リクエスト',
-          attempt: '再試行',
-          result: '最終結果',
-          ranges: '数値範囲',
+          request: 'リクエストとレスポンス',
+          attempt: 'アップストリームの試行と再試行',
+          timing: '応答時間',
+          usage: 'トークンとキャッシュ',
+          cost: 'コストと料金計算',
         },
         retryState: { retried: '再試行あり', not_retried: '再試行なし' },
         usageState: {
