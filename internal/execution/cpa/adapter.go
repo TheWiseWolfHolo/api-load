@@ -212,6 +212,9 @@ func (a *Adapter) Execute(ctx context.Context, spec execution.AttemptSpec) (resu
 	}
 	if err != nil {
 		result := unaryExecutionError(execCtx, provider, err, credential)
+		if result.ResponseStarted {
+			result.Header = subscriptionResponseHeaders(response.Headers, "application/json")
+		}
 		if result.Error != nil && execution.UpstreamCountTokensUnsupported(
 			spec.Operation,
 			result.Error.StatusCode,
@@ -330,6 +333,9 @@ func (a *Adapter) ExecuteStream(
 	}
 	if err != nil {
 		result := unaryExecutionError(streamCtx, provider, err, credential)
+		if response != nil && result.ResponseStarted {
+			result.Header = subscriptionResponseHeaders(response.Headers, "application/json")
+		}
 		var applied *reasoning.Config
 		if response != nil {
 			applied = appliedReasoning(response.AppliedReasoningEffort)

@@ -264,7 +264,10 @@ const credentialTestDialogResult = computed(() => {
   }
 })
 const hasChangedConditions = computed(
-  () => filters.value.q !== undefined || filters.value.status !== undefined,
+  () =>
+    filters.value.q !== undefined ||
+    filters.value.status !== undefined ||
+    filters.value.model_cooldown === true,
 )
 const statusSummaryItems = computed(() => {
   const summary = collection.value?.summary
@@ -321,7 +324,13 @@ watch(
 )
 
 watch(
-  () => [filters.value.status, filters.value.q, filters.value.page, filters.value.page_size],
+  () => [
+    filters.value.status,
+    filters.value.q,
+    filters.value.page,
+    filters.value.page_size,
+    filters.value.model_cooldown,
+  ],
   () => {
     selectedIds.value = new Set()
   },
@@ -370,7 +379,9 @@ function updateRoute(
 }
 
 function setFilter(
-  patch: Partial<Pick<CredentialCollectionFilters, 'q' | 'status' | 'page_size'>>,
+  patch: Partial<
+    Pick<CredentialCollectionFilters, 'q' | 'status' | 'page_size' | 'model_cooldown'>
+  >,
 ): void {
   updateRoute({ ...filters.value, ...patch, page: 1 })
 }
@@ -455,6 +466,7 @@ function currentSelectionContext(): string {
   return JSON.stringify({
     groupId: props.groupId,
     status: filters.value.status ?? null,
+    modelCooldown: filters.value.model_cooldown ?? false,
     query: filters.value.q ?? null,
     page: filters.value.page,
     pageSize: filters.value.page_size,
@@ -643,7 +655,7 @@ async function refetchActiveCredentialPage(): Promise<void> {
   )
 }
 
-async function reconcileItem(result: CredentialItemDto, refetchActive: boolean): Promise<void> {
+async function reconcileItem(result: CredentialItemDto, refetchActive: boolean): Promise<boolean> {
   try {
     const current = cachedCurrentCredential(result.credential_id)
     if (current !== undefined && current.secret_version !== result.secret_version) {
@@ -663,9 +675,13 @@ async function reconcileItem(result: CredentialItemDto, refetchActive: boolean):
       }
     }
     await refetchGroupSummary()
+    await queryClient.invalidateQueries({ queryKey: controlQueryKeys.health() })
+    await queryClient.invalidateQueries({ queryKey: controlQueryKeys.groups.collectionAll })
+    return true
   } catch {
     feedback.value = t('group.credentials.reconcileFailed')
     await invalidateReconciliationQueries()
+    return false
   }
 }
 
@@ -711,7 +727,7 @@ async function refreshCredentialToken(item: CredentialItemDto): Promise<void> {
   try {
     const result = await refreshCredentialRequest(client, props.groupId, item.credential_id)
     clearDetailState(item.credential_id)
-    await reconcileItem(result, true)
+    if (!(await reconcileItem(result, true))) return
     toast.show({
       message: t('group.credentials.subscription.refreshCredentialSucceeded'),
       tone: 'success',
@@ -966,18 +982,18 @@ async function confirmResetCredit(): Promise<void> {
       target.idempotencyKey,
     )
     const observationPending = result.observation_pending || result.observation?.state !== 'fresh'
-    if (result.observation) {
-      await reconcileItem({ ...target.item, observation: result.observation }, false)
-    } else {
-      try {
-        await refetchActiveCredentialPage()
-      } catch {
-        await invalidateReconciliationQueries()
-      }
+    let reconciled = false
+    try {
+      clearDetailState(target.item.credential_id)
+      const detail = await getCredentialDetail(client, props.groupId, target.item.credential_id)
+      reconciled = await reconcileItem(detail.credential, true)
+    } catch {
+      feedback.value = t('group.credentials.reconcileFailed')
+      await invalidateReconciliationQueries()
     }
-    if (observationPending) {
+    if (reconciled && observationPending) {
       feedback.value = t('group.credentials.subscription.consumeResetCreditPending')
-    } else {
+    } else if (reconciled) {
       toast.show({
         message: t('group.credentials.subscription.consumeResetCreditSucceeded'),
         tone: 'success',
@@ -1351,6 +1367,7 @@ async function confirmTestedCredentialRestore(): Promise<void> {
   credentialTestRestoreError.value = undefined
   setPending(item.credential_id, 'test-restore', true)
   let restored = false
+  let reconciled = false
   try {
     const restoredItem = await restoreTestedCredential(
       client,
@@ -1359,7 +1376,7 @@ async function confirmTestedCredentialRestore(): Promise<void> {
       result.restore_proof,
     )
     if (owner !== credentialTestOwner || groupID !== props.groupId) return
-    await reconcileItem(restoredItem, true)
+    reconciled = await reconcileItem(restoredItem, true)
     restored = true
   } catch (cause) {
     if (owner !== credentialTestOwner || groupID !== props.groupId) return
@@ -1381,10 +1398,12 @@ async function confirmTestedCredentialRestore(): Promise<void> {
     }
   }
   if (!restored || owner !== credentialTestOwner || groupID !== props.groupId) return
-  toast.show({
-    message: t('group.credentials.test.restoreSucceeded'),
-    tone: 'success',
-  })
+  if (reconciled) {
+    toast.show({
+      message: t('group.credentials.test.restoreSucceeded'),
+      tone: 'success',
+    })
+  }
   resetCredentialTestState()
 }
 
@@ -1660,6 +1679,22 @@ async function runBatch(
             </AppButton>
           </span>
         </label>
+        <label class="group-credentials__model-filter">
+          <input
+            type="checkbox"
+            :checked="filters.model_cooldown === true"
+            @change="
+              setFilter({
+                model_cooldown: ($event.target as HTMLInputElement).checked ? true : undefined,
+              })
+            "
+          />
+          {{
+            t('group.credentials.modelCooldown.credentialCount', {
+              count: n(collection.summary.model_cooldown),
+            })
+          }}
+        </label>
         <CredentialBatchBar
           :selected-count="selectedCount"
           :all-visible-selected="allVisibleSelected"
@@ -1891,6 +1926,13 @@ async function runBatch(
 </template>
 
 <style scoped>
+.group-credentials__model-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-label-xs);
+  white-space: nowrap;
+}
 .group-credentials {
   display: grid;
   min-width: 0;
@@ -1909,7 +1951,7 @@ async function runBatch(
 }
 .group-credentials__tools {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, max-content);
+  grid-template-columns: minmax(260px, 1fr) auto minmax(0, max-content);
   align-items: start;
   gap: 10px;
   border-bottom: 1px solid var(--color-border-subtle);
