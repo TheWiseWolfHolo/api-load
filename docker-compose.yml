@@ -1,6 +1,6 @@
 services:
-  gpt-load:
-    image: ghcr.io/tbphp/gpt-load:2
+  api-load:
+    image: ghcr.io/thewisewolfholo/api-load:v2-candidate
     # build:
     #   context: .
     #   dockerfile: Dockerfile
@@ -18,7 +18,7 @@ services:
       DATA_DIR: /app/data
     restart: always
     volumes:
-      - gpt-load-data:/app/data
+      - api-load-v2-data:/app/data
     stop_grace_period: ${CONTAINER_STOP_GRACE_PERIOD:-15s}
     healthcheck:
       test: wget -q --spider -T 10 -O /dev/null http://localhost:${PORT:-3001}/health
@@ -28,4 +28,4 @@ services:
       start_period: 40s
 
 volumes:
-  gpt-load-data:
+  api-load-v2-data:

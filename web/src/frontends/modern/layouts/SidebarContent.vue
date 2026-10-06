@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { BookOpen, Heart, Send } from '@lucide/vue'
-import { computed, ref, useId } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
@@ -18,8 +18,6 @@ const emit = defineEmits<{ navigate: [] }>()
 const route = useRoute()
 const { t } = useI18n()
 const { resolvedTheme } = usePreferences()
-const mascot = ref<InstanceType<typeof BrandLogo>>()
-const mascotHint = useId()
 const navigation = useNavigation()
 const sections = computed(() =>
   navigationSections.filter((section) => navigation.value.some((item) => item.section === section)),
@@ -27,7 +25,7 @@ const sections = computed(() =>
 const footerLinks = computed(() => [
   { label: t('shell.documentation'), href: 'https://www.gpt-load.com/docs', icon: BookOpen },
   { label: t('shell.sponsor'), href: 'https://www.gpt-load.com/sponsor', icon: Heart },
-  { label: 'GitHub', href: 'https://github.com/tbphp/gpt-load', icon: GitHubIcon },
+  { label: 'GitHub', href: 'https://github.com/TheWiseWolfHolo/api-load', icon: GitHubIcon },
   { label: 'Telegram', href: 'https://t.me/+GHpy5SwEllg3MTUx', icon: Send },
 ])
 </script>
@@ -38,13 +36,10 @@ const footerLinks = computed(() => [
       class="modern-sidebar-brand"
       :to="{ name: 'modern-home' }"
       :aria-label="t('shell.goHome')"
-      :aria-describedby="mascotHint"
       @click="emit('navigate')"
-      @keydown.space.prevent="!$event.repeat && mascot?.nudge()"
     >
-      <BrandLogo ref="mascot" :compact="collapsed" :resolved-theme="resolvedTheme" />
+      <BrandLogo :compact="collapsed" :resolved-theme="resolvedTheme" />
     </RouterLink>
-    <span :id="mascotHint" class="modern-sr-only">{{ t('shell.mascotHint') }}</span>
     <nav class="modern-sidebar-navigation" :aria-label="t('navigation')">
       <div v-for="section in sections" :key="section" class="modern-nav-section">
         <p v-if="!collapsed" class="modern-nav-section__label">{{ t(`sections.${section}`) }}</p>

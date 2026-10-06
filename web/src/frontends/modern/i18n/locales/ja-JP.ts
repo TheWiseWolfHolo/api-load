@@ -57,7 +57,7 @@ export default {
     refresh: '更新',
     refreshedAt: '{time} 更新',
     importCredentials: 'キーをインポート',
-    goHome: 'GPT-Load の概要',
+    goHome: 'API-Load の概要',
     mascotHint:
       'マスコットを長押し、またはフォーカス中にスペースで遊べます。Enter で概要へ戻ります。',
     collapseSidebar: 'サイドバーを折りたたむ',
@@ -70,7 +70,7 @@ export default {
     reload: '再読み込み',
   },
   auth: {
-    title: 'GPT-Load にログイン',
+    title: 'API-Load にログイン',
     description: '管理者キーまたはアクセスキーを入力すると、サーバーが権限を判定します。',
     keyLabel: 'ログインキー',
     keyPlaceholder: 'AUTH_KEY またはアクセスキーを入力',

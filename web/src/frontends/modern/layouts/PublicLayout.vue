@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
@@ -10,8 +9,6 @@ import AppearanceMenu from './AppearanceMenu.vue'
 defineProps<{ restoringSession?: boolean }>()
 const { t } = useI18n()
 const { sidebarCollapsed, resolvedTheme } = usePreferences()
-const mascot = ref<InstanceType<typeof BrandLogo>>()
-const mascotHint = useId()
 </script>
 
 <template>
@@ -25,16 +22,12 @@ const mascotHint = useId()
         }"
         :to="{ name: 'modern-home' }"
         :aria-label="t('shell.goHome')"
-        :aria-describedby="mascotHint"
-        @keydown.space.prevent="!$event.repeat && mascot?.nudge()"
       >
         <BrandLogo
-          ref="mascot"
           :compact="restoringSession && sidebarCollapsed"
           :resolved-theme="resolvedTheme"
         />
       </RouterLink>
-      <span :id="mascotHint" class="modern-sr-only">{{ t('shell.mascotHint') }}</span>
       <div class="modern-public-actions"><AppearanceMenu /></div>
     </header>
     <main class="modern-public-content"><slot /></main>

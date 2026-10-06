@@ -2,7 +2,7 @@
 
 <img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
 
-# GPT-Load
+# API-Load
 
 **面向多渠道、多凭据场景的自托管 AI 网关**
 

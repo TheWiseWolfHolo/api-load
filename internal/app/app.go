@@ -258,7 +258,7 @@ func (a *App) Start() error {
 		"event":   "startup.ready",
 		"address": listener.Addr().String(),
 		"version": version.Version,
-	}).Info("GPT-Load 2.0 server started")
+	}).Info("API-Load 2.0 server started")
 	return nil
 }
 

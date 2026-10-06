@@ -34,7 +34,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const open = ref(false)
 const identity = useId()
-const githubURL = 'https://github.com/tbphp/gpt-load'
+const githubURL = 'https://github.com/TheWiseWolfHolo/api-load'
 const telegramURL = 'https://t.me/+GHpy5SwEllg3MTUx'
 const localeOptions: Array<{ value: AppLocale; labelKey: string; compactLabelKey: string }> = [
   { value: 'zh-CN', labelKey: 'shell.localeZh', compactLabelKey: 'shell.localeZhShort' },
