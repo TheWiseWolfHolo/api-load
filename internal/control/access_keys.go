@@ -223,7 +223,7 @@ type generatedAccessKeyCredential struct {
 	KeySuffix string
 }
 
-const accessKeyPrefix = "sk-gl-"
+const accessKeyPrefix = "sk-al-"
 
 func (s *Service) newAccessKeyRow(
 	name string,

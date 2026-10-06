@@ -46,10 +46,10 @@ func TestEnsureInitialStateCreatesDefaultAccessKeyAndMarker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decrypt(default key) error = %v", err)
 	}
-	if !strings.HasPrefix(plaintext, "sk-gl-") || len(plaintext) != len("sk-gl-")+32 {
+	if !strings.HasPrefix(plaintext, "sk-al-") || len(plaintext) != len("sk-al-")+32 {
 		t.Fatal("default plaintext shape is invalid")
 	}
-	if _, err := hex.DecodeString(strings.TrimPrefix(plaintext, "sk-gl-")); err != nil {
+	if _, err := hex.DecodeString(strings.TrimPrefix(plaintext, "sk-al-")); err != nil {
 		t.Fatalf("default plaintext suffix is not hex: %v", err)
 	}
 	if row.KeyHash != fixture.encryption.Hash(plaintext) {
@@ -219,7 +219,7 @@ func TestEnsureInitialStateDoesNotLogPlaintext(t *testing.T) {
 	fixture := newServiceFixture(t)
 	randomBytes := bytes.Repeat([]byte{0xab}, 16)
 	fixture.service.random = bytes.NewReader(randomBytes)
-	expectedPlaintext := "sk-gl-" + hex.EncodeToString(randomBytes)
+	expectedPlaintext := "sk-al-" + hex.EncodeToString(randomBytes)
 
 	var logs bytes.Buffer
 	logger := logrus.StandardLogger()

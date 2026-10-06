@@ -8,14 +8,15 @@ import (
 func TestAccessKeyMasksPreserveDefaultFormatAndUseLengthBands(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ name, key, mask string }{
-		{"generated", "", "sk-gl-****0000"},
+		{"generated", "", "sk-al-****0000"},
 		{"one", "a", "********"},
 		{"eight", "12345678", "********"},
 		{"nine", "123456789", "****6789"},
 		{"sixteen", "1234567890123456", "****3456"},
 		{"seventeen", "12345678901234567", "123456****4567"},
 		{"custom prefix", "client-abcdefghijklmnop", "client****mnop"},
-		{"default prefix", "sk-gl-0123456789abcdef0123456789abcdef", "sk-gl-****cdef"},
+		{"default prefix", "sk-al-0123456789abcdef0123456789abcdef", "sk-al-****cdef"},
+		{"legacy prefix", "sk-gl-0123456789abcdef0123456789abcdef", "sk-gl-****cdef"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newServiceFixture(t)
@@ -66,11 +67,11 @@ func TestAccessKeyMasksPreserveDefaultFormatAndUseLengthBands(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if rotated.MaskedKey != "sk-gl-****0101" {
+			if rotated.MaskedKey != "sk-al-****0101" {
 				t.Fatal("rotation did not restore the generated key mask")
 			}
 			view := fixture.manager.Current().AccessKeysByID[created.ID]
-			if view.KeyPrefix != "sk-gl-" || view.KeySuffix != "0101" {
+			if view.KeyPrefix != "sk-al-" || view.KeySuffix != "0101" {
 				t.Fatal("runtime mask metadata differs from rotation")
 			}
 		})

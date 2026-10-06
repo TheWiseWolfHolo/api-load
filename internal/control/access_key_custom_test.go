@@ -123,7 +123,7 @@ func TestCustomAccessKeyEmptyUsesAutomaticGeneration(t *testing.T) {
 	if err := json.Unmarshal(data["key"], &key); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(key, "sk-gl-") || len(key) != 38 {
+	if !strings.HasPrefix(key, "sk-al-") || len(key) != 38 {
 		t.Fatal("empty input did not generate a random key")
 	}
 	replay := serveAccessKeyLifecycleRequest(t, engine, http.MethodPost, "/api/access-keys", `{"name":"automatic"}`, operation)

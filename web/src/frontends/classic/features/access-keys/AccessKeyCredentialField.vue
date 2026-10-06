@@ -46,7 +46,7 @@ function generateKey(): void {
     const bytes = new Uint8Array(16)
     globalThis.crypto.getRandomValues(bytes)
     const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-    emit('update:modelValue', `sk-gl-${random}`)
+    emit('update:modelValue', `sk-al-${random}`)
   } catch {
     generationFailed.value = true
   }
