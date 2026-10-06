@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import logoLight from '@shared/brand/logo-light.svg'
+import logoDark from '@shared/brand/logo-dark.svg'
 defineProps<{
   compact?: boolean
   resolvedTheme: 'light' | 'dark'
@@ -8,7 +10,7 @@ defineProps<{
 <template>
   <span class="modern-brand-logo" aria-label="API-Load">
     <img
-      :src="resolvedTheme === 'dark' ? '/logo-dark.svg' : '/logo-light.svg'"
+      :src="resolvedTheme === 'dark' ? logoDark : logoLight"
       alt=""
       :width="compact ? 32 : 40"
       :height="compact ? 32 : 40"

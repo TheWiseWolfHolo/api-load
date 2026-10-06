@@ -123,3 +123,17 @@ func TestLegacyKeyUsesOriginalPBKDF2AndAESGCM(t *testing.T) {
 		t.Fatal("wrong key accepted")
 	}
 }
+
+func TestCompatibleBaseURLKeepsLegacyVersionedPaths(t *testing.T) {
+	for _, test := range []struct{ channel, source, target string }{
+		{"openai_compatible", "https://example.com/api", "https://example.com/api/v1"},
+		{"openai_compatible", "https://example.com/v1/", "https://example.com/v1"},
+		{"mistral", "https://api.mistral.ai", "https://api.mistral.ai/v1"},
+		{"cohere", "https://api.cohere.ai", "https://api.cohere.ai/v2"},
+		{"anthropic", "https://example.com/coding", "https://example.com/coding"},
+	} {
+		if got := migratedBaseURL(test.channel, test.source); got != test.target {
+			t.Errorf("wrong URL conversion for %s", test.channel)
+		}
+	}
+}

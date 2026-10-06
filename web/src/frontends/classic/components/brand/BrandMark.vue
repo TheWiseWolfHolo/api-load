@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import logoLight from '@shared/brand/logo-light.svg'
+import logoDark from '@shared/brand/logo-dark.svg'
 
 const props = withDefaults(
   defineProps<{
@@ -13,8 +15,8 @@ const dimension = computed(() => (typeof props.size === 'number' ? String(props.
 
 <template>
   <picture class="brand-mark">
-    <source srcset="/logo-dark.svg" media="(prefers-color-scheme: dark)" />
-    <img src="/logo-light.svg" :width="dimension" :height="dimension" :alt="label ?? ''" />
+    <source :srcset="logoDark" media="(prefers-color-scheme: dark)" />
+    <img :src="logoLight" :width="dimension" :height="dimension" :alt="label ?? ''" />
   </picture>
 </template>
 
