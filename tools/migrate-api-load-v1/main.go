@@ -508,7 +508,7 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 				if _, e := rand.Read(random[:]); e != nil {
 					return e
 				}
-				gr.AccessKey = "sk-gl-" + hex.EncodeToString(random[:])
+				gr.AccessKey = "sk-al-" + hex.EncodeToString(random[:])
 				if e := insertAccessKey(tx, crypt, "New API / "+name, gr.AccessKey, []uint{group.ID}); e != nil {
 					return e
 				}
@@ -600,6 +600,8 @@ func migratedBaseURL(channelID, baseURL string) string {
 		version = "/v1"
 	case "cohere":
 		version = "/v2"
+	case "gemini":
+		version = "/v1beta"
 	}
 	if version != "" && !strings.HasSuffix(baseURL, version) {
 		baseURL += version

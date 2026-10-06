@@ -199,7 +199,7 @@ export function draftErrors(draft: AccessDraft, base?: AccessKey): Record<string
 }
 export function keyStrength(value: string): 'weak' | 'fair' | 'strong' | undefined {
   if (!value) return undefined
-  const content = value.startsWith('sk-gl-') ? value.slice(6) : value
+  const content = /^sk-(?:al|gl)-/.test(value) ? value.slice(6) : value
   if (
     content.length < 12 ||
     new Set(content).size < 4 ||
@@ -219,5 +219,5 @@ export function keyStrength(value: string): 'weak' | 'fair' | 'strong' | undefin
 export function generateKey(): string {
   const bytes = new Uint8Array(32)
   globalThis.crypto.getRandomValues(bytes)
-  return 'sk-gl-' + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return 'sk-al-' + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

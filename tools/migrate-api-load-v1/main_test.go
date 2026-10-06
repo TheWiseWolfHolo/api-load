@@ -130,6 +130,8 @@ func TestCompatibleBaseURLKeepsLegacyVersionedPaths(t *testing.T) {
 		{"openai_compatible", "https://example.com/v1/", "https://example.com/v1"},
 		{"mistral", "https://api.mistral.ai", "https://api.mistral.ai/v1"},
 		{"cohere", "https://api.cohere.ai", "https://api.cohere.ai/v2"},
+		{"gemini", "https://generativelanguage.googleapis.com", "https://generativelanguage.googleapis.com/v1beta"},
+		{"gemini", "https://example.com/tenant/v1beta/", "https://example.com/tenant/v1beta"},
 		{"anthropic", "https://example.com/coding", "https://example.com/coding"},
 	} {
 		if got := migratedBaseURL(test.channel, test.source); got != test.target {

@@ -47,10 +47,10 @@ func TestCreateAccessKeyGeneratesEncryptedSKGLToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAccessKey() error = %v", err)
 	}
-	if !strings.HasPrefix(result.Key, "sk-gl-") || len(result.Key) != len("sk-gl-")+32 {
-		t.Fatalf("generated key = %q, want sk-gl- plus 32 hex chars", result.Key)
+	if !strings.HasPrefix(result.Key, "sk-al-") || len(result.Key) != len("sk-al-")+32 {
+		t.Fatalf("generated key = %q, want sk-al- plus 32 hex chars", result.Key)
 	}
-	if _, err := hex.DecodeString(strings.TrimPrefix(result.Key, "sk-gl-")); err != nil {
+	if _, err := hex.DecodeString(strings.TrimPrefix(result.Key, "sk-al-")); err != nil {
 		t.Fatalf("generated suffix is not hex: %v", err)
 	}
 	plaintext := result.Key
@@ -242,9 +242,9 @@ func TestListAccessKeyCollectionReturnsMaskedMetadataWithoutDecrypting(t *testin
 	}
 	if len(listed.Items) != 2 ||
 		listed.Items[0].ID != second.ID ||
-		listed.Items[0].MaskedKey != "sk-gl-****1e1f" ||
+		listed.Items[0].MaskedKey != "sk-al-****1e1f" ||
 		listed.Items[1].ID != first.ID ||
-		listed.Items[1].MaskedKey != "sk-gl-****0e0f" {
+		listed.Items[1].MaskedKey != "sk-al-****0e0f" {
 		t.Fatalf("ListAccessKeyCollection() = %#v", listed)
 	}
 
