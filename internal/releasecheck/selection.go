@@ -213,5 +213,5 @@ func validReleaseURL(raw, tag string) bool {
 		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return false
 	}
-	return parsed.Path == "/tbphp/gpt-load/releases/tag/"+tag
+	return parsed.Path == "/TheWiseWolfHolo/api-load/releases/tag/"+tag
 }

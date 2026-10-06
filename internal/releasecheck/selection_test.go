@@ -113,8 +113,9 @@ func TestSelectUpdateRejectsIneligibleReleases(t *testing.T) {
 
 func TestSelectUpdateRejectsUntrustedOrIncompleteMetadata(t *testing.T) {
 	releases := []Release{
-		{TagName: "v2.0.1", HTMLURL: "http://github.com/tbphp/gpt-load/releases/tag/v2.0.1", PublishedAt: time.Now()},
-		{TagName: "v2.0.2", HTMLURL: "https://evil.test/tbphp/gpt-load/releases/tag/v2.0.2", PublishedAt: time.Now()},
+		{TagName: "v2.0.1", HTMLURL: "http://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1", PublishedAt: time.Now()},
+		{TagName: "v2.0.2", HTMLURL: "https://evil.test/TheWiseWolfHolo/api-load/releases/tag/v2.0.2", PublishedAt: time.Now()},
+		{TagName: "v2.9.0", HTMLURL: "https://github.com/tbphp/gpt-load/releases/tag/v2.9.0", PublishedAt: time.Now()},
 		{TagName: "v2.0.3", HTMLURL: testReleaseURL("v2.0.2"), PublishedAt: time.Now()},
 		{TagName: "v2.0.4", HTMLURL: testReleaseURL("v2.0.4")},
 	}
@@ -122,6 +123,19 @@ func TestSelectUpdateRejectsUntrustedOrIncompleteMetadata(t *testing.T) {
 	if got := SelectUpdate("v2.0.0", releases); got != nil {
 		t.Fatalf("SelectUpdate() = %#v, want nil", got)
 	}
+}
+
+func TestSelectUpdateCandidateBuildOnlyUsesAPIloadReleases(t *testing.T) {
+	releases := []Release{
+		testRelease("v1.4.11", "2026-08-18T00:00:00Z"),
+		{TagName: "v2.0.0-rc.45", HTMLURL: "https://github.com/tbphp/gpt-load/releases/tag/v2.0.0-rc.45", PublishedAt: mustParseReleaseTime("2026-08-19T00:00:00Z")},
+	}
+	current := "2.0.0-api-load-fd194259266259e763559c7f767309a99fc66ed"
+	if got := SelectUpdate(current, releases); got != nil {
+		t.Fatalf("candidate update = %#v, want nil", got)
+	}
+	releases = append(releases, testRelease("v2.0.0", "2026-08-20T00:00:00Z"))
+	assertUpdate(t, SelectUpdate(current, releases), "v2.0.0", "2026-08-20T00:00:00Z")
 }
 
 func testRelease(tag, published string) Release {
@@ -133,7 +147,7 @@ func testRelease(tag, published string) Release {
 }
 
 func testReleaseURL(tag string) string {
-	return "https://github.com/tbphp/gpt-load/releases/tag/" + tag
+	return "https://github.com/TheWiseWolfHolo/api-load/releases/tag/" + tag
 }
 
 func mustParseReleaseTime(value string) time.Time {

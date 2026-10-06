@@ -65,7 +65,7 @@ function projectReleaseUpdate(value: unknown): ReleaseUpdateDto | null {
     parsed.password !== '' ||
     parsed.search !== '' ||
     parsed.hash !== '' ||
-    parsed.pathname !== `/tbphp/gpt-load/releases/tag/${version}`
+    parsed.pathname !== `/TheWiseWolfHolo/api-load/releases/tag/${version}`
   ) {
     invalidResponse()
   }

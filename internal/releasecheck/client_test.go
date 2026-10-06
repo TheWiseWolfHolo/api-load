@@ -16,12 +16,19 @@ import (
 	"gpt-load/internal/platform/httpclient"
 )
 
+func TestNewClientUsesAPIloadRepository(t *testing.T) {
+	client := NewClient(nil, nil)
+	if client.endpoint != "https://api.github.com/repos/TheWiseWolfHolo/api-load/releases" {
+		t.Fatalf("release endpoint = %q", client.endpoint)
+	}
+}
+
 func TestClientUsesLatestGlobalProxyPolicyForEachFetch(t *testing.T) {
 	t.Parallel()
 
 	writeReleases := func(writer http.ResponseWriter) {
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[{"tag_name":"v2.0.1","html_url":"https://github.com/tbphp/gpt-load/releases/tag/v2.0.1","published_at":"2026-08-19T13:09:53Z","draft":false}]`))
+		_, _ = writer.Write([]byte(`[{"tag_name":"v2.0.1","html_url":"https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1","published_at":"2026-08-19T13:09:53Z","draft":false}]`))
 	}
 	var targetCalls atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -73,13 +80,13 @@ func TestClientUsesLatestGlobalProxyPolicyForEachFetch(t *testing.T) {
 func TestClientFetchUsesFixedPublicGitHubContract(t *testing.T) {
 	published := "2026-08-19T13:09:53Z"
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodGet || request.URL.Path != "/repos/tbphp/gpt-load/releases" ||
+		if request.Method != http.MethodGet || request.URL.Path != "/repos/TheWiseWolfHolo/api-load/releases" ||
 			request.URL.Query().Get("per_page") != "100" || len(request.URL.Query()) != 1 {
 			t.Errorf("request = %s %s", request.Method, request.URL.String())
 		}
 		if request.Header.Get("Accept") != "application/vnd.github+json" ||
 			request.Header.Get("X-GitHub-Api-Version") != "2022-11-28" ||
-			request.Header.Get("User-Agent") != "GPT-Load" ||
+			request.Header.Get("User-Agent") != "API-Load" ||
 			request.Header.Get("Authorization") != "" {
 			t.Errorf("request headers = %#v", request.Header)
 		}
@@ -92,7 +99,7 @@ func TestClientFetchUsesFixedPublicGitHubContract(t *testing.T) {
 
 	client := &Client{
 		httpClient:       server.Client(),
-		endpoint:         server.URL + "/repos/tbphp/gpt-load/releases?per_page=100",
+		endpoint:         server.URL + "/repos/TheWiseWolfHolo/api-load/releases?per_page=100",
 		maxResponseBytes: maxGitHubResponseBytes,
 	}
 	releases, err := client.Fetch(t.Context())
@@ -110,7 +117,7 @@ func TestClientFetchReadsEligibleV2ReleaseFromSecondPage(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requests++
-		if request.URL.Path != "/repos/tbphp/gpt-load/releases" ||
+		if request.URL.Path != "/repos/TheWiseWolfHolo/api-load/releases" ||
 			request.URL.Query().Get("per_page") != "100" {
 			t.Errorf("request = %s %s", request.Method, request.URL.String())
 		}
@@ -136,7 +143,7 @@ func TestClientFetchReadsEligibleV2ReleaseFromSecondPage(t *testing.T) {
 
 	client := &Client{
 		httpClient:       server.Client(),
-		endpoint:         server.URL + "/repos/tbphp/gpt-load/releases?per_page=100",
+		endpoint:         server.URL + "/repos/TheWiseWolfHolo/api-load/releases?per_page=100",
 		maxResponseBytes: maxGitHubResponseBytes,
 	}
 	releases, err := client.Fetch(t.Context())
@@ -167,7 +174,7 @@ func TestClientFetchRejectsReleaseHistoryBeyondPageLimit(t *testing.T) {
 
 	client := &Client{
 		httpClient:       server.Client(),
-		endpoint:         server.URL + "/repos/tbphp/gpt-load/releases?per_page=100",
+		endpoint:         server.URL + "/repos/TheWiseWolfHolo/api-load/releases?per_page=100",
 		maxResponseBytes: maxGitHubResponseBytes,
 	}
 	if releases, err := client.Fetch(t.Context()); err == nil || releases != nil ||
@@ -195,7 +202,7 @@ func TestClientFetchAcceptsCurrentReleaseHistoryInOnePage(t *testing.T) {
 
 	client := &Client{
 		httpClient:       server.Client(),
-		endpoint:         server.URL + "/repos/tbphp/gpt-load/releases",
+		endpoint:         server.URL + "/repos/TheWiseWolfHolo/api-load/releases",
 		maxResponseBytes: maxGitHubResponseBytes,
 	}
 	releases, err := client.Fetch(t.Context())
