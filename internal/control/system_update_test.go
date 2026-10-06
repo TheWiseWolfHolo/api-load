@@ -39,7 +39,7 @@ func TestSystemUpdateHTTPChecksOnDemandWithoutAffectingHome(t *testing.T) {
 	fixture := newServiceFixture(t)
 	checker := &recordingReleaseUpdateChecker{update: &releasecheck.Update{
 		Version:       "v2.0.0-beta.9",
-		ReleaseURL:    "https://github.com/tbphp/gpt-load/releases/tag/v2.0.0-beta.9",
+		ReleaseURL:    "https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.0-beta.9",
 		PublishedAtMS: time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC).UnixMilli(),
 	}}
 	server := NewServerWithReleaseUpdateChecker(

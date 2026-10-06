@@ -108,7 +108,7 @@ export async function getReleaseUpdate(
     url.password ||
     url.search ||
     url.hash ||
-    url.pathname !== `/tbphp/gpt-load/releases/tag/${version}`
+    url.pathname !== `/TheWiseWolfHolo/api-load/releases/tag/${version}`
   ) {
     throw new InvalidResponseError()
   }

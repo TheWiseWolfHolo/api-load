@@ -14,7 +14,7 @@ import (
 	"gpt-load/internal/platform/httpclient"
 )
 
-const githubReleasesEndpoint = "https://api.github.com/repos/tbphp/gpt-load/releases"
+const githubReleasesEndpoint = "https://api.github.com/repos/TheWiseWolfHolo/api-load/releases"
 
 const (
 	githubReleasesPerPage  = 100
@@ -26,7 +26,7 @@ type httpDoer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-// Client reads public GPT-Load release metadata from GitHub.
+// Client reads public API-Load release metadata from GitHub.
 type Client struct {
 	httpClient       httpDoer
 	clientManager    *httpclient.HTTPClientManager
@@ -162,7 +162,7 @@ func (client *Client) fetchPage(
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	request.Header.Set("User-Agent", "GPT-Load")
+	request.Header.Set("User-Agent", "API-Load")
 
 	response, err := httpClient.Do(request)
 	if err != nil {
