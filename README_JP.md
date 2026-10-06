@@ -22,40 +22,6 @@ API キー、サブスクリプションアカウント、トラフィック制�
 
 ---
 
-## スポンサー
-
-<sub>[スポンサーになる](mailto:tangb7420@gmail.com)</sub>
-
-<details open>
-<summary>スポンサー詳細（折りたたみ可能）</summary>
-
-<table>
-<tbody>
-<tr>
-<td width="180"><a href="https://ofox.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_content=gpt_load" target="_blank" rel="noopener noreferrer"><img src="./screenshot/ofoxai.svg" alt="OfoxAI" width="150"></a></td>
-<td><strong>OfoxAI：テキスト・画像・動画 AI を一つのプラットフォームで</strong><br>OfoxAI は、複数のプロバイダーのテキスト・画像・動画モデルを集約する AI API プラットフォームです。OpenAI 互換 API と Anthropic・Gemini のネイティブ API に対応。開発者は一つのプラットフォームから AI アプリ、エージェント、コンテンツ制作向けのモデルを利用し、タスクに合った機能を選べます。 <a href="https://ofox.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_content=gpt_load" target="_blank" rel="noopener noreferrer">OfoxAI のモデルと API を見る →</a></td>
-</tr>
-<tr>
-<td width="180"><a href="https://www.packyapi.ai/register?aff=ahiS" target="_blank" rel="sponsored noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="./screenshot/packycode-dark.png"><source media="(prefers-color-scheme: light)" srcset="./screenshot/packycode-light.png"><img src="./screenshot/packycode-light.png" alt="PackyCode" width="150"></picture></a></td>
-<td><strong>PackyCode</strong><br>PackyCode は、安定性と効率性を重視した AI API 中継サービスです。ひとつの API エンドポイントと API キーで主要な大規模モデルに接続できます。統一ドメイン、統一キー、スマートな障害切り替えに対応し、可用性は 97% としています。人民元で 1:1 チャージでき、為替差損や追加手数料の心配はありません。新規ユーザーは初回チャージ割引と $1 の無料体験クレジットを受け取れ、複数グループでは最大 80% の割引、Codex／Claude Code 専用の高速ルートも利用できます。<a href="https://www.packyapi.ai/register?aff=ahiS" target="_blank" rel="sponsored noopener noreferrer">リンクから登録して、すぐに利用を開始できます。</a></td>
-</tr>
-<tr>
-<td width="180"><a href="https://fluxionai.space/register?source=github&amp;campaign=gptload&amp;promo=GPTLOAD" target="_blank" rel="sponsored noopener noreferrer"><img src="./screenshot/fluxionai-horizontal.png" alt="Fluxion AI" width="150"></a></td>
-<td><strong>一つの入口で、世界の主要AIモデルに接続・管理</strong><br>Fluxion AIは、個人開発者、技術チーム、企業向けに、統一APIで世界の主要AIモデルへの接続と管理を提供します。複数経路の動的なスケジューリングで可用性を高め、モデルの性能、応答時間、料金を透明に確認できます。モデルや経路によっては、API利用料を公式価格または基準価格より40%〜98%抑えられます。今すぐアクセスして登録すると、$7分のAPIクレジットを受け取れます。（<a href="https://fluxionai.space/register?source=github&amp;campaign=gptload&amp;promo=GPTLOAD" target="_blank" rel="sponsored noopener noreferrer">専用リンク</a>）</td>
-</tr>
-<tr>
-<td width="180"><a href="https://www.axisnow.io/zh"><img src="./screenshot/axisnow.jpg" alt="AxisNow" width="150"></a></td>
-<td>ウェブサイトと API を保護・高速化し、<strong>中国本土</strong>および世界各地のアクセス体験にも配慮し、クライアント SDK を通じて高速化とセキュリティの機能をネイティブ／モバイルアプリにまで拡張します — <strong>自社構築・プライベート運用 CDN｜サブスクリプション型高防御 CDN｜自主的に制御でき、柔軟に組み合わせられる CDN ネットワーク。</strong></td>
-</tr>
-<tr>
-<td width="180"><a href="https://go.apimart.ai/gh-gpt-load"><img src="./screenshot/apimart.png" alt="APIMart" width="150"></a></td>
-<td>APIMartによる本プロジェクトへのスポンサー支援に感謝します！APIMartはAI画像・動画生成に特化した低価格APIプラットフォームで、GPT-Image-2は1枚$0.006から、1ドルで160枚以上の画像を生成できます。画像と動画の両方に対応する1つの非同期APIで、タスクを送信してIDを取得し、ポーリングまたはコールバックで結果を取得できます。数万枚規模の一括処理でもタイムアウトせず、モデルを切り替えてもコードを変更する必要はありません。従量課金制で月額料金は不要です。<a href="https://go.apimart.ai/gh-gpt-load">こちらの登録リンク</a>から登録して、すぐにご利用いただけます。</td>
-</tr>
-</tbody>
-</table>
-
-</details>
-
 ## API-Load を選ぶ理由
 
 アプリケーション側で必要なのは、一つの Base URL と一つの AccessKey だけです。プロバイダー、アカウント、認証情報、モデル、ルーティングポリシーはすべて管理画面で設定します。
@@ -255,33 +221,3 @@ GPT-Load の一部機能は以下のプロジェクトを基盤としていま�
 
 チャネルアイコンは対応するアップストリームプロバイダーを識別するために使用しています。商標権は各所有者に帰属し、本プロジェクトはこれらのプロバイダーと提携関係や推奨関係にはありません。
 
-## プロジェクト支援
-
-<table>
-<tbody>
-<tr>
-<td align="center" width="33%">
-<a href="https://openai.com/">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="./screenshot/sponsor-openai-lockup-white.svg">
-<source media="(prefers-color-scheme: light)" srcset="./screenshot/sponsor-openai-lockup-black.svg">
-<img src="./screenshot/sponsor-openai-lockup-black.svg" alt="OpenAI" width="120">
-</picture>
-</a>
-<br><sub>プラットフォーム支援</sub>
-</td>
-<td align="center" width="33%">
-<a href="https://linux.do"><img src="./screenshot/l.png" alt="LINUX DO" width="120"></a>
-<br><sub>コミュニティ支援</sub>
-</td>
-<td align="center" width="33%">
-<a href="https://www.digitalocean.com/?refcode=3d52cff21342&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge"><img src="https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%202.svg" alt="DigitalOcean" width="120"></a>
-<br><sub>インフラ支援</sub>
-</td>
-</tr>
-</tbody>
-</table>
-
----
-
-[MIT License](LICENSE) · [サードパーティ表記](THIRD_PARTY_NOTICES.md) · [セキュリティポリシー](SECURITY.md)

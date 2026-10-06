@@ -22,41 +22,7 @@
 
 ---
 
-## 赞助商
-
-<sub>[成为赞助商](mailto:tangb7420@gmail.com)</sub>
-
-<details open>
-<summary>赞助商详情（可折叠）</summary>
-
-<table>
-<tbody>
-<tr>
-<td width="180"><a href="https://ofox.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_content=gpt_load" target="_blank" rel="noopener noreferrer"><img src="./screenshot/ofoxai.svg" alt="OfoxAI" width="150"></a></td>
-<td><strong>OfoxAI：一个平台，连接文本、图像与视频 AI</strong><br>OfoxAI 是统一的 AI API 平台，汇集多家文本、图像和视频模型，支持 OpenAI 兼容接口及 Anthropic、Gemini 原生接口。开发者可通过一个平台为 AI 应用、智能体和内容创作接入模型，按任务选择合适的能力。 <a href="https://ofox.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_content=gpt_load" target="_blank" rel="noopener noreferrer">探索 OfoxAI 模型与 API →</a></td>
-</tr>
-<tr>
-<td width="180"><a href="https://www.packyapi.ai/register?aff=ahiS" target="_blank" rel="sponsored noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="./screenshot/packycode-dark.png"><source media="(prefers-color-scheme: light)" srcset="./screenshot/packycode-light.png"><img src="./screenshot/packycode-light.png" alt="PackyCode" width="150"></picture></a></td>
-<td><strong>PackyCode</strong><br>PackyCode 是一家稳定、高效的 API 中转服务商。一句话接入主流大模型。统一域名、统一密钥、智能容灾切换，97% 可用性。人民币1:1充值，无汇率无手续费坑，新用户首充立享折扣 + $1免费体验额度，多分组折扣低至 2 折起，提供专属Codex/Claude Code高速通道。<a href="https://www.packyapi.ai/register?aff=ahiS" target="_blank" rel="sponsored noopener noreferrer">点此链接注册，立即开始使用！</a></td>
-</tr>
-<tr>
-<td width="180"><a href="https://fluxionai.space/register?source=github&amp;campaign=gptload&amp;promo=GPTLOAD" target="_blank" rel="sponsored noopener noreferrer"><img src="./screenshot/fluxionai-horizontal.png" alt="Fluxion AI" width="150"></a></td>
-<td><strong>一个入口，接入并管理全球主流AI模型</strong><br>Fluxion AI面向个人开发者、技术团队与企业，通过统一API接入并管理全球主流AI模型；通过多线路动态调度提升可用性，模型表现、响应时间与费用透明可查。根据不同模型与线路，API调用成本较官方或基准价格可降低40%—98%。立即访问并注册，即可获得 $7 API 额度。（<a href="https://fluxionai.space/register?source=github&amp;campaign=gptload&amp;promo=GPTLOAD" target="_blank" rel="sponsored noopener noreferrer">专属链接</a>）</td>
-</tr>
-<tr>
-<td width="180"><a href="https://www.axisnow.io/zh"><img src="./screenshot/axisnow.jpg" alt="AxisNow" width="150"></a></td>
-<td>保护并加速网站与 API，<strong>兼顾中国大陆</strong>及全球的访问体验，并通过客户端 SDK，将加速与安全能力延伸至原生/移动 App — <strong>自建私有部署 CDN｜订阅式高防 CDN｜自主可控、灵活组合的 CDN 网络。</strong></td>
-</tr>
-<tr>
-<td width="180"><a href="https://go.apimart.ai/gh-gpt-load"><img src="./screenshot/apimart.png" alt="APIMart" width="150"></a></td>
-<td>感谢 APIMart 赞助了本项目！APIMart 是专注 AI 图片/视频生成的低价 API 平台，GPT-Image-2 低至 $0.006/张，1 美元可出图 160+ 张。图片、视频一套异步 API 通吃，提交任务拿 ID、回调取结果，跑批万张不超时、换模型不改代码。按量付费、无月费，通过<a href="https://go.apimart.ai/gh-gpt-load">此注册链接</a>注册即可开用。</td>
-</tr>
-</tbody>
-</table>
-
-</details>
-
-## 为什么选择 GPT-Load
+## 为什么选择 API-Load
 
 应用只需要配置一个地址和一个 AccessKey。后面的服务商、账号、凭据、模型与路由策略，全部在管理界面里完成。
 
@@ -255,33 +221,3 @@ GPT-Load 自身负责凭据存储、账号选择、调度、重试、健康、�
 
 各渠道图标用于标识对应的上游服务商，其商标权归各自所有者；本项目与这些服务商没有从属或背书关系。
 
-## 项目支持
-
-<table>
-<tbody>
-<tr>
-<td align="center" width="33%">
-<a href="https://openai.com/">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="./screenshot/sponsor-openai-lockup-white.svg">
-<source media="(prefers-color-scheme: light)" srcset="./screenshot/sponsor-openai-lockup-black.svg">
-<img src="./screenshot/sponsor-openai-lockup-black.svg" alt="OpenAI" width="120">
-</picture>
-</a>
-<br><sub>平台支持</sub>
-</td>
-<td align="center" width="33%">
-<a href="https://linux.do"><img src="./screenshot/l.png" alt="LINUX DO" width="120"></a>
-<br><sub>社区支持</sub>
-</td>
-<td align="center" width="33%">
-<a href="https://www.digitalocean.com/?refcode=3d52cff21342&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge"><img src="https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%202.svg" alt="DigitalOcean" width="120"></a>
-<br><sub>基础设施支持</sub>
-</td>
-</tr>
-</tbody>
-</table>
-
----
-
-[MIT License](LICENSE) · [第三方声明](THIRD_PARTY_NOTICES.md) · [安全政策](SECURITY.md)

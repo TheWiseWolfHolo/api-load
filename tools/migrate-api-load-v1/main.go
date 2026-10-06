@@ -74,11 +74,12 @@ type legacyEndpoint struct {
 }
 
 type snapshot struct {
-	Groups    []legacyGroup      `json:"groups"`
-	Keys      []legacyCredential `json:"api_keys"`
-	Resources []legacyCredential `json:"upstream_resources"`
-	Endpoints []legacyEndpoint   `json:"resource_pool_endpoints"`
-	Settings  []struct {
+	ExtraModels map[string][]string `json:"-"`
+	Groups      []legacyGroup       `json:"groups"`
+	Keys        []legacyCredential  `json:"api_keys"`
+	Resources   []legacyCredential  `json:"upstream_resources"`
+	Endpoints   []legacyEndpoint    `json:"resource_pool_endpoints"`
+	Settings    []struct {
 		Key   string `json:"setting_key"`
 		Value string `json:"setting_value"`
 	} `json:"system_settings"`
@@ -115,12 +116,13 @@ func main() {
 	deployment := flag.String("deployment", "", "protected deployment-before.json containing the old encryption configuration")
 	keyFile := flag.String("target-key-file", "", "new v2 encryption.key")
 	output := flag.String("output", "", "new protected report directory")
+	extraModels := flag.String("models-file", "", "optional New API group-to-model mapping")
 	flag.Parse()
 	if *input == "" || *deployment == "" || *keyFile == "" || *output == "" || os.Getenv("MIGRATION_TARGET_DSN") == "" {
 		fmt.Fprintln(os.Stderr, "input, deployment, target-key-file, output and MIGRATION_TARGET_DSN are required")
 		os.Exit(2)
 	}
-	if err := run(*input, *deployment, *keyFile, *output, os.Getenv("MIGRATION_TARGET_DSN")); err != nil {
+	if err := run(*input, *deployment, *keyFile, *output, *extraModels, os.Getenv("MIGRATION_TARGET_DSN")); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -155,33 +157,43 @@ func oldKeyFromDeployment(raw []byte) (string, error) {
 }
 
 func legacyDecrypt(key, value string) (string, error) {
-	if key == "" {
-		return value, nil
-	}
-	data, err := hex.DecodeString(value)
+	decrypt, err := newLegacyDecryptor(key)
 	if err != nil {
-		return "", errors.New("legacy credential is not valid ciphertext")
+		return "", err
+	}
+	return decrypt(value)
+}
+
+func newLegacyDecryptor(key string) (func(string) (string, error), error) {
+	if key == "" {
+		return func(value string) (string, error) { return value, nil }, nil
 	}
 	derived := pbkdf2.Key([]byte(key), []byte("gpt-load-encryption-v1"), 100000, 32, sha256.New)
 	block, err := aes.NewCipher(derived)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if len(data) < gcm.NonceSize() {
-		return "", errors.New("legacy credential ciphertext is too short")
-	}
-	plaintext, err := gcm.Open(nil, data[:gcm.NonceSize()], data[gcm.NonceSize():], nil)
-	if err != nil {
-		return "", errors.New("legacy credential decryption failed; check the original encryption key")
-	}
-	return string(plaintext), nil
+	return func(value string) (string, error) {
+		data, err := hex.DecodeString(value)
+		if err != nil {
+			return "", errors.New("legacy credential is not valid ciphertext")
+		}
+		if len(data) < gcm.NonceSize() {
+			return "", errors.New("legacy credential ciphertext is too short")
+		}
+		plaintext, err := gcm.Open(nil, data[:gcm.NonceSize()], data[gcm.NonceSize():], nil)
+		if err != nil {
+			return "", errors.New("legacy credential decryption failed; check the original encryption key")
+		}
+		return string(plaintext), nil
+	}, nil
 }
 
-func run(input, deployment, keyFile, output, dsn string) error {
+func run(input, deployment, keyFile, output, modelsFile, dsn string) error {
 	raw, err := os.ReadFile(input)
 	if err != nil {
 		return errors.New("cannot read legacy snapshot")
@@ -192,6 +204,15 @@ func run(input, deployment, keyFile, output, dsn string) error {
 	}
 	if len(source.Groups) == 0 {
 		return errors.New("source has no groups")
+	}
+	if modelsFile != "" {
+		rawModels, e := os.ReadFile(modelsFile)
+		if e != nil {
+			return errors.New("cannot read New API models")
+		}
+		if e := json.Unmarshal(rawModels, &source.ExtraModels); e != nil {
+			return errors.New("invalid New API model mapping")
+		}
 	}
 	config, err := os.ReadFile(deployment)
 	if err != nil {
@@ -269,6 +290,10 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 	if err != nil {
 		return report, err
 	}
+	decryptLegacy, err := newLegacyDecryptor(oldKey)
+	if err != nil {
+		return report, err
+	}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&models.Group{}).Count(&count).Error; err != nil {
@@ -287,6 +312,15 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 				return fmt.Errorf("unsupported channel for group %d", old.ID)
 			}
 			channelID := channel.ID(old.Channel)
+			if old.Channel == "openai" {
+				channelID = channel.ID("openai_compatible")
+			}
+			if old.Name == "mistral" {
+				channelID = channel.ID("mistral")
+			}
+			if old.Name == "cohere-native" {
+				channelID = channel.ID("cohere")
+			}
 			if old.Channel == "openai-response" {
 				channelID = channel.ID("openai")
 			}
@@ -316,6 +350,11 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 				return fmt.Errorf("missing upstream for group %d", old.ID)
 			}
 			pairs := map[string]modelPair{}
+			for _, name := range source.ExtraModels[old.Name] {
+				if name != "" {
+					pairs[name] = modelPair{ID: name}
+				}
+			}
 			for _, name := range old.Models {
 				if name != "" {
 					pairs[name] = modelPair{ID: name}
@@ -413,7 +452,7 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 				}
 				seen := map[string]bool{}
 				for _, item := range pending {
-					key, e := legacyDecrypt(oldKey, item.row.Value)
+					key, e := decryptLegacy(item.row.Value)
 					if e != nil {
 						return fmt.Errorf("decrypt credential %d in group %d failed", item.row.ID, old.ID)
 					}
