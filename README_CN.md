@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
+<img src="./web/public/favicon.svg" alt="API-Load" width="96">
 
 # API-Load
 
@@ -10,13 +10,11 @@
 
 [English](README.md) · 中文 · [日本語](README_JP.md) | [官方网站](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/github/v/tag/tbphp/gpt-load?filter=v2.*)](https://github.com/tbphp/gpt-load/releases)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftbphp%2Fgpt--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/tbphp/gpt-load/pkgs/container/gpt-load)
+[![Release](https://img.shields.io/badge/API--Load-v2_candidate-blue)](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-<a href="https://trendshift.io/repositories/14880" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14880" alt="tbphp/gpt-load | Trendshift" width="220" height="48"/></a>
-<a href="https://hellogithub.com/repository/tbphp/gpt-load" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=554dc4c46eb14092b9b0c56f1eb9021c&claim_uid=Qlh8vzrWJ0HCneG" alt="Featured｜HelloGitHub" width="220" height="47"/></a>
 
 </div>
 
@@ -43,7 +41,7 @@
 需要 Docker 与 Docker Compose。
 
 ```bash
-git clone --depth 1 https://github.com/tbphp/gpt-load.git
+git clone --depth 1 https://github.com/TheWiseWolfHolo/api-load.git
 cd gpt-load
 
 cp .env.example .env
@@ -59,7 +57,7 @@ curl --fail http://127.0.0.1:3001/health
 首次启动会自动生成管理密钥，读取并妥善保存：
 
 ```bash
-docker compose exec gpt-load sh -c 'cat /app/data/auth.key'
+docker compose exec api-load sh -c 'cat /app/data/auth.key'
 ```
 
 打开 <http://127.0.0.1:3001>，用该密钥登录控制台。
@@ -143,12 +141,12 @@ docker compose pull && docker compose up -d   # 更新到最新 2.x 镜像
 docker compose stop         # 停止服务
 ```
 
-官方 Compose 使用 `ghcr.io/tbphp/gpt-load:2`。GA 前，`2` 跟随已验证的 2.0 Beta 和 RC；GA 后只跟随稳定的 2.x。镜像精确标签会去掉 Git tag 的 `v` 前缀（例如 `2.0.0-beta.25`），`2.0-beta` 则保留为 2.0 Beta 通道；`latest` 继续留在 1.x。
+官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:v2-candidate`。GA 前，`2` 跟随已验证的 2.0 Beta 和 RC；GA 后只跟随稳定的 2.x。镜像精确标签会去掉 Git tag 的 `v` 前缀（例如 `2.0.0-beta.25`），`2.0-beta` 则保留为 2.0 Beta 通道；`latest` 继续留在 1.x。
 
 <details>
 <summary>使用原生二进制</summary>
 
-从 [GitHub Releases](https://github.com/tbphp/gpt-load/releases) 下载对应平台的文件，建议先用随附的 `SHA256SUMS` 校验：
+从 [GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption) 下载对应平台的文件，建议先用随附的 `SHA256SUMS` 校验：
 
 ```bash
 chmod +x ./gpt-load-linux-amd64
@@ -220,4 +218,3 @@ GPT-Load 的部分能力构建在这些开源项目之上，在此致谢：
 GPT-Load 自身负责凭据存储、账号选择、调度、重试、健康、亲和、日志与用量策略。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，许可证全文位于 [`LICENSES/`](LICENSES/)，每个 Release 另附覆盖 Go 依赖的 CycloneDX SBOM。
 
 各渠道图标用于标识对应的上游服务商，其商标权归各自所有者；本项目与这些服务商没有从属或背书关系。
-

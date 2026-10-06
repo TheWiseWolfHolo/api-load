@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
+<img src="./web/public/favicon.svg" alt="API-Load" width="96">
 
 # API-Load
 
@@ -12,13 +12,11 @@ API keys, subscription accounts, traffic scheduling, failure handling, request l
 
 English · [中文](README_CN.md) · [日本語](README_JP.md) | [Official Website](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/github/v/tag/tbphp/gpt-load?filter=v2.*)](https://github.com/tbphp/gpt-load/releases)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftbphp%2Fgpt--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/tbphp/gpt-load/pkgs/container/gpt-load)
+[![Release](https://img.shields.io/badge/API--Load-v2_candidate-blue)](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-<a href="https://trendshift.io/repositories/14880" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14880" alt="tbphp/gpt-load | Trendshift" width="220" height="48"/></a>
-<a href="https://hellogithub.com/repository/tbphp/gpt-load" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=554dc4c46eb14092b9b0c56f1eb9021c&claim_uid=Qlh8vzrWJ0HCneG" alt="Featured｜HelloGitHub" width="220" height="47"/></a>
 
 </div>
 
@@ -45,7 +43,7 @@ Your application only needs one base URL and one AccessKey. Providers, accounts,
 Requires Docker and Docker Compose.
 
 ```bash
-git clone --depth 1 https://github.com/tbphp/gpt-load.git
+git clone --depth 1 https://github.com/TheWiseWolfHolo/api-load.git
 cd gpt-load
 
 cp .env.example .env
@@ -61,7 +59,7 @@ curl --fail http://127.0.0.1:3001/health
 The first start generates a management key. Read it and store it safely:
 
 ```bash
-docker compose exec gpt-load sh -c 'cat /app/data/auth.key'
+docker compose exec api-load sh -c 'cat /app/data/auth.key'
 ```
 
 Open <http://127.0.0.1:3001> and sign in to the console with that key.
@@ -145,12 +143,12 @@ docker compose pull && docker compose up -d   # update to the latest 2.x image
 docker compose stop         # stop the service
 ```
 
-The official Compose file uses `ghcr.io/tbphp/gpt-load:2`. Before GA, `2` tracks verified 2.0 Beta and RC releases; after GA, it tracks stable 2.x releases only. Exact image tags omit the Git tag's `v` prefix (for example, `2.0.0-beta.25`), while `2.0-beta` remains the 2.0 Beta channel. `latest` remains on 1.x.
+The official Compose file uses `ghcr.io/thewisewolfholo/api-load:v2-candidate`. Before GA, `2` tracks verified 2.0 Beta and RC releases; after GA, it tracks stable 2.x releases only. Exact image tags omit the Git tag's `v` prefix (for example, `2.0.0-beta.25`), while `2.0-beta` remains the 2.0 Beta channel. `latest` remains on 1.x.
 
 <details>
 <summary>Using a native binary</summary>
 
-Download the build for your platform from [GitHub Releases](https://github.com/tbphp/gpt-load/releases), and verify it against the bundled `SHA256SUMS` first:
+Download the build for your platform from [GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption), and verify it against the bundled `SHA256SUMS` first:
 
 ```bash
 chmod +x ./gpt-load-linux-amd64
@@ -222,4 +220,3 @@ Some of GPT-Load's capabilities build on these projects, with thanks:
 GPT-Load owns credential storage, account selection, scheduling, retry, health, affinity, logging, and usage policy. Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), full license texts in [`LICENSES/`](LICENSES/), and each release ships a CycloneDX SBOM covering the Go dependency graph.
 
 Channel icons identify their respective upstream providers. All trademarks belong to their owners; this project is not affiliated with or endorsed by them.
-

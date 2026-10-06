@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
+<img src="./web/public/favicon.svg" alt="API-Load" width="96">
 
 # API-Load
 
@@ -10,13 +10,11 @@ API キー、サブスクリプションアカウント、トラフィック制�
 
 [English](README.md) · [中文](README_CN.md) · 日本語 | [公式サイト](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/github/v/tag/tbphp/gpt-load?filter=v2.*)](https://github.com/tbphp/gpt-load/releases)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftbphp%2Fgpt--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/tbphp/gpt-load/pkgs/container/gpt-load)
+[![Release](https://img.shields.io/badge/API--Load-v2_candidate-blue)](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-<a href="https://trendshift.io/repositories/14880" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14880" alt="tbphp/gpt-load | Trendshift" width="220" height="48"/></a>
-<a href="https://hellogithub.com/repository/tbphp/gpt-load" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=554dc4c46eb14092b9b0c56f1eb9021c&claim_uid=Qlh8vzrWJ0HCneG" alt="Featured｜HelloGitHub" width="220" height="47"/></a>
 
 </div>
 
@@ -43,7 +41,7 @@ API キー、サブスクリプションアカウント、トラフィック制�
 Docker と Docker Compose が必要です。
 
 ```bash
-git clone --depth 1 https://github.com/tbphp/gpt-load.git
+git clone --depth 1 https://github.com/TheWiseWolfHolo/api-load.git
 cd gpt-load
 
 cp .env.example .env
@@ -59,7 +57,7 @@ curl --fail http://127.0.0.1:3001/health
 初回起動時に管理キーが自動生成されます。読み出して安全に保管してください：
 
 ```bash
-docker compose exec gpt-load sh -c 'cat /app/data/auth.key'
+docker compose exec api-load sh -c 'cat /app/data/auth.key'
 ```
 
 <http://127.0.0.1:3001> を開き、そのキーでコンソールにログインします。
@@ -143,12 +141,12 @@ docker compose pull && docker compose up -d   # 最新の 2.x イメージへ更
 docker compose stop         # サービスを停止
 ```
 
-公式 Compose は `ghcr.io/tbphp/gpt-load:2` を使用します。GA 前の `2` は検証済みの 2.0 Beta / RC を追跡し、GA 後は安定版 2.x のみを追跡します。イメージの完全なタグからは Git tag の `v` 接頭辞を除き（例：`2.0.0-beta.25`）、`2.0-beta` は 2.0 Beta チャネルとして残します。`latest` は引き続き 1.x を指します。
+公式 Compose は `ghcr.io/thewisewolfholo/api-load:v2-candidate` を使用します。GA 前の `2` は検証済みの 2.0 Beta / RC を追跡し、GA 後は安定版 2.x のみを追跡します。イメージの完全なタグからは Git tag の `v` 接頭辞を除き（例：`2.0.0-beta.25`）、`2.0-beta` は 2.0 Beta チャネルとして残します。`latest` は引き続き 1.x を指します。
 
 <details>
 <summary>ネイティブバイナリを使う</summary>
 
-[GitHub Releases](https://github.com/tbphp/gpt-load/releases) からプラットフォームに合ったファイルをダウンロードし、同梱の `SHA256SUMS` で検証してから使用してください：
+[GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption) からプラットフォームに合ったファイルをダウンロードし、同梱の `SHA256SUMS` で検証してから使用してください：
 
 ```bash
 chmod +x ./gpt-load-linux-amd64
@@ -220,4 +218,3 @@ GPT-Load の一部機能は以下のプロジェクトを基盤としていま�
 認証情報の保存、アカウント選択、スケジューリング、リトライ、健全性、アフィニティ、ログ、使用量ポリシーは GPT-Load が担います。サードパーティ表記は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、ライセンス全文は [`LICENSES/`](LICENSES/) にあり、各リリースには Go 依存関係を対象とした CycloneDX SBOM が付属します。
 
 チャネルアイコンは対応するアップストリームプロバイダーを識別するために使用しています。商標権は各所有者に帰属し、本プロジェクトはこれらのプロバイダーと提携関係や推奨関係にはありません。
-
