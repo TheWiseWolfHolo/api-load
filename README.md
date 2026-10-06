@@ -2,7 +2,9 @@
 
 <img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
 
-# GPT-Load
+# API-Load
+
+API-Load v2 adopts [GPT-Load](https://github.com/tbphp/gpt-load) v2 with API-Load branding and images published to `ghcr.io/thewisewolfholo/api-load`. The upstream architecture and Go module name remain intact to simplify future updates. Copyright, MIT license, and third-party notices are retained. See [the adoption notes](docs/api-load-v2.md) for migration and deployment.
 
 **A self-hosted AI gateway for multi-channel, multi-credential setups**
 

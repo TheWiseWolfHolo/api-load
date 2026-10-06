@@ -29,7 +29,7 @@ const { title } = usePageTitle()
 watch(
   [title, locale],
   () => {
-    document.title = `${title.value} · GPT-Load`
+    document.title = `${title.value} · API-Load`
   },
   { immediate: true },
 )

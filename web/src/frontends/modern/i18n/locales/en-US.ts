@@ -57,7 +57,7 @@ export default {
     refresh: 'Refresh',
     refreshedAt: 'Updated {time}',
     importCredentials: 'Import credentials',
-    goHome: 'GPT-Load overview',
+    goHome: 'API-Load overview',
     mascotHint:
       'Hold the mascot or press Space when focused to play. Press Enter for the overview.',
     collapseSidebar: 'Collapse sidebar',
@@ -70,7 +70,7 @@ export default {
     reload: 'Reload',
   },
   auth: {
-    title: 'Sign in to GPT-Load',
+    title: 'Sign in to API-Load',
     description: 'Enter an admin key or access key. The server identifies your permissions.',
     keyLabel: 'Sign-in key',
     keyPlaceholder: 'Enter an AUTH_KEY or access key',

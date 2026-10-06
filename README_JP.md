@@ -2,7 +2,7 @@
 
 <img src="./web/public/favicon.svg" alt="GPT-Load" width="96">
 
-# GPT-Load
+# API-Load
 
 **マルチチャネル・マルチ認証情報向けのセルフホスト AI ゲートウェイ**
 
@@ -56,7 +56,7 @@ API キー、サブスクリプションアカウント、トラフィック制�
 
 </details>
 
-## GPT-Load を選ぶ理由
+## API-Load を選ぶ理由
 
 アプリケーション側で必要なのは、一つの Base URL と一つの AccessKey だけです。プロバイダー、アカウント、認証情報、モデル、ルーティングポリシーはすべて管理画面で設定します。
 

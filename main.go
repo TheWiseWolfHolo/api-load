@@ -17,7 +17,7 @@ func main() {
 		os.Exit(dispatchCommand(os.Args[1:], os.Stdout, os.Stderr))
 	}
 	if err := runServer(); err != nil {
-		logrus.WithError(err).Error("GPT-Load stopped with an error")
+		logrus.WithError(err).Error("API-Load stopped with an error")
 		os.Exit(1)
 	}
 }
@@ -45,7 +45,7 @@ func dispatchCommand(args []string, stdout, stderr io.Writer) int {
 }
 
 func printHelp(output io.Writer) {
-	fmt.Fprintln(output, "GPT-Load - self-hosted AI API key gateway")
+	fmt.Fprintln(output, "API-Load - self-hosted AI API key gateway")
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Usage:")
 	fmt.Fprintln(output, "  gpt-load                    Start the gateway")

@@ -57,7 +57,7 @@ export default {
     refresh: '刷新',
     refreshedAt: '更新于 {time}',
     importCredentials: '导入密钥',
-    goHome: 'GPT-Load 总览',
+    goHome: 'API-Load 总览',
     mascotHint: '长按吉祥物或聚焦后按空格与它互动，按回车返回总览。',
     collapseSidebar: '收起侧栏',
     expandSidebar: '展开侧栏',
@@ -69,7 +69,7 @@ export default {
     reload: '重新加载',
   },
   auth: {
-    title: '登录 GPT-Load',
+    title: '登录 API-Load',
     description: '输入管理员密钥或访问密钥，系统会识别对应权限。',
     keyLabel: '登录密钥',
     keyPlaceholder: '输入 AUTH_KEY 或访问密钥',
