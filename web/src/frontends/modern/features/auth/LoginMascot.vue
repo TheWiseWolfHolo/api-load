@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import logoLight from '@shared/brand/logo-light.svg'
+import logoDark from '@shared/brand/logo-dark.svg'
 defineProps<{ quiet?: boolean }>()
 </script>
 
 <template>
   <picture class="modern-login-brand" aria-hidden="true">
-    <source srcset="/logo-dark.svg" media="(prefers-color-scheme: dark)" />
-    <img src="/logo-light.svg" alt="" width="64" height="64" />
+    <source :srcset="logoDark" media="(prefers-color-scheme: dark)" />
+    <img :src="logoLight" alt="" width="64" height="64" />
   </picture>
 </template>
 

@@ -410,6 +410,7 @@ func importSnapshot(db *gorm.DB, source snapshot, oldKey string, crypt encryptio
 			}
 			overrideJSON, _ := json.Marshal(overrides)
 			for index, baseURL := range urls {
+				baseURL = migratedBaseURL(string(channelID), baseURL)
 				paramsJSON, _ := json.Marshal(map[string]string{"base_url": baseURL})
 				params, e := registry.ValidateParams(channelID, paramsJSON)
 				if e != nil {
@@ -589,4 +590,19 @@ func insertAccessKey(tx *gorm.DB, crypt encryption.Service, name, key string, id
 		return errors.New("create access credential failed")
 	}
 	return nil
+}
+
+func migratedBaseURL(channelID, baseURL string) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+	version := ""
+	switch channelID {
+	case "openai_compatible", "mistral":
+		version = "/v1"
+	case "cohere":
+		version = "/v2"
+	}
+	if version != "" && !strings.HasSuffix(baseURL, version) {
+		baseURL += version
+	}
+	return baseURL
 }
