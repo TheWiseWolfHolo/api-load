@@ -2,7 +2,7 @@ name: Publish API-Load image
 
 on:
   push:
-    branches: [feat/gpt-load-v2-adoption, main]
+    branches: [main]
     tags: [v2.*]
   workflow_dispatch:
 
