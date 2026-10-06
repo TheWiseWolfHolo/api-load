@@ -6,6 +6,7 @@ defineProps<{ title: string; description?: string }>()
 
 <template>
   <section class="modern-auth-card">
+    <slot name="brand" />
     <PageHeader :title="title" :description="description" />
     <slot />
   </section>

@@ -2,25 +2,25 @@
 :root {
   color-scheme: light dark;
 
-  /* 颜色：亮橙红搭配白色与中性灰；前景与背景成对维护。 */
-  --modern-canvas: light-dark(#ffffff, #202020);
-  --modern-sidebar: light-dark(#f0f0ed, #181818);
-  --modern-surface: light-dark(#ffffff, #272727);
+  /* 陶土色与暖灰色，前景与背景成对维护。 */
+  --modern-canvas: light-dark(#faf9f5, #262624);
+  --modern-sidebar: light-dark(#f0eee6, #21211f);
+  --modern-surface: light-dark(#ffffff, #30302e);
   --modern-subtle: color-mix(in srgb, var(--modern-accent-soft) 15%, var(--modern-surface));
-  --modern-text: light-dark(#1c1c1b, #f5f5f2);
-  --modern-muted: light-dark(#6c6c67, #b5b5b0);
-  --modern-border: light-dark(#e4e4df, #40403c);
+  --modern-text: light-dark(#141413, #faf9f5);
+  --modern-muted: light-dark(#5f5e5a, #c2c0b6);
+  --modern-border: light-dark(#dedbd2, #4a4945);
   --modern-coral: var(--modern-action);
-  --modern-accent: light-dark(#e84518, #ff845e);
-  --modern-accent-soft: light-dark(#fff3ed, #3e2a23);
+  --modern-accent: light-dark(#b85c3e, #d97757);
+  --modern-accent-soft: light-dark(#f2ddd5, #55382f);
   --modern-badge-brand-text: color-mix(in srgb, var(--modern-accent) 80%, var(--modern-muted));
   --modern-badge-brand-surface: color-mix(
     in srgb,
     var(--modern-accent-soft) 55%,
     var(--modern-surface)
   );
-  --modern-action: #ff4f1f;
-  --modern-action-hover: #f04012;
+  --modern-action: #b85c3e;
+  --modern-action-hover: #a34f35;
   --modern-on-action: #ffffff;
   --modern-danger: light-dark(#dc3737, #ff8a80);
   --modern-danger-soft: light-dark(#fff1f0, #3e2624);
@@ -65,13 +65,9 @@
   );
   --modern-login-mascot-shadow: light-dark(rgb(90 39 16 / 24%), rgb(0 0 0 / 42%));
   --modern-login-mascot-shadow-soft: light-dark(rgb(98 44 19 / 8%), rgb(0 0 0 / 16%));
-  --modern-login-card-surface: color-mix(
-    in srgb,
-    var(--modern-accent-soft) 12%,
-    var(--modern-surface)
-  );
+  --modern-login-card-surface: var(--modern-surface);
   --modern-login-card-highlight: light-dark(rgb(255 255 255 / 90%), rgb(255 255 255 / 5%));
-  --modern-login-card-border: color-mix(in srgb, var(--modern-accent) 8%, var(--modern-border));
+  --modern-login-card-border: var(--modern-border);
   /* 模型卡卡头的晕染基色。用饱和色，实际浓度由径向渐变的混合比例决定，
      与用量统计顶部卡片同一套手法（那里的 Token 卡用的也是这支蓝）。 */
   --modern-model-card-tint: var(--modern-chart-input);
@@ -98,16 +94,16 @@
   --modern-protocol-gemini-embeddings: light-dark(#6a7518, #c9d37c);
 
   /* 控件状态：按钮、字段与选择器共用边框、底色和焦点反馈。 */
-  --modern-control-border: light-dark(#dcdcd6, #4a4a45);
-  --modern-control-border-hover: light-dark(#bdbdb5, #707069);
+  --modern-control-border: light-dark(#d6d3c9, #55544e);
+  --modern-control-border-hover: light-dark(#bdbdb5, #807e76);
   --modern-control-hover: color-mix(in srgb, var(--modern-accent-soft) 40%, var(--modern-surface));
   --modern-control-pressed: color-mix(
     in srgb,
     var(--modern-accent-soft) 80%,
     var(--modern-surface)
   );
-  --modern-control-disabled: light-dark(#f4f4f1, #2b2b29);
-  --modern-control-placeholder: light-dark(#85857d, #999991);
+  --modern-control-disabled: light-dark(#f0eee6, #2b2b29);
+  --modern-control-placeholder: light-dark(#74726b, #aaa79c);
   --modern-switch-off: light-dark(#ccccc4, #62625b);
 
   /* 字体：沿用系统字体，不增加远端字体请求。 */
@@ -161,8 +157,7 @@
   --modern-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--modern-accent) 15%, transparent);
   --modern-shadow-focus-danger: 0 0 0 3px color-mix(in srgb, var(--modern-danger) 15%, transparent);
   --modern-shadow-login:
-    0 16px 48px light-dark(rgb(92 51 30 / 7%), rgb(0 0 0 / 20%)),
-    0 2px 8px light-dark(rgb(92 51 30 / 3%), rgb(0 0 0 / 10%)),
+    0 2px 8px light-dark(rgb(20 20 19 / 4%), rgb(0 0 0 / 12%)),
     inset 0 1px 0 var(--modern-login-card-highlight);
 
   /* 控件与图标：尺寸由公共组件选择，不在调用处传像素。 */

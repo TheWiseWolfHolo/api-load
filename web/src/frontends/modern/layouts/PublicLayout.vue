@@ -37,7 +37,7 @@ const { sidebarCollapsed, resolvedTheme } = usePreferences()
 <style scoped>
 .modern-public-layout {
   min-height: 100dvh;
-  background: var(--modern-subtle);
+  background: var(--modern-canvas);
 }
 .modern-public-header {
   display: flex;
