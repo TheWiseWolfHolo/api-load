@@ -26,10 +26,17 @@ temp/
 # Runtime data and secrets
 data/
 data_bak/
+secrets/
+backups/
 *.db*
 *.sqlite*
 *.key
 *.log
+*.dump
+*.dpapi
+*.pem
+*.p12
+*.pfx
 
 # Editor and OS files
 .idea/
