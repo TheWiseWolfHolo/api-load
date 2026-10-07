@@ -29,6 +29,9 @@ const tags = computed(() => {
     { key: 'sources', label: t('accessKeys.sourceTag'), values: scope.allowed_cidrs },
   ]
   return [
+    ...(scope.groups_restricted && !scope.groups.length
+      ? [{ key: 'groups-empty', text: t('accessKeys.noGroups'), tooltip: t('accessKeys.noGroups') }]
+      : []),
     ...definitions
       .filter((item) => item.values.length)
       .map((item) => ({

@@ -220,7 +220,7 @@ func websocketGroupEnabled(snapshot *state.ConfigSnapshot, key state.AccessKeyVi
 	if !exists || !snapshot.GroupCatalog[groupID].Enabled || !group.ResponsesWebsocketEnabled || !group.ResolvedTarget.ResponsesWebsocket.Native {
 		return false
 	}
-	if _, allowed := key.Filters.Groups[groupID]; len(key.Filters.Groups) > 0 && !allowed {
+	if !key.Filters.AllowsGroup(groupID) {
 		return false
 	}
 	if _, allowed := key.Filters.Protocols[protocol.OpenAIResponses]; len(key.Filters.Protocols) > 0 && !allowed {

@@ -24,6 +24,7 @@ export interface AccessKeyPresenterLabels {
   protocols: string
   models: string
   allGroups: string
+  noGroups?: string
   allProtocols: string
   allModels: string
   unlimited: string
@@ -44,7 +45,9 @@ function presentAccessKeyWithGroupNames(
 ): AccessKeyPresentation {
   const groupValue =
     accessKey.filters.groups.length === 0
-      ? options.labels.allGroups
+      ? accessKey.filters.groups_restricted
+        ? (options.labels.noGroups ?? '0')
+        : options.labels.allGroups
       : accessKey.filters.groups.map((id) => groupNames.get(id) ?? `#${id}`).join(', ')
   const protocolValue =
     accessKey.filters.protocols.length === 0

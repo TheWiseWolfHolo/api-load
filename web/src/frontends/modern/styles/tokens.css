@@ -6,7 +6,7 @@
   --modern-canvas: light-dark(#faf9f5, #262624);
   --modern-sidebar: light-dark(#f0eee6, #21211f);
   --modern-surface: light-dark(#ffffff, #30302e);
-  --modern-subtle: color-mix(in srgb, var(--modern-accent-soft) 15%, var(--modern-surface));
+  --modern-subtle: light-dark(#f5f4ef, #2b2b29);
   --modern-text: light-dark(#141413, #faf9f5);
   --modern-muted: light-dark(#5f5e5a, #c2c0b6);
   --modern-border: light-dark(#dedbd2, #4a4945);
@@ -22,14 +22,14 @@
   --modern-action: #b85c3e;
   --modern-action-hover: #a34f35;
   --modern-on-action: #ffffff;
-  --modern-danger: light-dark(#dc3737, #ff8a80);
-  --modern-danger-soft: light-dark(#fff1f0, #3e2624);
-  --modern-success: light-dark(#1a9b55, #68d99a);
-  --modern-success-soft: light-dark(#edf9f1, #21362a);
-  --modern-warning: light-dark(#b87408, #f4bc52);
-  --modern-warning-soft: light-dark(#fff8e8, #3b321f);
-  --modern-info: light-dark(#377de2, #89b9ff);
-  --modern-info-soft: light-dark(#edf5ff, #233247);
+  --modern-danger: light-dark(#b3473f, #df958e);
+  --modern-danger-soft: light-dark(#f7eeec, #392b29);
+  --modern-success: light-dark(#42684d, #a1b8a7);
+  --modern-success-soft: light-dark(#edf1ec, #29322b);
+  --modern-warning: light-dark(#80632e, #ccb37a);
+  --modern-warning-soft: light-dark(#f4f0e5, #353024);
+  --modern-info: light-dark(#526b7a, #a7bac7);
+  --modern-info-soft: light-dark(#edf0f2, #2b3237);
   /* 用量图表的固定系列色，概览、构成与趋势保持一致。 */
   --modern-chart-input: light-dark(#527eb2, #96b9e4);
   --modern-chart-cache: light-dark(#318d91, #82ced0);
@@ -96,7 +96,7 @@
   /* 控件状态：按钮、字段与选择器共用边框、底色和焦点反馈。 */
   --modern-control-border: light-dark(#d6d3c9, #55544e);
   --modern-control-border-hover: light-dark(#bdbdb5, #807e76);
-  --modern-control-hover: color-mix(in srgb, var(--modern-accent-soft) 40%, var(--modern-surface));
+  --modern-control-hover: light-dark(#f0eee6, #393936);
   --modern-control-pressed: color-mix(
     in srgb,
     var(--modern-accent-soft) 80%,
@@ -151,7 +151,7 @@
   --modern-radius-round: 50%;
   --modern-shadow-tooltip: 0 2px 8px rgb(0 0 0 / 6%);
   --modern-shadow-menu: 0 8px 28px rgb(0 0 0 / 12%);
-  --modern-shadow-dialog: 0 20px 75px rgb(0 0 0 / 20%);
+  --modern-shadow-dialog: 0 12px 36px rgb(0 0 0 / 12%);
   --modern-shadow-control: 0 1px 2px rgb(0 0 0 / 4%);
   --modern-shadow-thumb: 0 1px 3px rgb(0 0 0 / 18%);
   --modern-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--modern-accent) 15%, transparent);

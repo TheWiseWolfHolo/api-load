@@ -81,6 +81,7 @@ const presentations = computed(() =>
       protocols: t('accessKeys.filterProtocols'),
       models: t('accessKeys.filterModels'),
       allGroups: t('accessKeys.allGroups'),
+      noGroups: t('accessKeys.noGroups'),
       allProtocols: t('accessKeys.allProtocols'),
       allModels: t('accessKeys.allModels'),
       unlimited: t('accessKeys.unlimited'),

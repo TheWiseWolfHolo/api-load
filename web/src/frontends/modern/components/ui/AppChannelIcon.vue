@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import AppTooltip from './AppTooltip.vue'
-import { computed, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { channelIconRasterURL, namespacedChannelIconMarkup } from './channel-icons'
+import { automaticGroupIcon, customIconURL, matchGroupIcon } from './custom-channel-icons'
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
   defineProps<{
     icon?: string
+    customIcon?: string
     mark?: string
     name?: string
     groupName?: string
@@ -26,8 +28,20 @@ const props = withDefaults(
 )
 const { t } = useI18n()
 const id = `modern-channel-${useId()}`
-const markup = computed(() => namespacedChannelIconMarkup(props.icon ?? '', id))
-const raster = computed(() => channelIconRasterURL(props.icon ?? ''))
+const customFailed = ref(false)
+const remote = computed(() =>
+  customIconURL(props.customIcon ?? automaticGroupIcon(props.groupName ?? '') ?? ''),
+)
+watch(remote, () => {
+  customFailed.value = false
+})
+const selectedIcon = computed(() =>
+  props.customIcon?.startsWith('builtin:')
+    ? props.customIcon.slice(8)
+    : (matchGroupIcon(props.groupName ?? '') ?? props.icon ?? ''),
+)
+const markup = computed(() => namespacedChannelIconMarkup(selectedIcon.value, id))
+const raster = computed(() => channelIconRasterURL(selectedIcon.value))
 const fallback = computed(
   () =>
     props.mark?.trim() ||
@@ -57,8 +71,15 @@ const tooltipLabel = computed(() => {
       aria-hidden="true"
     >
       <!-- 只渲染随构建发布的 SVG，接口只提供资源名，不能提供 HTML。 -->
+      <img
+        v-if="remote && !customFailed"
+        :src="remote"
+        alt=""
+        referrerpolicy="no-referrer"
+        @error="customFailed = true"
+      />
       <!-- eslint-disable-next-line vue/no-v-html -->
-      <span v-if="markup" class="modern-channel-icon-art" v-html="markup" />
+      <span v-else-if="markup" class="modern-channel-icon-art" v-html="markup" />
       <img v-else-if="raster" :src="raster" alt="" />
       <span v-else class="modern-channel-icon-mark">{{ fallback }}</span>
     </span>

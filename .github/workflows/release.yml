@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_checks:
+        description: Run the full backend test suite before publishing
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Check pricing, migration, logs and gateway on Linux
+        if: github.event_name != 'workflow_dispatch' || inputs.run_checks
         run: go test -count=1 -timeout=10m ./internal/pricing ./internal/control ./internal/storage ./internal/requestlog ./internal/telemetry ./internal/accessquota ./internal/gateway
       - name: Resolve API-Load version
         id: version

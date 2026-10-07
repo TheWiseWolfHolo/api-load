@@ -51,6 +51,7 @@ const (
 	XAI              = spec.XAI
 	Cerebras         = spec.Cerebras
 	Mistral          = spec.Mistral
+	Fireworks        = spec.Fireworks
 	Nebius           = spec.Nebius
 	Parasail         = spec.Parasail
 	Wafer            = spec.Wafer

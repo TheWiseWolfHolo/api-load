@@ -18,7 +18,7 @@ export interface AccessKeyScopeValidation {
 
 export function createAccessKeyScopeModes(filters: AccessKeyFiltersDto): AccessKeyScopeModes {
   return {
-    groups: filters.groups.length === 0 ? 'all' : 'restricted',
+    groups: filters.groups.length === 0 && !filters.groups_restricted ? 'all' : 'restricted',
     protocols: filters.protocols.length === 0 ? 'all' : 'restricted',
     models: filters.models.length === 0 ? 'all' : 'restricted',
   }
@@ -30,6 +30,7 @@ export function materializeAccessKeyFilters(
 ): AccessKeyFiltersDto {
   return {
     groups: modes.groups === 'all' ? [] : [...new Set(filters.groups)],
+    ...(modes.groups !== 'all' && !filters.groups.length ? { groups_restricted: true } : {}),
     protocols: modes.protocols === 'all' ? [] : [...new Set(filters.protocols)],
     models:
       modes.models === 'all'
@@ -46,6 +47,7 @@ function sameSet<T>(left: readonly T[], right: readonly T[]): boolean {
 }
 
 function filtersEqual(left: AccessKeyFiltersDto, right: AccessKeyFiltersDto): boolean {
+  if (Boolean(left.groups_restricted) !== Boolean(right.groups_restricted)) return false
   return (
     sameSet(left.groups, right.groups) &&
     sameSet(left.protocols, right.protocols) &&

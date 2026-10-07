@@ -399,7 +399,7 @@ func scopeProjectModelGroups(
 		if !group.Enabled {
 			continue
 		}
-		if len(accessKey.Filters.Groups) > 0 {
+		if accessKey.Filters.GroupsRestricted || len(accessKey.Filters.Groups) > 0 {
 			if _, allowed := accessKey.Filters.Groups[group.ID]; !allowed {
 				continue
 			}

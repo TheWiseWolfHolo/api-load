@@ -72,21 +72,15 @@ const normalizedValue = computed(() => {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: #42be65;
+  background: var(--color-success);
 }
 .quota-progress__fill--warning {
-  background: #f1c21b;
+  background: var(--color-warning);
 }
 .quota-progress__fill--danger {
-  background: #fa4d56;
+  background: var(--color-danger);
 }
 .quota-progress--unknown {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--color-border-subtle),
-    var(--color-border-subtle) 6px,
-    var(--color-surface-sunken) 6px,
-    var(--color-surface-sunken) 12px
-  );
+  background: var(--color-surface-sunken);
 }
 </style>

@@ -71,3 +71,7 @@ export function namespacedChannelIconMarkup(icon: string, instanceId: string): s
 export function channelIconRasterURL(icon: string): string | null {
   return rasterIconsByName.get(icon) ?? null
 }
+
+export const channelIconNames = [
+  ...new Set([...iconsByName.keys(), ...rasterIconsByName.keys()]),
+].sort()

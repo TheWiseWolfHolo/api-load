@@ -518,6 +518,7 @@ export interface HealthQuotaCredentialDto {
 }
 
 export interface AccessKeyFiltersDto {
+  groups_restricted?: boolean
   groups: number[]
   protocols: AccessProtocol[]
   models: string[]

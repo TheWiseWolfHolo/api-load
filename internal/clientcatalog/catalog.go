@@ -53,7 +53,7 @@ func Candidates(snapshot *state.ConfigSnapshot, key state.AccessKeyView) []strin
 			}
 		}
 		for _, target := range targets {
-			if len(key.Filters.Groups) == 0 {
+			if len(key.Filters.Groups) == 0 && !key.Filters.GroupsRestricted {
 				visible[name] = struct{}{}
 				break
 			}

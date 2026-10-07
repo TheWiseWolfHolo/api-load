@@ -48,6 +48,7 @@ function unique<T>(values: T[]): T[] {
 export function normalizeAccessKeyFilters(filters: AccessKeyFiltersDto): AccessKeyFiltersDto {
   return {
     groups: unique(filters.groups),
+    ...(filters.groups_restricted ? { groups_restricted: true } : {}),
     protocols: unique(filters.protocols),
     models: unique(filters.models.map((value) => value.trim()).filter(Boolean)),
     allowed_cidrs: unique(filters.allowed_cidrs.map((value) => value.trim()).filter(Boolean)),

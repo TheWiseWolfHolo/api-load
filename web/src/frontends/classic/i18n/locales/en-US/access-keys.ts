@@ -95,6 +95,7 @@ export default {
     createdAt: 'Created',
     updatedAt: 'Updated',
     allGroups: 'All Groups',
+    noGroups: 'No authorized groups',
     allProtocols: 'All protocols',
     allModels: 'All models',
     unlimited: 'Unlimited',

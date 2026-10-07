@@ -21,14 +21,14 @@
   --color-tag: #eceded;
   --color-code-bg: #f0eee6;
   --color-code: #141413;
-  --color-success: #1a6b3f;
-  --color-success-bg: #e6f3ec;
-  --color-info: #1c4f6e;
-  --color-info-bg: #e8eff4;
+  --color-success: #42684d;
+  --color-success-bg: #edf1ec;
+  --color-info: #526b7a;
+  --color-info-bg: #edf0f2;
   --color-warning: #8f6212;
   --color-warning-bg: #f8f0dd;
-  --color-danger: #d03b3b;
-  --color-danger-bg: #fbebe9;
+  --color-danger: #b3473f;
+  --color-danger-bg: #f7eeec;
   --color-neutral: #5a5f66;
   --color-neutral-bg: #eceded;
   --color-skeleton-base: color-mix(

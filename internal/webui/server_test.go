@@ -22,7 +22,7 @@ func TestServerServesSameIndexForExplicitPageRoutes(t *testing.T) {
 		"'sha256-60LHlRjW/B3CtzIoE/Lf1/NEDvko9efWMFaGVhHu/cs=' " +
 		"'sha256-0sLsI2a+NIcumVvBF9zD/ArGqlZR2xfnxsALPmK7nj8='; " +
 		"style-src-attr 'unsafe-inline'; " +
-		"img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
+		"img-src 'self' data: https:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
 		"base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 
 	server := newServer(fstest.MapFS{

@@ -360,7 +360,8 @@ export default {
         affinityHelp: '只控制本分组是否学习或复用亲和目标，不改变普通轮询、权重或重试。',
       },
       delete: {
-        sectionDescription: '删除分组会同时删除其全部渠道凭据，且无法撤销。',
+        sectionDescription:
+          '将删除分组及其凭据，并自动移除访问密钥中的对应引用。仅绑定此分组的访问密钥会停用，此操作无法撤销。',
         open: '删除分组',
         title: '删除此分组？',
         description: '输入准确的分组名称“{name}”以确认永久删除。',

@@ -26,6 +26,7 @@ import { useApiClient } from '@shared/http/client-context'
 
 const props = defineProps<{
   group: GroupRow
+  presentationIcon?: string
   expanded: boolean
   pending?: 'toggle' | 'priority' | 'weight'
   enabledOverride?: boolean
@@ -36,6 +37,7 @@ const props = defineProps<{
   weightError?: string
 }>()
 const emit = defineEmits<{
+  icon: []
   expand: []
   toggle: [value: boolean]
   priority: [value: number]
@@ -170,12 +172,21 @@ const lastActive = computed(() =>
   <article class="modern-group-entry" :aria-labelledby="`${id}-name`">
     <div class="modern-group-row">
       <div class="modern-group-identity">
-        <AppChannelIcon
-          class="modern-group-avatar"
-          :icon="group.channelIcon"
-          :mark="group.channelMark"
-          :name="group.channelName"
-        />
+        <button
+          type="button"
+          class="modern-group-icon-button"
+          :aria-label="t('groups.icons.edit', { name: group.name })"
+          @click="$emit('icon')"
+        >
+          <AppChannelIcon
+            class="modern-group-avatar"
+            :icon="group.channelIcon"
+            :custom-icon="presentationIcon"
+            :group-name="group.name"
+            :mark="group.channelMark"
+            :name="group.channelName"
+          />
+        </button>
         <div class="modern-group-heading">
           <div class="modern-group-name-line">
             <h2 :id="`${id}-name`">
@@ -369,6 +380,18 @@ const lastActive = computed(() =>
 </template>
 
 <style scoped>
+.modern-group-icon-button {
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--modern-radius-small);
+}
+.modern-group-icon-button:focus-visible {
+  outline: var(--modern-focus-width) solid var(--modern-accent);
+  outline-offset: var(--modern-focus-offset);
+}
 .modern-group-entry {
   min-width: var(--modern-group-list-width);
   border-bottom: var(--modern-line-width) solid var(--modern-border);

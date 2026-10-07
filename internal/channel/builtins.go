@@ -32,6 +32,7 @@ func builtInModules() []spec.Module {
 		modules.XAI(),
 		modules.Cerebras(),
 		modules.Mistral(),
+		modules.Fireworks(),
 		modules.Nebius(),
 		modules.Parasail(),
 		modules.Wafer(),

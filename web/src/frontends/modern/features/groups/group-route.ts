@@ -19,7 +19,7 @@ export function parseGroupFilters(query: LocationQuery): GroupFilters {
         ? query.credential_key
         : '',
     protocol: protocolOrder.find((value) => value === query.protocol) ?? '',
-    sort: groupSorts.find((value) => value === query.sort) ?? 'recent',
+    sort: groupSorts.find((value) => value === query.sort) ?? 'custom',
   }
 }
 export function groupFilterQuery(filters: GroupFilters): Record<string, string> {
@@ -33,6 +33,6 @@ export function groupFilterQuery(filters: GroupFilters): Record<string, string> 
   if (filters.model) query.model = filters.model
   if (filters.credential) query.credential_key = filters.credential
   if (filters.protocol) query.protocol = filters.protocol
-  if (filters.sort !== 'recent') query.sort = filters.sort
+  if (filters.sort !== 'custom') query.sort = filters.sort
   return query
 }

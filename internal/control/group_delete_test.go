@@ -1,7 +1,6 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,7 +21,7 @@ import (
 	"gpt-load/internal/storage/models"
 )
 
-func TestDeleteGroupRejectsActiveAndDisabledExplicitAccessKeyReferences(t *testing.T) {
+func TestDeleteGroupDetachesReferencesWithoutExpandingAccess(t *testing.T) {
 	t.Parallel()
 	fixture := newServiceFixture(t)
 	groupID := createGroupWithCredentials(t, fixture, "sk-in-use")
@@ -55,37 +54,38 @@ func TestDeleteGroupRejectsActiveAndDisabledExplicitAccessKeyReferences(t *testi
 			t.Fatal(err)
 		}
 	}
-	beforeSnapshot := fixture.manager.Current()
-	beforeRegistry := fixture.registry.Snapshot()
-
-	err := fixture.service.DeleteGroup(t.Context(), groupID)
-	var apiErr *app_errors.APIError
-	if !errors.As(err, &apiErr) || apiErr.Code != app_errors.ErrGroupInUse.Code {
-		t.Fatalf("DeleteGroup() error = %#v", err)
-	}
-	data := apiErr.Data.(GroupInUseData)
-	if len(data.AccessKeys) != 2 ||
-		data.AccessKeys[0].Name != "Active" ||
-		data.AccessKeys[1].Name != "Disabled" {
-		t.Fatalf("references = %#v", data)
-	}
-	if fixture.manager.Current() != beforeSnapshot ||
-		!reflect.DeepEqual(fixture.registry.Snapshot(), beforeRegistry) {
-		t.Fatal("rejected delete mutated runtime state")
-	}
-	var count int64
-	if err := fixture.db.Model(&models.Group{}).Where("id = ?", groupID).Count(&count).Error; err != nil {
+	if err := fixture.service.DeleteGroup(t.Context(), groupID); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Fatalf("group count = %d, want 1", count)
+	var rows []models.AccessKey
+	if err := fixture.db.Order("id ASC").Find(&rows).Error; err != nil {
+		t.Fatal(err)
 	}
-	encoded, _ := json.Marshal(apiErr.Data)
-	for _, forbidden := range []string{"cipher-client", "client-hash", `"status"`, `"filters"`} {
-		if bytes.Contains(encoded, []byte(forbidden)) {
-			t.Fatalf("GROUP_IN_USE data exposes %q: %s", forbidden, encoded)
+	for _, row := range rows {
+		filters, err := decodeStoredAccessKeyFilters(row.Filters)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch row.Name {
+		case "Active":
+			if row.Status != "disabled" || len(filters.Groups) != 0 || !filters.GroupsRestricted {
+				t.Fatalf("orphaned key = %#v", filters)
+			}
+			view := fixture.manager.Current().AccessKeysByID[row.ID]
+			if view.Filters.AllowsGroup(other.ID) {
+				t.Fatal("empty explicit scope expanded to all groups")
+			}
+		case "Disabled":
+			if row.Status != "disabled" || !reflect.DeepEqual(filters.Groups, []uint{other.ID}) {
+				t.Fatalf("remaining scope = %#v", filters)
+			}
+		case "Unrestricted":
+			if row.Status != "active" || filters.GroupsRestricted || len(filters.Groups) != 0 || len(filters.Models) != 1 {
+				t.Fatalf("unrestricted key changed = %#v", filters)
+			}
 		}
 	}
+
 }
 
 func TestDeleteGroupCommitsCascadeThenRemovesRegistryThenPublishes(t *testing.T) {
@@ -359,38 +359,9 @@ func TestDeleteGroupEndpointAuthenticationValidationNotFoundConflictAndSuccess(t
 	engine.ServeHTTP(notFound, notFoundRequest)
 	assertDeleteGroupEnvelope(t, notFound, http.StatusNotFound, "NOT_FOUND", "グループが存在しません")
 
-	for _, test := range []struct {
-		language string
-		message  string
-	}{
-		{language: "zh-CN", message: "分组仍被访问密钥引用"},
-		{language: "en-US", message: "The group is still referenced by access keys"},
-		{language: "ja-JP", message: "グループはアクセスキーから参照されています"},
-	} {
-		row := models.AccessKey{
-			Name:      "HTTP reference " + test.language,
-			KeyValue:  "cipher-http-" + test.language,
-			KeyHash:   "hash-http-" + test.language,
-			KeySuffix: "0005",
-			Status:    string(state.AccessKeyStatusActive),
-			Filters:   models.JSON(fmt.Sprintf(`{"groups":[%d]}`, groupID)),
-		}
-		if err := fixture.db.Create(&row).Error; err != nil {
-			t.Fatal(err)
-		}
-		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodDelete, path, nil)
-		request.Header.Set("Authorization", "Bearer test-auth-key")
-		request.Header.Set("Accept-Language", test.language)
-		engine.ServeHTTP(recorder, request)
-		assertDeleteGroupEnvelope(t, recorder, http.StatusConflict, "GROUP_IN_USE", test.message)
-		var cleanup models.AccessKey
-		if err := fixture.db.First(&cleanup, row.ID).Error; err != nil {
-			t.Fatal(err)
-		}
-		if err := fixture.db.Delete(&cleanup).Error; err != nil {
-			t.Fatal(err)
-		}
+	row := models.AccessKey{Name: "HTTP reference", KeyValue: "cipher-http", KeyHash: "hash-http", KeySuffix: "0005", Status: "active", Filters: models.JSON(fmt.Sprintf("{\"groups\":[%d]}", groupID))}
+	if err := fixture.db.Create(&row).Error; err != nil {
+		t.Fatal(err)
 	}
 
 	success := httptest.NewRecorder()

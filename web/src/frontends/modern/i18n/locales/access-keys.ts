@@ -10,6 +10,7 @@ export const zhCN = {
   quotaMinimum: '当前最低已知剩余比例：{value}',
   groupFilter: '可用分组',
   allGroups: '全部分组',
+  noGroups: '未授权分组',
   expiryOptions: { all: '全部有效期', never: '长期', active: '未到期', expired: '已到期' },
   title: '访问密钥',
   name: '名称',
@@ -144,6 +145,7 @@ export const enUS: typeof zhCN = {
   quotaMinimum: 'Lowest known remaining quota: {value}',
   groupFilter: 'Accessible group',
   allGroups: 'All groups',
+  noGroups: 'No authorized groups',
   expiryOptions: {
     all: 'All expirations',
     never: 'No expiration',
@@ -285,6 +287,7 @@ export const jaJP: typeof zhCN = {
   quotaMinimum: '確認済みの最小残量：{value}',
   groupFilter: '利用可能なグループ',
   allGroups: 'すべてのグループ',
+  noGroups: '許可されたグループなし',
   expiryOptions: {
     all: 'すべての有効期限',
     never: '無期限',
