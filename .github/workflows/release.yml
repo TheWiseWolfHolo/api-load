@@ -21,6 +21,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - name: Check pricing, migration, logs and gateway on Linux
+        run: go test -count=1 -timeout=10m ./internal/pricing ./internal/control ./internal/storage ./internal/requestlog ./internal/telemetry ./internal/accessquota ./internal/gateway
       - name: Resolve API-Load version
         id: version
         shell: bash
@@ -46,6 +51,7 @@ jobs:
             type=sha,prefix=v2-sha-
             type=raw,value=v2-candidate,enable=${{ github.ref == 'refs/heads/feat/gpt-load-v2-adoption' }}
             type=raw,value=2,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=v${{ steps.version.outputs.value }}
             type=ref,event=tag
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
