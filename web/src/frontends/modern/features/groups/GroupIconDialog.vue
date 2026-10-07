@@ -82,6 +82,14 @@ watch(selection, () => {
   imageError.value = false
   fileError.value = false
 })
+function imageLoaded() {
+  imageError.value = false
+  imagePending.value = false
+}
+function imageFailed() {
+  imageError.value = true
+  imagePending.value = false
+}
 async function choose(event: Event) {
   const field = event.target as HTMLInputElement
   const file = field.files?.[0]
@@ -180,14 +188,8 @@ async function choose(event: Event) {
             :src="previewURL"
             alt=""
             referrerpolicy="no-referrer"
-            @error="
-              imageError = true
-              imagePending = false
-            "
-            @load="
-              imageError = false
-              imagePending = false
-            "
+            @error="imageFailed"
+            @load="imageLoaded"
           />
           <AppChannelIcon
             v-else
