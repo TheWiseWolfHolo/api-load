@@ -64,6 +64,44 @@ func TestGetGroupModelsReturnsClientNamesAndPricingStatus(t *testing.T) {
 	}
 }
 
+func TestUpdateGroupModelsRejectsStaleDraft(t *testing.T) {
+	t.Parallel()
+	fixture := newServiceFixture(t)
+	groupID := createGroupWithCredentials(t, fixture, "sk-model-sync-fixture")
+	original := []GroupModel{{ID: "upstream-v1", Alias: "public-model", AliasEnabled: true}}
+	_, err := fixture.service.UpdateGroupModels(t.Context(), groupID, GroupModelsUpdateRequest{
+		Models: optionalGroupModels{Set: true, Values: original},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := []GroupModel{{ID: "upstream-v2", Alias: "public-model", AliasEnabled: true}}
+	_, err = fixture.service.UpdateGroupModels(t.Context(), groupID, GroupModelsUpdateRequest{
+		Models:         optionalGroupModels{Set: true, Values: updated},
+		ExpectedModels: optionalGroupModels{Set: true, Values: original},
+	})
+	if err != nil {
+		t.Fatalf("matching draft failed: %v", err)
+	}
+	before := fixture.manager.Current()
+	_, err = fixture.service.UpdateGroupModels(t.Context(), groupID, GroupModelsUpdateRequest{
+		Models:         optionalGroupModels{Set: true, Values: []GroupModel{}},
+		ExpectedModels: optionalGroupModels{Set: true, Values: original},
+	})
+	if !errors.Is(err, app_errors.ErrGroupModelsChanged) || fixture.manager.Current() != before {
+		t.Fatalf("stale draft changed configuration: %v", err)
+	}
+	got, err := fixture.service.GetGroupModels(t.Context(), groupID)
+	if err != nil || len(got.Items) != 1 || got.Items[0].ID != "upstream-v2" || got.Items[0].ClientModel != "public-model" {
+		t.Fatalf("stale draft overwrote saved mapping: %#v, %v", got, err)
+	}
+	if !sameVisibleGroupModelBindings(string(channel.Codex), []GroupModel{
+		{ID: channel.CodexLiveModelID}, {ID: "upstream-v2", Alias: "public-model"},
+	}, updated) {
+		t.Fatal("hidden Codex live entry caused a false conflict")
+	}
+}
+
 func TestMapGroupModelsResponseTreatsContextTierOnlyPriceAsConfigured(t *testing.T) {
 	t.Parallel()
 	result, err := mapGroupModelsResponse(

@@ -14,7 +14,8 @@ import (
 )
 
 type GroupModelsUpdateRequest struct {
-	Models optionalGroupModels `json:"models"`
+	Models         optionalGroupModels `json:"models"`
+	ExpectedModels optionalGroupModels `json:"expected_models"`
 }
 
 type GroupModelResponse struct {
@@ -117,6 +118,13 @@ func (s *Service) UpdateGroupModels(
 	if err != nil {
 		return GroupModelsResponse{}, fmt.Errorf("encode group models: %w", err)
 	}
+	var expected []GroupModel
+	if request.ExpectedModels.Set {
+		expected, err = normalizeGroupModels(request.ExpectedModels.Values)
+		if err != nil {
+			return GroupModelsResponse{}, err
+		}
+	}
 
 	modelIDsChanged := false
 	_, err = s.writeGroupConfig(ctx, func(tx *gorm.DB) error {
@@ -130,6 +138,9 @@ func (s *Service) UpdateGroupModels(
 		var previous []GroupModel
 		if err := decodeGroupDiscoveryJSON(group.Models, &previous); err != nil {
 			return fmt.Errorf("decode group %d models: %w", groupID, app_errors.ErrInternalServer)
+		}
+		if request.ExpectedModels.Set && !sameVisibleGroupModelBindings(group.ChannelID, previous, expected) {
+			return app_errors.ErrGroupModelsChanged
 		}
 		modelIDsChanged = !sameGroupModelIDs(previous, normalized)
 
@@ -178,4 +189,18 @@ func sameGroupModelIDs(left, right []GroupModel) bool {
 		}
 	}
 	return true
+}
+
+func sameVisibleGroupModelBindings(channelID string, current, expected []GroupModel) bool {
+	index := 0
+	for _, model := range current {
+		if isBuiltInCodexLiveModel(channelID, model.ID) {
+			continue
+		}
+		if index >= len(expected) || model.ID != expected[index].ID || model.Alias != expected[index].Alias {
+			return false
+		}
+		index++
+	}
+	return index == len(expected)
 }
