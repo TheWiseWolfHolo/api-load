@@ -1309,6 +1309,9 @@ func TestProductionRuntimeManagerUsesNativeProviderListModelsPaths(t *testing.T)
 			t.Cleanup(manager.Shutdown)
 
 			spec := listModelsAttempt(t, test.channelID, server.URL)
+			if test.channelID == channel.OpenRouter {
+				spec = listModelsAttempt(t, test.channelID, server.URL+"/v1")
+			}
 			spec.RawQuery = "cursor=%2F&limit=10"
 			result := manager.Execute(context.Background(), spec)
 			if validationErr := result.Validate(); validationErr != nil || result.Error != nil {

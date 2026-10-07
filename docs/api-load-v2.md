@@ -10,6 +10,8 @@ API-Load 保留自己的名字和图标，镜像发布到 `ghcr.io/thewisewolfho
 
 模型保存请求可以携带 `expected_models`。服务器在写入事务中核对已有映射，配置已变化时返回 `GROUP_MODELS_CHANGED`，避免旧草稿覆盖更新。旧客户端不携带此字段时沿用既有保存行为。上游模型替换后，价格按新模型身份解析；公开名称保持不变不代表价格和能力相同。
 
+`2.0.0-apiload.5` 修复内置 OpenRouter 渠道的 API 前缀。其 SDK 自动追加 `/v1`，现在也接受迁移前常用的完整地址 `https://openrouter.ai/api/v1`，避免模型同步等操作请求到重复的 `/v1/v1` 路径。此修复不修改持久化地址、模型映射或凭据。
+
 用户已授权发布 `2.0.0-apiload.2` 候选镜像。代码继续在 `feat/gpt-load-v2-adoption` 分支维护，main 合并另行安排。已发布标签 `v2.0.0-apiload.1` 保持原提交。
 
 新版部署到 Tencent US，访问地址为 `https://apiload.wolfholo.com`。New API 渠道使用 v2 统一入口及各分组专用访问凭据。

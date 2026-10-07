@@ -186,6 +186,11 @@ func providerConfig(baseURL string, custom bool, baseProvider schemas.ModelProvi
 		// base_url is a complete API prefix, so remove only that exact suffix.
 		networkBaseURL = strings.TrimSuffix(baseURL, "/v1")
 	}
+	if !custom && baseProvider == schemas.OpenRouter {
+		// OpenRouter's SDK appends /v1 for models, embeddings and chat. Accept
+		// the complete API prefix used by migrated compatible channels too.
+		networkBaseURL = strings.TrimSuffix(baseURL, "/v1")
+	}
 	config := &schemas.ProviderConfig{
 		NetworkConfig: schemas.NetworkConfig{
 			BaseURL:                        networkBaseURL,
