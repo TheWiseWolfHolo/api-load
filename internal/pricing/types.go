@@ -25,6 +25,14 @@ type Prices struct {
 	CacheWrite Price
 }
 
+// BillingUnit identifies the quantity charged for a successful request.
+type BillingUnit string
+
+const (
+	BillingUnitToken   BillingUnit = "token"
+	BillingUnitRequest BillingUnit = "request"
+)
+
 // Identity is the exact channel and upstream-model pricing identity.
 type Identity struct {
 	ChannelID string `json:"channel_id"`
@@ -56,6 +64,8 @@ type Schedule struct {
 // Rule is one exact channel and upstream-model price definition.
 type Rule struct {
 	Identity      Identity
+	BillingUnit   BillingUnit
+	RequestPrice  *NanoUSD
 	Prices        Prices
 	ContextTiers  []ContextTier
 	ModeSchedules map[Mode]Schedule
@@ -92,6 +102,8 @@ type Quote struct {
 // the first persisted pricing receipt schema.
 const ReceiptMethodUnitRateSum = "unit_rate_sum"
 
+const ReceiptMethodPerRequest = "fixed_per_request"
+
 // ReceiptLineState distinguishes a priced component from a positive component
 // whose exact rate was unavailable at request time.
 type ReceiptLineState string
@@ -106,6 +118,7 @@ type ReceiptLine struct {
 	Code                  string           `json:"code"`
 	Quantity              int64            `json:"quantity"`
 	RateNanoUSDPerMillion *int64           `json:"rate_nano_usd_per_million,omitempty"`
+	RateNanoUSDPerRequest *int64           `json:"rate_nano_usd_per_request,omitempty"`
 	Multiplier            Multiplier       `json:"multiplier"`
 	State                 ReceiptLineState `json:"state"`
 	AmountNanoUSD         *int64           `json:"amount_nano_usd,omitempty"`

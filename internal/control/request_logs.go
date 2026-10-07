@@ -113,6 +113,7 @@ type requestLogPricingLineResponse struct {
 	Code                  string                              `json:"code"`
 	Quantity              string                              `json:"quantity"`
 	RateNanoUSDPerMillion *string                             `json:"rate_nano_usd_per_million"`
+	RateNanoUSDPerRequest *string                             `json:"rate_nano_usd_per_request,omitempty"`
 	Multiplier            requestLogPricingMultiplierResponse `json:"multiplier"`
 	State                 pricing.ReceiptLineState            `json:"state"`
 	AmountNanoUSD         *string                             `json:"amount_nano_usd"`
@@ -1450,6 +1451,10 @@ func mapRequestLogPricingReceipt(
 			value := strconv.FormatInt(*line.RateNanoUSDPerMillion, 10)
 			mapped.RateNanoUSDPerMillion = &value
 		}
+		if line.RateNanoUSDPerRequest != nil {
+			value := strconv.FormatInt(*line.RateNanoUSDPerRequest, 10)
+			mapped.RateNanoUSDPerRequest = &value
+		}
 		if line.AmountNanoUSD != nil {
 			value := strconv.FormatInt(*line.AmountNanoUSD, 10)
 			mapped.AmountNanoUSD = &value
@@ -1582,7 +1587,8 @@ type requestLogUsageCostResponse struct {
 }
 
 func mapRequestLogUsageCost(record requestlog.Record) (requestLogUsageCostResponse, error) {
-	if err := requestlog.ValidateUsageCostState(
+	if err := requestlog.ValidateBillingUsageCostState(
+		record.BillingUnit, record.Status,
 		record.UsageState,
 		record.CostState,
 		record.PricingCompleteness,

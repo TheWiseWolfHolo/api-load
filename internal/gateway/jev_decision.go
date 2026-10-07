@@ -243,6 +243,7 @@ func (handler *Handler) executeJevDecision(ctx context.Context, snapshot *state.
 		frozenPricing,
 		result.Usage,
 		effectivePricingMode(metadata.PricingMode),
+		result.Err == nil && result.ExecutionError == nil && !result.ProviderErrorBeforeCommit && result.HasResponse() && result.StatusCode >= 200 && result.StatusCode < 300,
 	)
 	decision.CostState = quote.CostState
 	decision.PricingCompleteness = quote.PricingCompleteness

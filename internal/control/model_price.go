@@ -25,6 +25,8 @@ type PriceSlotsDTO struct {
 }
 
 type ModelPriceDTO struct {
+	BillingUnit         pricing.BillingUnit                    `json:"billing_unit"`
+	RequestPrice        *string                                `json:"request_price"`
 	ID                  uint                                   `json:"id"`
 	ChannelID           string                                 `json:"channel_id"`
 	ChannelName         string                                 `json:"channel_name"`
@@ -124,7 +126,7 @@ func (s *Service) UpdateModelPrice(
 		if err := tx.First(&row, id).Error; err != nil {
 			return fmt.Errorf("load model price: %w", app_errors.ParseDBError(err))
 		}
-		if err := validateModeScheduleUpdate(row, request.ModeSchedules.schedules); err != nil {
+		if err := validateModeScheduleUpdate(row, request.ModeSchedules.schedules); err != nil && request.BillingUnit != pricing.BillingUnitRequest {
 			return err
 		}
 		references, err := loadPriceReferenceSnapshot(tx)
@@ -139,6 +141,11 @@ func (s *Service) UpdateModelPrice(
 		}
 
 		desired := row
+		desired.BillingUnit = string(request.BillingUnit)
+		if desired.BillingUnit == "" {
+			desired.BillingUnit = string(pricing.BillingUnitToken)
+		}
+		desired.RequestPriceNanoUSD = cloneModelPriceValue(request.RequestPrice.nanoUSD)
 		desired.InputPriceNanoUSDPerMillionTokens = cloneModelPriceValue(request.Input.nanoUSD)
 		desired.OutputPriceNanoUSDPerMillionTokens = cloneModelPriceValue(request.Output.nanoUSD)
 		desired.CacheReadPriceNanoUSDPerMillionTokens = cloneModelPriceValue(request.CacheRead.nanoUSD)
@@ -154,6 +161,8 @@ func (s *Service) UpdateModelPrice(
 			if err := tx.Model(&models.ModelPrice{}).
 				Where("id = ?", id).
 				Updates(map[string]any{
+					"billing_unit":                                  desired.BillingUnit,
+					"request_price_nano_usd":                        desired.RequestPriceNanoUSD,
 					"input_price_nano_usd_per_million_tokens":       desired.InputPriceNanoUSDPerMillionTokens,
 					"output_price_nano_usd_per_million_tokens":      desired.OutputPriceNanoUSDPerMillionTokens,
 					"cache_read_price_nano_usd_per_million_tokens":  desired.CacheReadPriceNanoUSDPerMillionTokens,
@@ -227,6 +236,7 @@ func (s *Service) ResetModelPrice(
 		if err != nil {
 			return fmt.Errorf("normalize catalog model price: %w", app_errors.ErrInternalServer)
 		}
+		desired.BillingUnit = string(pricing.BillingUnitToken)
 		if !modelPriceMutableValuesEqual(row, desired) {
 			updatedAtMS, err := safeEpochMilliseconds(s.now())
 			if err != nil {
@@ -235,6 +245,8 @@ func (s *Service) ResetModelPrice(
 			if err := tx.Model(&models.ModelPrice{}).
 				Where("id = ?", id).
 				Updates(map[string]any{
+					"billing_unit":                                  desired.BillingUnit,
+					"request_price_nano_usd":                        nil,
 					"input_price_nano_usd_per_million_tokens":       desired.InputPriceNanoUSDPerMillionTokens,
 					"output_price_nano_usd_per_million_tokens":      desired.OutputPriceNanoUSDPerMillionTokens,
 					"cache_read_price_nano_usd_per_million_tokens":  desired.CacheReadPriceNanoUSDPerMillionTokens,
@@ -247,6 +259,8 @@ func (s *Service) ResetModelPrice(
 				return fmt.Errorf("reset model price: %w", app_errors.ParseDBError(err))
 			}
 			row.InputPriceNanoUSDPerMillionTokens = desired.InputPriceNanoUSDPerMillionTokens
+			row.BillingUnit = desired.BillingUnit
+			row.RequestPriceNanoUSD = nil
 			row.OutputPriceNanoUSDPerMillionTokens = desired.OutputPriceNanoUSDPerMillionTokens
 			row.CacheReadPriceNanoUSDPerMillionTokens = desired.CacheReadPriceNanoUSDPerMillionTokens
 			row.CacheWritePriceNanoUSDPerMillionTokens = desired.CacheWritePriceNanoUSDPerMillionTokens
@@ -340,6 +354,9 @@ func (s *Service) DeleteModelPrice(ctx context.Context, id uint) error {
 }
 
 func modelPriceUpdateAllNull(request ModelPriceUpdateRequest) bool {
+	if request.BillingUnit == pricing.BillingUnitRequest {
+		return request.RequestPrice.nanoUSD == nil
+	}
 	if len(request.ModeSchedules.schedules) > 0 {
 		return false
 	}
@@ -466,6 +483,8 @@ func modelPriceMutableValuesEqual(left, right models.ModelPrice) bool {
 		return false
 	}
 	return pricePointerEqual(left.InputPriceNanoUSDPerMillionTokens, right.InputPriceNanoUSDPerMillionTokens) &&
+		(left.BillingUnit == right.BillingUnit || (left.BillingUnit == "" && right.BillingUnit == "token") || (right.BillingUnit == "" && left.BillingUnit == "token")) &&
+		pricePointerEqual(left.RequestPriceNanoUSD, right.RequestPriceNanoUSD) &&
 		pricePointerEqual(left.OutputPriceNanoUSDPerMillionTokens, right.OutputPriceNanoUSDPerMillionTokens) &&
 		pricePointerEqual(left.CacheReadPriceNanoUSDPerMillionTokens, right.CacheReadPriceNanoUSDPerMillionTokens) &&
 		pricePointerEqual(left.CacheWritePriceNanoUSDPerMillionTokens, right.CacheWritePriceNanoUSDPerMillionTokens) &&
@@ -594,6 +613,7 @@ func projectModelPriceRow(
 		}
 	}
 	dto := ModelPriceDTO{
+		BillingUnit: pricing.BillingUnit(row.BillingUnit), RequestPrice: modelPriceWireDecimal(row.RequestPriceNanoUSD),
 		ID: row.ID, ChannelID: row.ChannelID, ChannelName: descriptor.Name,
 		ChannelMark: descriptor.Mark, ChannelIcon: descriptor.Icon, ModelID: row.ModelID,
 		Prices:              prices,
@@ -609,6 +629,9 @@ func projectModelPriceRow(
 		UpdatedAtMS:         row.UpdatedAtMS,
 		CanReset:            row.IsManual,
 		CanDelete:           row.IsManual && reference.referenceCount == 0,
+	}
+	if dto.BillingUnit == "" {
+		dto.BillingUnit = pricing.BillingUnitToken
 	}
 	return modelPriceListRecord{dto: dto}, nil
 }

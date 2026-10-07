@@ -2,6 +2,7 @@ package models
 
 // RequestLog is the durable request-level audit and usage record.
 type RequestLog struct {
+	BillingUnit                 string              `gorm:"type:varchar(16);not null;default:token;check:chk_request_log_billing_unit,billing_unit IN ('token','request')"`
 	RequestAudit                JSON                `gorm:"type:json"`
 	AuditCostNanoUSD            int64               `gorm:"column:audit_cost_nano_usd;not null;default:0"`
 	AuditPricingCompleteness    string              `gorm:"type:varchar(32);not null;default:'not_applicable'"`
@@ -48,7 +49,7 @@ type RequestLog struct {
 	EstimatedCostNanoUSD        int64               `gorm:"column:estimated_cost_nano_usd;not null;default:0;check:chk_request_log_cost_nano,estimated_cost_nano_usd >= 0"`
 	UsageState                  string              `gorm:"type:varchar(32);not null;default:'not_applicable';check:chk_request_log_usage_state,usage_state IN ('complete','partial','missing','not_applicable')"`
 	CostState                   string              `gorm:"type:varchar(32);not null;default:'not_applicable';check:chk_request_log_cost_state,cost_state IN ('priced','unpriced','not_applicable')"`
-	PricingCompleteness         string              `gorm:"type:varchar(32);not null;default:'not_applicable';check:chk_request_log_pricing_completeness,pricing_completeness IN ('complete','partial','unavailable','not_applicable');check:chk_request_log_usage_pricing_state,(usage_state = 'not_applicable' AND cost_state = 'not_applicable' AND pricing_completeness = 'not_applicable' AND estimated_cost_nano_usd = 0) OR (usage_state = 'missing' AND cost_state = 'unpriced' AND pricing_completeness = 'unavailable' AND estimated_cost_nano_usd = 0) OR (usage_state IN ('complete','partial') AND ((cost_state = 'unpriced' AND pricing_completeness = 'unavailable' AND estimated_cost_nano_usd = 0) OR (cost_state = 'priced' AND pricing_completeness IN ('complete','partial'))))"`
+	PricingCompleteness         string              `gorm:"type:varchar(32);not null;default:'not_applicable';check:chk_request_log_pricing_completeness,pricing_completeness IN ('complete','partial','unavailable','not_applicable');check:chk_request_log_usage_pricing_state,(billing_unit = 'request' AND ((status = 'success' AND cost_state = 'priced' AND pricing_completeness = 'complete') OR (cost_state = 'unpriced' AND pricing_completeness = 'unavailable' AND estimated_cost_nano_usd = 0) OR (cost_state = 'not_applicable' AND pricing_completeness = 'not_applicable' AND estimated_cost_nano_usd = 0))) OR (billing_unit = 'token' AND ((usage_state = 'not_applicable' AND cost_state = 'not_applicable' AND pricing_completeness = 'not_applicable' AND estimated_cost_nano_usd = 0) OR (usage_state = 'missing' AND cost_state = 'unpriced' AND pricing_completeness = 'unavailable' AND estimated_cost_nano_usd = 0) OR (usage_state IN ('complete','partial') AND ((cost_state = 'unpriced' AND pricing_completeness = 'unavailable' AND estimated_cost_nano_usd = 0) OR (cost_state = 'priced' AND pricing_completeness IN ('complete','partial'))))))"`
 	AttemptRows                 []RequestLogAttempt `gorm:"-"`
 }
 

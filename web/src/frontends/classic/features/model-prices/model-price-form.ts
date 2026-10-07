@@ -31,10 +31,13 @@ export interface ModelPriceScheduleDraft {
 }
 
 export interface ModelPriceDraft extends ModelPriceScheduleDraft {
+  billingUnit: 'token' | 'request'
+  requestPrice: string
   modeSchedules: Record<string, ModelPriceScheduleDraft>
 }
 
 export interface ModelPriceFormErrors {
+  requestPrice?: 'invalid_price'
   base: ModelPriceSlotErrors
   tiers: Record<string, ModelPriceTierErrors>
   modeSchedules: Record<string, ModelPriceScheduleErrors>
@@ -88,7 +91,12 @@ export function createModelPriceDraft(row?: ModelPriceDto | null): ModelPriceDra
   for (const [mode, schedule] of Object.entries(row?.mode_schedules ?? {})) {
     modeSchedules[mode] = createScheduleDraft(schedule)
   }
-  return { ...standard, modeSchedules }
+  return {
+    ...standard,
+    modeSchedules,
+    billingUnit: row?.billing_unit ?? 'token',
+    requestPrice: row?.request_price ?? '',
+  }
 }
 
 function parsePrice(raw: string): string | null | undefined {
@@ -161,6 +169,15 @@ function validateScheduleDraft(draft: ModelPriceScheduleDraft): ModelPriceSchedu
 }
 
 export function validateModelPriceDraft(draft: ModelPriceDraft): ModelPriceFormErrors {
+  if (draft.billingUnit === 'request')
+    return {
+      base: {},
+      tiers: {},
+      modeSchedules: {},
+      ...(parsePrice(draft.requestPrice) === undefined
+        ? { requestPrice: 'invalid_price' as const }
+        : {}),
+    }
   const standard = validateScheduleDraft(draft)
   const modeSchedules: Record<string, ModelPriceScheduleErrors> = {}
   for (const [mode, schedule] of Object.entries(draft.modeSchedules)) {
@@ -177,6 +194,7 @@ export function validateModelPriceDraft(draft: ModelPriceDraft): ModelPriceFormE
 
 export function modelPriceFormHasErrors(errors: ModelPriceFormErrors): boolean {
   return (
+    errors.requestPrice !== undefined ||
     Object.keys(errors.base).length > 0 ||
     Object.keys(errors.tiers).length > 0 ||
     Object.keys(errors.modeSchedules).length > 0
@@ -213,6 +231,18 @@ export function buildModelPriceRequest(
 ): ModelPriceUpdateRequest | null {
   const errors = validateModelPriceDraft(draft)
   if (modelPriceFormHasErrors(errors)) return null
+  if (draft.billingUnit === 'request')
+    return {
+      billing_unit: 'request',
+      request_price: parsePrice(draft.requestPrice) ?? null,
+      input: null,
+      output: null,
+      cache_read: null,
+      cache_write: null,
+      context_tiers: [],
+      mode_schedules: {},
+      confirm_unpriced: confirmUnpriced,
+    }
 
   const modeSchedules: Record<string, ModelPriceScheduleUpdateRequest> = {}
   for (const [mode, schedule] of Object.entries(draft.modeSchedules)) {
@@ -220,6 +250,8 @@ export function buildModelPriceRequest(
   }
 
   return {
+    billing_unit: 'token',
+    request_price: null,
     input: parsePrice(draft.base.input) ?? null,
     output: parsePrice(draft.base.output) ?? null,
     cache_read: parsePrice(draft.base.cache_read) ?? null,
@@ -232,6 +264,7 @@ export function buildModelPriceRequest(
 
 /** 是否处于「用户主动清空」状态；基础价格和全部 Tier 都没有任何价格。 */
 export function modelPriceDraftIsAllNull(draft: ModelPriceDraft): boolean {
+  if (draft.billingUnit === 'request') return draft.requestPrice === ''
   return (
     slotsAllEmpty(draft.base) &&
     draft.tiers.every((tier) => slotsAllEmpty(tier.slots)) &&
@@ -260,6 +293,9 @@ function scheduleDraftChanged(
 }
 
 export function modelPriceDraftChanged(row: ModelPriceDto, draft: ModelPriceDraft): boolean {
+  if (row.billing_unit !== draft.billingUnit || (row.request_price ?? '') !== draft.requestPrice)
+    return true
+  if (draft.billingUnit === 'request') return false
   if (scheduleDraftChanged({ prices: row.prices, context_tiers: row.context_tiers }, draft)) {
     return true
   }

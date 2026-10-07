@@ -15,6 +15,7 @@ import {
   AppFormSection,
   AppIcon,
   AppIconButton,
+  AppSelect,
   AppTextField,
   AppTooltip,
 } from '@modern/components/ui'
@@ -24,6 +25,7 @@ import {
   priceDraft,
   priceDraftErrors,
   priceDraftRequest,
+  validPrice,
 } from './model-price-draft'
 
 const props = defineProps<{ price: ModelPrice; modelCount: number; groupCount: number }>()
@@ -37,13 +39,36 @@ const { t, n } = useI18n()
 const client = useApiClient()
 const messages = useMessages()
 const draft = ref(priceDraft(props.price))
-const baseline = ref(JSON.stringify(draft.value))
-const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
+const billingUnit = ref(props.price.billing_unit)
+const requestPrice = ref(props.price.request_price ?? '')
+const serialized = () => JSON.stringify([draft.value, billingUnit.value, requestPrice.value])
+const baseline = ref(serialized())
+const dirty = computed(() => serialized() !== baseline.value)
 const pending = ref(false)
 const submitted = ref(false)
 const unpriced = ref(false)
-const errors = computed(() => priceDraftErrors(draft.value))
-const request = computed(() => priceDraftRequest(draft.value))
+const errors = computed(() =>
+  billingUnit.value === 'request'
+    ? validPrice(requestPrice.value.trim())
+      ? {}
+      : { request_price: 'invalidPrice' }
+    : priceDraftErrors(draft.value),
+)
+const request = computed(() =>
+  billingUnit.value === 'request'
+    ? {
+        billing_unit: 'request' as const,
+        request_price: requestPrice.value.trim() || null,
+        input: null,
+        output: null,
+        cache_read: null,
+        cache_write: null,
+        context_tiers: [],
+        mode_schedules: {},
+        confirm_unpriced: !requestPrice.value.trim(),
+      }
+    : priceDraftRequest(draft.value),
+)
 const ownershipIntent = computed(
   () => request.value.confirm_unpriced && props.price.method !== 'user_marked_unpriced',
 )
@@ -65,7 +90,9 @@ watch(
   (price) => {
     if (dirty.value || pending.value) return
     draft.value = priceDraft(price)
-    baseline.value = JSON.stringify(draft.value)
+    billingUnit.value = price.billing_unit
+    requestPrice.value = price.request_price ?? ''
+    baseline.value = serialized()
   },
 )
 onScopeDispose(() => {
@@ -89,7 +116,7 @@ async function save(confirmed = false): Promise<void> {
   try {
     const price = await saveModelPrice(client, props.price.id, request.value, controller.signal)
     if (controller.signal.aborted) return
-    baseline.value = JSON.stringify(draft.value)
+    baseline.value = serialized()
     emit('dirty', false)
     unpriced.value = false
     messages.show({ tone: 'success', text: t('modelManager.saveSuccess') })
@@ -127,108 +154,136 @@ async function save(confirmed = false): Promise<void> {
         {{ t('modelManager.priceImpact', { models: n(modelCount), groups: n(groupCount) }) }}
       </p>
       <div class="modern-model-price-editor-hint">
-        <span>{{ t('modelManager.unit') }}</span>
+        <span>{{
+          t(billingUnit === 'request' ? 'modelManager.requestUnit' : 'modelManager.unit')
+        }}</span>
         <AppTooltip :label="t('modelManager.emptySlotsHint')">
           <span tabindex="0" class="modern-model-price-help"
             ><AppIcon :icon="Info" size="sm"
           /></span>
         </AppTooltip>
       </div>
-      <AppFormSection
-        v-for="schedule in draft"
-        :key="schedule.mode"
-        :title="modeLabel(schedule.mode)"
-        compact
-      >
-        <template #actions>
-          <!-- 阶梯价只在标准档提供：Fast 后端直接驳回，Ultrafast 统一不做。 -->
-          <span v-if="schedule.mode !== 'standard'" class="modern-model-price-note">
-            {{ t('modelManager.noTierMode') }}
-          </span>
-          <AppButton
-            v-else
-            variant="text"
-            size="xs"
-            :icon="Plus"
-            :disabled="pending"
-            @click="schedule.tiers.push(newPriceTier())"
-          >
-            {{ t('modelManager.addTier') }}
-          </AppButton>
-          <AppIconButton
-            v-if="schedule.mode !== 'standard'"
-            :icon="Trash2"
-            :label="t('modelManager.removeMode')"
-            :tooltip="true"
-            size="xs"
-            :disabled="pending"
-            @click="draft = draft.filter((item) => item !== schedule)"
-          />
-        </template>
-        <div class="modern-model-price-inputs">
-          <AppTextField
-            v-for="field in priceFields"
-            :key="field"
-            v-model="schedule.prices[field]"
-            :label="t('modelManager.slots.' + field)"
-            :error="error(schedule.mode + '.' + field)"
-            :disabled="pending"
-            :placeholder="t('modelManager.emptySlot')"
-            inputmode="decimal"
-            size="sm"
-          />
-        </div>
-        <p v-if="error(schedule.mode)" class="modern-model-price-error">
-          {{ error(schedule.mode) }}
-        </p>
-        <div v-for="tier in schedule.tiers" :key="tier.key" class="modern-model-price-tier-editor">
-          <header>
-            <AppTextField
-              v-model="tier.threshold"
-              :label="t('modelManager.threshold')"
-              :error="error(tier.key)"
+      <AppSelect
+        v-model="billingUnit"
+        :label="t('modelManager.billingUnit')"
+        :options="[
+          { value: 'token', label: t('modelManager.tokenBilling') },
+          { value: 'request', label: t('modelManager.requestBilling') },
+        ]"
+        :disabled="pending"
+        size="sm"
+      />
+      <AppTextField
+        v-if="billingUnit === 'request'"
+        v-model="requestPrice"
+        :label="t('modelManager.requestPrice')"
+        :description="t('modelManager.requestPriceHelp')"
+        :error="error('request_price')"
+        :disabled="pending"
+        inputmode="decimal"
+        size="sm"
+      />
+      <template v-else>
+        <AppFormSection
+          v-for="schedule in draft"
+          :key="schedule.mode"
+          :title="modeLabel(schedule.mode)"
+          compact
+        >
+          <template #actions>
+            <!-- 阶梯价只在标准档提供：Fast 后端直接驳回，Ultrafast 统一不做。 -->
+            <span v-if="schedule.mode !== 'standard'" class="modern-model-price-note">
+              {{ t('modelManager.noTierMode') }}
+            </span>
+            <AppButton
+              v-else
+              variant="text"
+              size="xs"
+              :icon="Plus"
               :disabled="pending"
-              size="sm"
-              inputmode="numeric"
-            />
+              @click="schedule.tiers.push(newPriceTier())"
+            >
+              {{ t('modelManager.addTier') }}
+            </AppButton>
             <AppIconButton
+              v-if="schedule.mode !== 'standard'"
               :icon="Trash2"
-              :label="t('modelManager.removeTier')"
+              :label="t('modelManager.removeMode')"
               :tooltip="true"
               size="xs"
               :disabled="pending"
-              @click="schedule.tiers = schedule.tiers.filter((item) => item.key !== tier.key)"
+              @click="draft = draft.filter((item) => item !== schedule)"
             />
-          </header>
+          </template>
           <div class="modern-model-price-inputs">
             <AppTextField
               v-for="field in priceFields"
               :key="field"
-              v-model="tier.prices[field]"
+              v-model="schedule.prices[field]"
               :label="t('modelManager.slots.' + field)"
-              :error="error(tier.key + '.' + field)"
+              :error="error(schedule.mode + '.' + field)"
               :disabled="pending"
               :placeholder="t('modelManager.emptySlot')"
-              size="sm"
               inputmode="decimal"
+              size="sm"
             />
           </div>
-          <p v-if="error(tier.key + '.prices')" class="modern-model-price-error">
-            {{ error(tier.key + '.prices') }}
+          <p v-if="error(schedule.mode)" class="modern-model-price-error">
+            {{ error(schedule.mode) }}
           </p>
-        </div>
-      </AppFormSection>
-      <AppButton
-        v-for="mode in optionalModes.filter((item) => !draft.some((row) => row.mode === item))"
-        :key="mode"
-        variant="ghost"
-        size="sm"
-        :icon="Plus"
-        :disabled="pending"
-        @click="draft.push({ mode, prices: draftSlots(), tiers: [] })"
-      >
-        {{ t('modelManager.addMode') }} · {{ t('modelManager.' + mode) }}
-      </AppButton>
+          <div
+            v-for="tier in schedule.tiers"
+            :key="tier.key"
+            class="modern-model-price-tier-editor"
+          >
+            <header>
+              <AppTextField
+                v-model="tier.threshold"
+                :label="t('modelManager.threshold')"
+                :error="error(tier.key)"
+                :disabled="pending"
+                size="sm"
+                inputmode="numeric"
+              />
+              <AppIconButton
+                :icon="Trash2"
+                :label="t('modelManager.removeTier')"
+                :tooltip="true"
+                size="xs"
+                :disabled="pending"
+                @click="schedule.tiers = schedule.tiers.filter((item) => item.key !== tier.key)"
+              />
+            </header>
+            <div class="modern-model-price-inputs">
+              <AppTextField
+                v-for="field in priceFields"
+                :key="field"
+                v-model="tier.prices[field]"
+                :label="t('modelManager.slots.' + field)"
+                :error="error(tier.key + '.' + field)"
+                :disabled="pending"
+                :placeholder="t('modelManager.emptySlot')"
+                size="sm"
+                inputmode="decimal"
+              />
+            </div>
+            <p v-if="error(tier.key + '.prices')" class="modern-model-price-error">
+              {{ error(tier.key + '.prices') }}
+            </p>
+          </div>
+        </AppFormSection>
+        <AppButton
+          v-for="mode in optionalModes.filter((item) => !draft.some((row) => row.mode === item))"
+          :key="mode"
+          variant="ghost"
+          size="sm"
+          :icon="Plus"
+          :disabled="pending"
+          @click="draft.push({ mode, prices: draftSlots(), tiers: [] })"
+        >
+          {{ t('modelManager.addMode') }} · {{ t('modelManager.' + mode) }}
+        </AppButton>
+      </template>
     </div>
     <footer class="modern-model-price-editor-footer">
       <AppButton size="sm" :disabled="pending" @click="$emit('cancel')">{{

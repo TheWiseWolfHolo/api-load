@@ -40,7 +40,10 @@ const value = (prices: PriceSlots, field: (typeof priceFields)[number]) =>
 </script>
 
 <template>
-  <div class="modern-model-price-table">
+  <p v-if="price.billing_unit === 'request'">
+    {{ t('modelManager.requestUnit') }} · {{ modelUnitPrice(price.request_price, locale) }}
+  </p>
+  <div v-else class="modern-model-price-table">
     <div class="modern-model-price-row modern-model-price-row--head">
       <span class="modern-model-price-unit">{{ t('modelManager.unit') }}</span>
       <span v-for="field in priceFields" :key="field">{{ t('modelManager.slots.' + field) }}</span>

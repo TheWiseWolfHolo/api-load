@@ -1,5 +1,12 @@
 export default {
   modelPrices: {
+    billingUnit: 'Billing unit',
+    tokenBilling: 'Per token',
+    requestBilling: 'Per request',
+    requestUnit: 'USD / request',
+    requestPrice: 'Price per request',
+    requestPriceHelp:
+      'Charge once for each successful request. Failed, canceled or incomplete requests are not charged.',
     status: {
       pending: 'Pending',
       configured: 'Configured',

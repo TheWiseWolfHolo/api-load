@@ -1,4 +1,10 @@
 export const zhCN = {
+  billingUnit: '计费方式',
+  tokenBilling: '按 token',
+  requestBilling: '按次',
+  requestUnit: 'USD / 次',
+  requestPrice: '每次请求价格',
+  requestPriceHelp: '每个成功请求收取一次固定金额，失败、取消或中断不收费。',
   allModels: '全部模型',
   upstreamSources: '上游来源',
   sourceUnit: '来源',
@@ -178,6 +184,13 @@ export const zhCN = {
   catalogStatus: { alpha: 'Alpha', beta: 'Beta', deprecated: '已弃用' },
 }
 export const enUS = {
+  billingUnit: 'Billing unit',
+  tokenBilling: 'Per token',
+  requestBilling: 'Per request',
+  requestUnit: 'USD / request',
+  requestPrice: 'Price per request',
+  requestPriceHelp:
+    'Charge once for each successful request. Failed, canceled or incomplete requests are not charged.',
   allModels: 'All models',
   upstreamSources: 'Upstream sources',
   sourceUnit: 'sources',
@@ -364,6 +377,13 @@ export const enUS = {
   catalogStatus: { alpha: 'Alpha', beta: 'Beta', deprecated: 'Deprecated' },
 }
 export const jaJP = {
+  billingUnit: '課金方式',
+  tokenBilling: 'トークン単位',
+  requestBilling: 'リクエスト単位',
+  requestUnit: 'USD / リクエスト',
+  requestPrice: 'リクエスト単価',
+  requestPriceHelp:
+    '成功したリクエストごとに固定額を課金します。失敗・キャンセル・中断は課金しません。',
   allModels: 'すべてのモデル',
   upstreamSources: '上流の提供元',
   sourceUnit: '提供元',

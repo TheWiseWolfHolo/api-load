@@ -36,6 +36,12 @@ const protocolsLabel = computed(() =>
 )
 const groupCount = computed(() => modelGroupCount(props.model))
 function price(source: ModelSource, field: PriceField): string {
+  if (source.price.billing_unit === 'request')
+    return field === 'input'
+      ? modelUnitPrice(source.price.request_price, locale.value) +
+          ' / ' +
+          t('logs.priceLines.request')
+      : ''
   return modelUnitPrice(source.price.prices[field], locale.value)
 }
 // 表头与来源行是两个独立网格，用 max-content 会各算各的导致列错位。
@@ -141,7 +147,12 @@ function hiddenGroupsLabel(source: ModelSource): string {
             v-for="field in priceFields"
             :key="field"
             class="r modern-model-source-price"
-            :class="{ 'is-empty': source.price.prices[field] === null }"
+            :class="{
+              'is-empty':
+                source.price.billing_unit === 'request'
+                  ? field !== 'input' || source.price.request_price === null
+                  : source.price.prices[field] === null,
+            }"
             >{{ price(source, field) }}</span
           >
           <span

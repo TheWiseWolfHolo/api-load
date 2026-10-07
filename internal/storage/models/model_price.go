@@ -53,6 +53,8 @@ type ModelPrice struct {
 	ID                                     uint   `gorm:"primaryKey;autoIncrement"`
 	ChannelID                              string `gorm:"type:varchar(64);not null;uniqueIndex:idx_model_prices_channel_model,priority:1"`
 	ModelID                                string `gorm:"type:varchar(255);not null;uniqueIndex:idx_model_prices_channel_model,priority:2"`
+	BillingUnit                            string `gorm:"type:varchar(16);not null;default:token;check:chk_model_price_billing_unit,billing_unit IN ('token','request')"`
+	RequestPriceNanoUSD                    *int64 `gorm:"check:chk_model_price_request_nano,request_price_nano_usd IS NULL OR request_price_nano_usd >= 0"`
 	InputPriceNanoUSDPerMillionTokens      *int64 `gorm:"column:input_price_nano_usd_per_million_tokens;check:chk_model_price_input_nano,input_price_nano_usd_per_million_tokens IS NULL OR input_price_nano_usd_per_million_tokens >= 0"`
 	OutputPriceNanoUSDPerMillionTokens     *int64 `gorm:"column:output_price_nano_usd_per_million_tokens;check:chk_model_price_output_nano,output_price_nano_usd_per_million_tokens IS NULL OR output_price_nano_usd_per_million_tokens >= 0"`
 	CacheReadPriceNanoUSDPerMillionTokens  *int64 `gorm:"column:cache_read_price_nano_usd_per_million_tokens;check:chk_model_price_cache_read_nano,cache_read_price_nano_usd_per_million_tokens IS NULL OR cache_read_price_nano_usd_per_million_tokens >= 0"`

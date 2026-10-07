@@ -17,6 +17,8 @@ function lineName(value: string): string {
   return te('logs.priceLines.' + value) ? t('logs.priceLines.' + value) : value
 }
 function rate(line: LogPricingLine): string {
+  if (line.rate_nano_usd_per_request !== null)
+    return exactLogMoney(line.rate_nano_usd_per_request) + ' / ' + t('logs.priceLines.request')
   return line.rate_nano_usd_per_million === null
     ? t('logs.values.unpriced')
     : exactLogMoney(line.rate_nano_usd_per_million) + ' / 1M'
@@ -42,7 +44,9 @@ const decisionRate = computed(() => {
   const receipt = props.decision?.receipt
   if (!receipt) return '—'
   const rates = receipt.line_items
-    .filter((line) => line.rate_nano_usd_per_million !== null)
+    .filter(
+      (line) => line.rate_nano_usd_per_million !== null || line.rate_nano_usd_per_request !== null,
+    )
     .map((line) => `${lineName(line.code)} ${rate(line)}`)
     .join(' · ')
   if (!rates) return '—'

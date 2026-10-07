@@ -124,6 +124,7 @@ type AccessKeyRef struct {
 }
 
 type Record struct {
+	BillingUnit             pricing.BillingUnit
 	RequestAudit            *requestaudit.Result
 	AutoDecision            *automodel.Decision
 	TotalPricing            telemetry.PricingObservation

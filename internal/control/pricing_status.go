@@ -26,7 +26,7 @@ func resolvePricingStatus(row *models.ModelPrice) PricingStatus {
 }
 
 func modelPriceHasConfiguredValue(row models.ModelPrice) bool {
-	return row.InputPriceNanoUSDPerMillionTokens != nil ||
+	return row.RequestPriceNanoUSD != nil || row.InputPriceNanoUSDPerMillionTokens != nil ||
 		row.OutputPriceNanoUSDPerMillionTokens != nil ||
 		row.CacheReadPriceNanoUSDPerMillionTokens != nil ||
 		row.CacheWritePriceNanoUSDPerMillionTokens != nil ||

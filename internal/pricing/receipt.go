@@ -36,6 +36,9 @@ func (receipt *Receipt) UnmarshalJSON(data []byte) error {
 // ValidateReceipt verifies a persisted request-time receipt without consulting
 // the mutable current pricing table.
 func ValidateReceipt(receipt Receipt) error {
+	if receipt.SchemaVersion == 7 {
+		return validateRequestReceipt(receipt)
+	}
 	if (receipt.SchemaVersion != 1 && receipt.SchemaVersion != 2 &&
 		receipt.SchemaVersion != 3 && receipt.SchemaVersion != 4 && receipt.SchemaVersion != 5 && receipt.SchemaVersion != 6) ||
 		receipt.Method != ReceiptMethodUnitRateSum || receipt.MethodVersion != 1 || receipt.Currency != "USD" {
@@ -83,6 +86,9 @@ func ValidateReceipt(receipt Receipt) error {
 	seen := make(map[string]struct{}, len(receipt.LineItems))
 	total := NanoUSD(0)
 	for _, line := range receipt.LineItems {
+		if line.RateNanoUSDPerRequest != nil {
+			return fmt.Errorf("historical token receipt must not contain a request rate")
+		}
 		if _, ok := allowed[line.Code]; !ok {
 			return fmt.Errorf("invalid pricing receipt line code %q", line.Code)
 		}
@@ -133,6 +139,27 @@ func ValidateReceipt(receipt Receipt) error {
 		}
 	} else if int64(total) != receipt.TotalNanoUSD {
 		return fmt.Errorf("pricing receipt total mismatch")
+	}
+	return nil
+}
+
+func validateRequestReceipt(receipt Receipt) error {
+	if receipt.Method != ReceiptMethodPerRequest || receipt.MethodVersion != 1 || receipt.Currency != "USD" || receipt.PricingMode != ModeStandard || receipt.ContextThresholdTokens != nil {
+		return fmt.Errorf("invalid per-request receipt contract")
+	}
+	if err := validateReceiptRule(receipt.Rule, 7); err != nil {
+		return err
+	}
+	if receipt.PriceMultipliers == nil || !receipt.PriceMultipliers.Group.Valid() || !receipt.PriceMultipliers.AccessKey.Valid() || receipt.BaseTotalNanoUSD == nil || *receipt.BaseTotalNanoUSD < 0 || len(receipt.LineItems) != 1 {
+		return fmt.Errorf("invalid per-request receipt totals or multipliers")
+	}
+	line := receipt.LineItems[0]
+	if line.Code != "request" || line.Quantity != 1 || line.State != ReceiptLinePriced || line.Multiplier != directPriceMultiplier || line.RateNanoUSDPerMillion != nil || line.RateNanoUSDPerRequest == nil || line.AmountNanoUSD == nil || *line.RateNanoUSDPerRequest < 0 || *line.RateNanoUSDPerRequest != *line.AmountNanoUSD || *line.AmountNanoUSD != *receipt.BaseTotalNanoUSD {
+		return fmt.Errorf("invalid per-request receipt line")
+	}
+	adjusted, ok := applyPriceMultipliers(NanoUSD(*receipt.BaseTotalNanoUSD), *receipt.PriceMultipliers)
+	if !ok || int64(adjusted) != receipt.TotalNanoUSD {
+		return fmt.Errorf("per-request receipt adjusted total mismatch")
 	}
 	return nil
 }

@@ -1,5 +1,11 @@
 export default {
   modelPrices: {
+    billingUnit: '计费方式',
+    tokenBilling: '按 token',
+    requestBilling: '按次',
+    requestUnit: 'USD / 次',
+    requestPrice: '每次请求价格',
+    requestPriceHelp: '每个成功请求收取一次固定金额，失败、取消或中断不收费。',
     status: {
       pending: '待定价',
       configured: '已定价',

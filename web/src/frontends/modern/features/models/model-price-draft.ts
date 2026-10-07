@@ -44,7 +44,7 @@ export function priceDraft(price: ModelPrice): PriceDraftSchedule[] {
     ...Object.entries(price.mode_schedules).map(([mode, schedule]) => read(mode, schedule)),
   ]
 }
-function validPrice(raw: string): boolean {
+export function validPrice(raw: string): boolean {
   if (!raw) return true
   if (!/^\d+(\.\d{1,9})?$/.test(raw)) return false
   const [whole = '0', fraction = ''] = raw.split('.')
@@ -95,6 +95,8 @@ export function priceDraftRequest(draft: PriceDraftSchedule[]): ModelPriceUpdate
       .sort((a, b) => a.threshold_tokens - b.threshold_tokens)
   const standard = draft.find((schedule) => schedule.mode === 'standard')!
   return {
+    billing_unit: 'token',
+    request_price: null,
     ...slots(standard.prices),
     context_tiers: tiers(standard),
     mode_schedules: Object.fromEntries(

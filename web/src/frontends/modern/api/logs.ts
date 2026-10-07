@@ -173,6 +173,7 @@ export interface LogAutoDecision {
   receipt: LogReceipt | null
 }
 export interface LogPricingLine {
+  rate_nano_usd_per_request: string | null
   code: string
   quantity: string
   rate_nano_usd_per_million: string | null
@@ -285,6 +286,7 @@ function receipt(value: unknown): LogReceipt | null {
         code: text(line.code),
         quantity: count(line.quantity),
         rate_nano_usd_per_million: optionalCount(line.rate_nano_usd_per_million),
+        rate_nano_usd_per_request: optionalCount(line.rate_nano_usd_per_request),
         multiplier: { numerator: count(multiplier.numerator), denominator },
         state: oneOf(line.state, ['priced', 'unpriced'] as const),
         amount_nano_usd: optionalCount(line.amount_nano_usd),
