@@ -76,6 +76,53 @@ func TestDownloadAllAPIKeysReturnsOneTextFileAcrossAllStatuses(t *testing.T) {
 	}
 }
 
+func TestDownloadSelectedAPIKeysRejectsInvalidScopeAndForeignMembers(t *testing.T) {
+	initControlI18n(t)
+	fixture := newServiceFixture(t)
+	groupID := createGroupForCredentialImport(t, fixture, "synthetic-selected-first\nsynthetic-selected-second")
+	other, err := fixture.service.CreateGroup(t.Context(), GroupCreateRequest{
+		Name: stringPointer("other selected export group"), ChannelID: channel.OpenAI,
+		ConnectionType: "api_key", Params: json.RawMessage(`{}`), Models: optionalGroupModels{Set: true},
+		Credentials: "synthetic-foreign-member", ConfirmSameTarget: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := fixture.registry.CaptureActiveCredentialRefs([]uint{groupID})
+	foreign := fixture.registry.CaptureActiveCredentialRefs([]uint{other.GroupID})
+	server := NewServer(&config.Config{AuthKey: "synthetic-selected-auth"}, fixture.service)
+	engine := gin.New()
+	server.RegisterRoutes(engine)
+	path := fmt.Sprintf("/api/groups/%d/credentials/download-all", groupID)
+	body := fmt.Sprintf(`{"scope":"selected","credential_ids":[%d]}`, refs[0].ID)
+	result := serveCredentialRequest(t, engine, http.MethodPost, path, body, "synthetic-selected-auth", "")
+	if result.Code != http.StatusOK || result.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("selected export status = %d", result.Code)
+	}
+	var envelope struct {
+		Data CredentialDownloadAllResult `json:"data"`
+	}
+	if err := json.Unmarshal(result.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.CredentialCount != 1 || len(envelope.Data.Files) != 1 || envelope.Data.Files[0].Content == nil || *envelope.Data.Files[0].Content != "synthetic-selected-first\n" {
+		t.Fatal("selected export must include only the requested member")
+	}
+	for _, invalid := range []string{
+		`{"scope":"selected","credential_ids":[]}`,
+		`{"scope":"selected","credential_ids":null}`,
+		`{"credential_ids":null}`,
+		fmt.Sprintf(`{"credential_ids":[%d]}`, refs[0].ID),
+		fmt.Sprintf(`{"scope":"selected","credential_ids":[%d,%d]}`, refs[0].ID, refs[0].ID),
+		fmt.Sprintf(`{"scope":"selected","credential_ids":[%d,%d]}`, refs[0].ID, foreign[0].ID),
+	} {
+		response := serveCredentialRequest(t, engine, http.MethodPost, path, invalid, "synthetic-selected-auth", "")
+		if response.Code < 400 || strings.Contains(response.Body.String(), "synthetic-selected-first") || strings.Contains(response.Body.String(), "synthetic-foreign-member") {
+			t.Fatal("invalid selection must fail without exporting credentials")
+		}
+	}
+}
+
 func TestDownloadAllAPIKeysPreservesStructuredCredentials(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

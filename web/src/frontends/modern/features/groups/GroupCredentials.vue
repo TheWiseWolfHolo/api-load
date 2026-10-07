@@ -9,6 +9,7 @@ import {
   RotateCcw,
   RefreshCw,
   Search,
+  Stethoscope,
   Trash2,
   Upload,
 } from '@lucide/vue'
@@ -52,6 +53,7 @@ import APIKeyCredentialCard from './APIKeyCredentialCard.vue'
 import SubscriptionCredentialCard from './SubscriptionCredentialCard.vue'
 import CredentialDetailPanel from './CredentialDetailPanel.vue'
 import CredentialTestDialog from './CredentialTestDialog.vue'
+import CredentialBatchTestDialog from './CredentialBatchTestDialog.vue'
 import {
   AppButton,
   AppActionMenu,
@@ -168,6 +170,8 @@ const syncSucceeded = ref(new Set<number>())
 const accountBatchPending = ref(false)
 const pendingAction = ref('')
 const deleting = ref<number[]>([])
+const batchTest = ref<{ rows?: CredentialRow[] }>()
+const batchTestPending = ref(false)
 type FullAction = 'download' | 'enable' | 'disable' | 'restore' | 'import'
 const fullTarget = ref<FullAction>()
 const importFile = ref<APIKeyFileImport>()
@@ -197,7 +201,9 @@ const rows = computed(() => query.data.value?.items ?? [])
 const filteredCredential = computed(() => (filters.value.credential ? rows.value[0] : undefined))
 const busy = computed(() => query.isFetching.value || mutating.value !== undefined)
 const syncPending = (id: number) => syncing.value.has(id) || queuedSync.value.has(id)
-const bulkBusy = computed(() => busy.value || accountBatchPending.value || syncing.value.size > 0)
+const bulkBusy = computed(
+  () => busy.value || accountBatchPending.value || batchTestPending.value || syncing.value.size > 0,
+)
 const stale = computed(() => query.isError.value && Boolean(query.data.value))
 const summary = computed(() => query.data.value?.counts)
 const fullActions = computed(() =>
@@ -559,6 +565,24 @@ async function batch(
     await changed()
   } catch {
     if (!controller.signal.aborted) error.value = t('groups.edit.saveFailed')
+  } finally {
+    mutating.value = undefined
+  }
+}
+async function downloadSelectedKeys(): Promise<void> {
+  if (bulkBusy.value || !selected.value.size) return
+  mutating.value = 'batch'
+  error.value = ''
+  notice.value = ''
+  try {
+    const result = await exportAllCredentials(client, props.group.id, controller.signal, [
+      ...selected.value,
+    ])
+    if (controller.signal.aborted) return
+    result.files.forEach(downloadFile)
+    notice.value = t('groupDetail.full.succeeded.download', { count: n(result.count) })
+  } catch {
+    if (!controller.signal.aborted) error.value = t('credentialCards.actionFailed')
   } finally {
     mutating.value = undefined
   }
@@ -955,6 +979,19 @@ defineExpose({ refresh })
         @update:model-value="change({ proxy: $event as CredentialFilters['proxy'], page: 1 })"
       />
       <div class="modern-credentials-toolbar-actions">
+        <AppButton
+          v-if="group.connectionType === 'api_key'"
+          :icon="Stethoscope"
+          :disabled="bulkBusy || !summary?.total"
+          @click="batchTest = {}"
+          >{{ t('groupWorkflows.keyBatch.testAll') }}</AppButton
+        >
+        <AppButton
+          :icon="Download"
+          :disabled="bulkBusy || !summary?.total"
+          @click="fullTarget = 'download'"
+          >{{ t('groupWorkflows.keyBatch.exportAll') }}</AppButton
+        >
         <AppSortMenu
           :model-value="filters.sort"
           :label="t('groups.sort.label')"
@@ -1017,13 +1054,30 @@ defineExpose({ refresh })
                 size="sm"
                 :disabled="bulkBusy"
                 @click="batch('disable')"
-              /><AppIconButton
+              /><AppButton
                 :icon="Trash2"
-                :label="t('groupDetail.deleteSelected')"
                 size="sm"
+                variant="danger"
                 :disabled="bulkBusy"
                 @click="deleting = [...selected]"
-              />
+                >{{ t('groupDetail.deleteSelected') }}</AppButton
+              >
+              <AppButton
+                v-if="group.connectionType === 'api_key'"
+                :icon="Stethoscope"
+                size="sm"
+                :disabled="bulkBusy"
+                @click="batchTest = { rows: rows.filter((row) => selected.has(row.id)) }"
+                >{{ t('groupWorkflows.keyBatch.testSelected') }}</AppButton
+              >
+              <AppButton
+                v-if="group.connectionType === 'api_key'"
+                :icon="Download"
+                size="sm"
+                :disabled="bulkBusy"
+                @click="downloadSelectedKeys"
+                >{{ t('groupWorkflows.keyBatch.exportSelected') }}</AppButton
+              >
               <AppIconButton
                 v-if="group.connectionType === 'subscription' && channel?.quotaObservation"
                 :icon="RefreshCw"
@@ -1033,14 +1087,14 @@ defineExpose({ refresh })
                 :disabled="busy || accountBatchPending || !canSyncSelected"
                 @click="runAccountBatch('sync')"
               />
-              <AppIconButton
+              <AppButton
                 v-if="group.connectionType === 'subscription'"
                 :icon="Download"
-                :label="t('groupWorkflows.downloadSelected')"
                 size="sm"
                 :disabled="bulkBusy"
                 @click="runAccountBatch('download')"
-              />
+                >{{ t('groupWorkflows.downloadSelected') }}</AppButton
+              >
             </template>
           </div>
           <AppFileButton
@@ -1209,8 +1263,16 @@ defineExpose({ refresh })
   />
   <AppDraftGuard
     :dirty="nameDrafts.size > 0"
-    :pending="mutating !== undefined || accountBatchPending || syncing.size > 0"
+    :pending="mutating !== undefined || accountBatchPending || batchTestPending || syncing.size > 0"
     :query-scope="filterKeys"
+  />
+  <CredentialBatchTestDialog
+    v-if="batchTest"
+    :group-id="group.id"
+    :rows="batchTest.rows"
+    @close="batchTest = undefined"
+    @changed="changed"
+    @pending="batchTestPending = $event"
   />
 </template>
 
