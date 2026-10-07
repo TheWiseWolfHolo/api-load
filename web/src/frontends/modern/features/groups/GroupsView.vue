@@ -637,7 +637,7 @@ onScopeDispose(() => {
   window.removeEventListener('beforeunload', beforeUnload)
 })
 
-async function refreshGroup(id: number, settings: GroupBasics): Promise<void> {
+function refreshGroup(id: number, settings: GroupBasics): void {
   enabledOverrides.value.set(id, settings.enabled)
   queryClient.setQueryData<GroupWorkspace>(
     groupQueryKey,
@@ -658,8 +658,10 @@ async function refreshGroup(id: number, settings: GroupBasics): Promise<void> {
         ),
       },
   )
-  const result = await query.refetch()
-  if (!controller.signal.aborted && !result.isError) enabledOverrides.value.delete(id)
+  // The write has succeeded and the row is updated; refresh statistics in the background.
+  void query.refetch().then((result) => {
+    if (!controller.signal.aborted && !result.isError) enabledOverrides.value.delete(id)
+  })
 }
 async function mutate(
   group: GroupRow,
@@ -676,7 +678,7 @@ async function mutate(
     if (controller.signal.aborted) return
     const settings = await updateGroupBasics(client, group.id, patch, controller.signal)
     if (controller.signal.aborted) return
-    await refreshGroup(group.id, settings)
+    refreshGroup(group.id, settings)
   } catch {
     if (!controller.signal.aborted) {
       enabledOverrides.value.delete(group.id)

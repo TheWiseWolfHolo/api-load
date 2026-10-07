@@ -12,7 +12,7 @@ API keys, subscription accounts, traffic scheduling, failure handling, request l
 
 English · [中文](README_CN.md) · [日本語](README_JP.md) | [Official Website](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2.0.0-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.0)
+[![Release](https://img.shields.io/badge/API--Load-v2.0.1-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -143,7 +143,7 @@ docker compose pull && docker compose up -d   # update to the latest 2.x image
 docker compose stop         # stop the service
 ```
 
-The official Compose file uses `ghcr.io/thewisewolfholo/api-load:v2-candidate` for the development branch. Use `ghcr.io/thewisewolfholo/api-load:v2.0.0` to pin the formal 2.0.0 release. The Git tag and container tag are both `v2.0.0`.
+The official Compose file uses `ghcr.io/thewisewolfholo/api-load:v2-candidate` for the development branch. Use `ghcr.io/thewisewolfholo/api-load:v2.0.1` to pin the formal 2.0.1 release. The Git tag and container tag are both `v2.0.1`.
 
 <details>
 <summary>Using a native binary</summary>
