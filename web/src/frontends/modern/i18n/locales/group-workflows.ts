@@ -1,4 +1,42 @@
 export const zhCN = {
+  copyConfiguredIDs: '复制当前上游 ID',
+  copyUpstreamIDs: '复制全部上游 ID',
+  copyNewIDs: '复制全部新增 ID',
+  removeAllMissing: '全部移除',
+  keepAllMissing: '全部保留',
+  syncPreviewStale: '模型配置已变化，请关闭并重新打开同步预览。',
+  modelScope: '普通模型只有加入此列表才能由本分组提供。别名留空时，公开名称就是上游 ID。',
+  redirects: {
+    title: '导入重定向 JSON',
+    help: '兼容 New API 格式，左侧为对外名称，右侧为上游模型 ID。预览后加入草稿，再保存生效。',
+    mode: '导入方式',
+    modes: { merge: '增量合并', replace: '全量替换模型列表' },
+    replaceRawNames: '用导入别名替换对应的原始名称入口',
+    replaceWarning: '全量替换只保留 JSON 中的模型，未包含的现有名称会移除。',
+    json: '重定向 JSON',
+    summary: '新增 {add}，改名 {rename}，更新 {update}，相同 {unchanged}，待处理 {conflict}',
+    target: '上游模型',
+    previous: '现有上游',
+    useIncoming: '使用导入目标',
+    conflictHelp:
+      '同名但上游不同的条目默认保留现有配置。勾选“使用导入目标”才会更新，其他有效项可以照常导入。',
+    removedNames: '保存后本分组将不再提供以下 {count} 个名称',
+    noChanges: '当前选择不会改变模型列表。',
+    actions: {
+      add: '新增',
+      rename: '替换原名',
+      update: '更新目标',
+      unchanged: '已存在',
+      conflict: '保留现有',
+    },
+    errors: {
+      invalidJSON: '请输入有效 JSON，也可以粘贴完整的 JSON 代码块。',
+      invalidObject: '需要一个 JSON 对象，键为对外名称，值为上游模型 ID 字符串。',
+      invalidName: '模型名称和 ID 不能为空，也不能包含换行等控制字符。',
+      duplicateName: 'JSON 包含重复的对外名称，请先消除重复键。',
+      tooLarge: 'JSON 超过 1 MiB 或 20,000 条，请分批增量导入。',
+    },
+  },
   openImport: '继续',
   deleteGroup: '删除分组',
   deleteDescription:
@@ -24,11 +62,12 @@ export const zhCN = {
     '未返回不代表模型已失效。默认保留；更换上游模型会保留原公开名称，请自行选择正确的新版本。',
   syncAction: '处理方式',
   syncReplacement: '新的上游模型',
-  missingActions: { keep: '保留映射', replace: '更换上游模型', remove: '移除映射' },
+  missingActions: { keep: '保留模型', replace: '更换上游模型', remove: '移除模型' },
   syncNameConflicts: '本次变更出现公开名称撞名或重复映射，请修改名称或取消对应项。',
   syncChooseReplacement: '请为每条更换映射选择一个上游实际返回的模型。',
   syncEmptyUpstream: '本次上游目录为空，现有映射仍保留。',
-  syncRemovalWarning: '移除映射可能影响使用该公开名称的客户端，请检查所选项。',
+  syncRemovalWarning:
+    '保存后，本分组不再公开或路由被移除的名称。同名模型仍可能由其他授权分组提供。',
   syncSummary: '新增 {added}，更换 {replaced}，移除 {removed}',
   syncStale: '模型配置已被其他操作更改。草稿仍保留，请关闭后重新打开模型设置，再合并变更。',
   syncMode: '同步方式',
@@ -48,6 +87,47 @@ export const zhCN = {
 }
 
 export const enUS: typeof zhCN = {
+  copyConfiguredIDs: 'Copy current upstream IDs',
+  copyUpstreamIDs: 'Copy all upstream IDs',
+  copyNewIDs: 'Copy all new IDs',
+  removeAllMissing: 'Remove all',
+  keepAllMissing: 'Keep all',
+  syncPreviewStale: 'Model configuration changed. Close and reopen the sync preview.',
+  modelScope:
+    'Regular models must be in this list to be served by this group. An empty alias exposes the upstream ID.',
+  redirects: {
+    title: 'Import mapping JSON',
+    help: 'New API format uses public names as keys and upstream model IDs as values. Review, apply to the draft, then save.',
+    mode: 'Import mode',
+    modes: { merge: 'Merge incrementally', replace: 'Replace entire model list' },
+    replaceRawNames: 'Replace matching original-name entries with imported aliases',
+    replaceWarning:
+      'Replacement keeps only models in the JSON. Existing names omitted from it will be removed.',
+    json: 'Model mapping JSON',
+    summary:
+      'Add {add}, rename {rename}, update {update}, unchanged {unchanged}, conflicts {conflict}',
+    target: 'Upstream model',
+    previous: 'Existing upstream',
+    useIncoming: 'Use imported target',
+    conflictHelp:
+      'Conflicting names keep their existing targets by default. Select “Use imported target” to update them. Other entries can still be imported.',
+    removedNames: 'After saving, this group will no longer provide these {count} names',
+    noChanges: 'The current selection does not change the model list.',
+    actions: {
+      add: 'Add',
+      rename: 'Replace original name',
+      update: 'Update target',
+      unchanged: 'Already exists',
+      conflict: 'Keep existing',
+    },
+    errors: {
+      invalidJSON: 'Enter valid JSON or a complete JSON code block.',
+      invalidObject: 'Use a JSON object with public-name keys and string upstream-model values.',
+      invalidName: 'Names and IDs cannot be empty or contain control characters.',
+      duplicateName: 'Duplicate public-name keys found. Remove duplicates first.',
+      tooLarge: 'The JSON exceeds 1 MiB or 20,000 entries. Import in smaller batches.',
+    },
+  },
   openImport: 'Continue',
   deleteGroup: 'Delete group',
   deleteDescription:
@@ -77,14 +157,14 @@ export const enUS: typeof zhCN = {
   missingActions: {
     keep: 'Keep mapping',
     replace: 'Replace upstream model',
-    remove: 'Remove mapping',
+    remove: 'Remove model',
   },
   syncNameConflicts:
     'These changes introduce public-name collisions or duplicate mappings. Edit names or deselect the affected entries.',
   syncChooseReplacement: 'Choose a model returned by the upstream for each replacement.',
   syncEmptyUpstream: 'The upstream catalog is empty. Existing mappings are retained.',
   syncRemovalWarning:
-    'Removing mappings may affect clients using these public names. Review the selected entries.',
+    'After saving, this group stops listing and routing the removed names. Other authorized groups may still provide the same names.',
   syncSummary: 'Add {added}, replace {replaced}, remove {removed}',
   syncStale:
     'Another operation changed the model configuration. Your draft is retained. Reopen model settings and merge the changes.',
@@ -106,6 +186,45 @@ export const enUS: typeof zhCN = {
 }
 
 export const jaJP: typeof zhCN = {
+  copyConfiguredIDs: '現在の上流 ID をコピー',
+  copyUpstreamIDs: '上流 ID をすべてコピー',
+  copyNewIDs: '新規 ID をすべてコピー',
+  removeAllMissing: 'すべて削除',
+  keepAllMissing: 'すべて保持',
+  syncPreviewStale: 'モデル設定が変更されました。同期画面を開き直してください。',
+  modelScope:
+    '通常のモデルは、この一覧に追加するとグループから提供できます。別名が空の場合は上流 ID を公開します。',
+  redirects: {
+    title: 'マッピング JSON を追加',
+    help: 'New API と同じ形式です。キーが公開名、値が上流モデル ID です。確認後に下書きへ反映して保存します。',
+    mode: 'インポート方法',
+    modes: { merge: '差分を追加', replace: 'モデル一覧を全置換' },
+    replaceRawNames: '対応する元の名前をインポートした別名で置換',
+    replaceWarning: 'JSON に含まれるモデルだけを残します。含まれない既存の名前は削除されます。',
+    json: 'マッピング JSON',
+    summary: '追加 {add}、改名 {rename}、更新 {update}、同一 {unchanged}、競合 {conflict}',
+    target: '上流モデル',
+    previous: '現在の上流',
+    useIncoming: '新しい上流を使用',
+    conflictHelp:
+      '同名で上流が異なる場合、既存の設定を保持します。更新する項目を選択してください。',
+    removedNames: '保存後、このグループは次の {count} 件の名前を提供しなくなります',
+    noChanges: '現在の選択では変更はありません。',
+    actions: {
+      add: '追加',
+      rename: '元の名前を置換',
+      update: '上流を更新',
+      unchanged: '登録済み',
+      conflict: '既存を保持',
+    },
+    errors: {
+      invalidJSON: '有効な JSON または JSON コードブロックを入力してください。',
+      invalidObject: '公開名をキー、上流モデル ID を文字列の値とするオブジェクトが必要です。',
+      invalidName: '名前と ID は空白や制御文字を含められません。',
+      duplicateName: '公開名のキーが重複しています。重複を修正してください。',
+      tooLarge: '1 MiB または 20,000 件を超えています。分割して追加してください。',
+    },
+  },
   openImport: '続ける',
   deleteGroup: 'グループを削除',
   deleteDescription: 'グループと認証情報、モデル、設定を削除します。この操作は取り消せません。',

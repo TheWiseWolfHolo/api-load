@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RefreshCw, X } from '@lucide/vue'
+import { RefreshCw, Trash2, X } from '@lucide/vue'
 import { DialogRoot } from 'reka-ui'
 import { computed, onScopeDispose, ref } from 'vue'
 import { useLoadingActivity } from '@modern/components/ui/loading'
@@ -17,6 +17,7 @@ import {
 } from '@modern/components/ui'
 import { useApiClient } from '@shared/http/client-context'
 import type { GroupDraftModel } from './group-create-rules'
+import ModelIDsCopyButton from './ModelIDsCopyButton.vue'
 import {
   syncModelDraft,
   syncModelConflicts,
@@ -29,6 +30,9 @@ const emit = defineEmits<{ close: []; confirm: [models: GroupDraftModel[]] }>()
 const { t, n } = useI18n()
 const client = useApiClient()
 const current = props.models.map((model) => ({ ...model }))
+const signature = (models: readonly GroupDraftModel[]) =>
+  JSON.stringify(models.map(({ id, alias }) => [id, alias]))
+const stale = computed(() => signature(props.models) !== signature(current))
 const additions = ref<SyncAddition[]>([])
 const missing = ref<SyncMissing[]>([])
 const upstream = ref<string[]>([])
@@ -60,6 +64,7 @@ const canApply = computed(
     loaded.value &&
     !loading.value &&
     !failed.value &&
+    !stale.value &&
     !conflicts.value.length &&
     !invalidReplacement.value &&
     Boolean(added.value || removed.value || replaced.value),
@@ -125,6 +130,9 @@ async function load(): Promise<void> {
 function apply(): void {
   if (canApply.value) emit('confirm', next.value)
 }
+function setMissingAction(action: 'keep' | 'remove'): void {
+  for (const row of missing.value) row.action = action
+}
 void load()
 onScopeDispose(() => controller?.abort())
 </script>
@@ -157,11 +165,19 @@ onScopeDispose(() => controller?.abort())
           >
         </AppNotice>
         <template v-else-if="loaded">
+          <AppNotice v-if="stale" tone="warning">{{
+            t('groupWorkflows.syncPreviewStale')
+          }}</AppNotice>
           <AppNotice>{{ t('groupWorkflows.syncRetained', { count: n(retained) }) }}</AppNotice>
+          <ModelIDsCopyButton :ids="upstream" :label="t('groupWorkflows.copyUpstreamIDs')" />
           <AppTextField v-model="search" :label="t('groupWorkflows.syncSearch')" size="sm" />
           <section v-if="additions.length" class="modern-model-sync-section">
             <div class="modern-model-sync-section-heading">
               <h3>{{ t('groupWorkflows.additions', { count: n(additions.length) }) }}</h3>
+              <ModelIDsCopyButton
+                :ids="additions.map((row) => row.id)"
+                :label="t('groupWorkflows.copyNewIDs')"
+              />
               <AppCheckbox
                 v-model="allSelected"
                 :label="t('groupWorkflows.syncSelectVisible')"
@@ -183,7 +199,26 @@ onScopeDispose(() => controller?.abort())
             </ul>
           </section>
           <section v-if="missing.length" class="modern-model-sync-section">
-            <h3>{{ t('groupWorkflows.syncMissing', { count: n(missing.length) }) }}</h3>
+            <div class="modern-model-sync-section-heading">
+              <h3>{{ t('groupWorkflows.syncMissing', { count: n(missing.length) }) }}</h3>
+              <div class="modern-model-sync-bulk-actions">
+                <AppButton
+                  :icon="Trash2"
+                  size="sm"
+                  variant="ghost"
+                  :disabled="missing.every((row) => row.action === 'remove')"
+                  @click="setMissingAction('remove')"
+                  >{{ t('groupWorkflows.removeAllMissing') }}</AppButton
+                >
+                <AppButton
+                  size="sm"
+                  variant="ghost"
+                  :disabled="missing.every((row) => row.action === 'keep')"
+                  @click="setMissingAction('keep')"
+                  >{{ t('groupWorkflows.keepAllMissing') }}</AppButton
+                >
+              </div>
+            </div>
             <p>{{ t('groupWorkflows.syncMissingHelp') }}</p>
             <ul class="modern-model-sync-list">
               <li v-for="row in visibleMissing" :key="row.model.key" class="modern-model-sync-row">
@@ -249,6 +284,7 @@ onScopeDispose(() => controller?.abort())
 <style scoped>
 .modern-model-sync-heading,
 .modern-model-sync-section-heading,
+.modern-model-sync-bulk-actions,
 .modern-model-sync-actions {
   display: flex;
   align-items: center;
