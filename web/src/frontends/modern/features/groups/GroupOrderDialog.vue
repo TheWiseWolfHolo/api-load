@@ -45,6 +45,10 @@ function start(event: DragEvent, id: number) {
     event.dataTransfer.setData('text/plain', String(id))
   }
 }
+function stopDragging() {
+  dragging.value = undefined
+  hover.value = undefined
+}
 function drop(index: number) {
   if (dragging.value !== undefined) move(dragging.value, index)
   dragging.value = undefined
@@ -85,10 +89,7 @@ function drop(index: number) {
               draggable="true"
               :aria-label="t('groups.order.drag', { name: row.name })"
               @dragstart="start($event, row.id)"
-              @dragend="
-                dragging = undefined
-                hover = undefined
-              "
+              @dragend="stopDragging"
             >
               <AppIcon :icon="GripVertical" />
             </button>

@@ -74,6 +74,14 @@ const orderSaving = ref(false)
 const iconGroup = ref<GroupRow>()
 const iconError = ref(false)
 const iconSaving = ref(false)
+function openOrdering() {
+  ordering.value = true
+  orderError.value = false
+}
+function editIcon(group: GroupRow) {
+  iconGroup.value = group
+  iconError.value = false
+}
 async function saveOrder(ids: number[]) {
   orderSaving.value = true
   orderError.value = false
@@ -838,10 +846,7 @@ useMessageSource(() =>
         <AppButton
           :icon="ArrowDownUp"
           :disabled="pending.size > 0 || !data || !presentation || orderSaving"
-          @click="
-            ordering = true
-            orderError = false
-          "
+          @click="openOrdering"
           >{{ t('groups.order.title') }}</AppButton
         >
         <AppSortMenu
@@ -988,10 +993,7 @@ useMessageSource(() =>
       <template v-else>
         <GroupListRow
           :presentation-icon="presentation?.icons[String(group.id)]"
-          @icon="
-            iconGroup = group
-            iconError = false
-          "
+          @icon="editIcon(group)"
           v-for="group in visible"
           :key="group.id + ':' + rowRevision"
           :group="group"
