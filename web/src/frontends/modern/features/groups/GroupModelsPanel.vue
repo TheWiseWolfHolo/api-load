@@ -16,6 +16,7 @@ import type { GroupRow } from '@modern/api/groups'
 import type { ModelCandidate } from '@modern/api/model-discovery'
 import { AppButton, AppCollectionState } from '@modern/components/ui'
 import { useApiClient } from '@shared/http/client-context'
+import { ApiError } from '@shared/http/errors'
 import { modelErrors, type GroupDraftModel } from './group-create-rules'
 import GroupModelPicker from './GroupModelPicker.vue'
 import GroupWorkspacePanel from './GroupWorkspacePanel.vue'
@@ -109,15 +110,27 @@ async function save(): Promise<void> {
   cancelDiscovery()
   try {
     await cache.cancelQueries({ queryKey: groupModelsKey(props.group.id) })
-    const result = await saveGroupModels(client, props.group.id, draft.value, controller.signal)
+    const expectedModels = JSON.parse(baseline.value) as { id: string; alias: string }[]
+    const result = await saveGroupModels(
+      client,
+      props.group.id,
+      draft.value,
+      controller.signal,
+      expectedModels,
+    )
     if (controller.signal.aborted) return
     baseline.value = signature()
     cache.setQueryData(groupModelsKey(props.group.id), result)
     void cache.invalidateQueries({ queryKey: ['modern', 'group-model-names', props.group.id] })
     emit('saved')
     emit('close')
-  } catch {
-    if (!controller.signal.aborted) error.value = t('groups.edit.saveFailed')
+  } catch (cause) {
+    if (!controller.signal.aborted)
+      error.value = t(
+        cause instanceof ApiError && cause.code === 'GROUP_MODELS_CHANGED'
+          ? 'groupWorkflows.syncStale'
+          : 'groups.edit.saveFailed',
+      )
   } finally {
     saving.value = false
   }
@@ -126,7 +139,6 @@ async function syncModels(models: GroupDraftModel[]): Promise<void> {
   if (saving.value || dirty.value) return
   draft.value = models
   syncing.value = false
-  await save()
 }
 onScopeDispose(() => {
   controller.abort()

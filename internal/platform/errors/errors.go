@@ -40,6 +40,7 @@ var (
 	ErrAuthLocked                             = &APIError{HTTPStatus: http.StatusTooManyRequests, Code: "AUTH_LOCKED", Message: "Authentication is temporarily locked"}
 	ErrChannelTargetConflict                  = &APIError{HTTPStatus: http.StatusConflict, Code: "CHANNEL_TARGET_CONFLICT", Message: "Channel target conflicts with an existing group"}
 	ErrModelNameConflict                      = &APIError{HTTPStatus: http.StatusConflict, Code: "MODEL_NAME_CONFLICT", Message: "Client model names conflict within the group"}
+	ErrGroupModelsChanged                     = &APIError{HTTPStatus: http.StatusConflict, Code: "GROUP_MODELS_CHANGED", Message: "Group model configuration changed since it was loaded"}
 	ErrNoActiveCredential                     = &APIError{HTTPStatus: http.StatusConflict, Code: "NO_ACTIVE_CREDENTIAL", Message: "No active credential is available for this group"}
 	ErrBadGateway                             = &APIError{HTTPStatus: http.StatusBadGateway, Code: "BAD_GATEWAY", Message: "Upstream service error"}
 	ErrIdempotencyKeyRequired                 = &APIError{HTTPStatus: http.StatusPreconditionRequired, Code: "IDEMPOTENCY_KEY_REQUIRED", Message: "Idempotency-Key is required"}

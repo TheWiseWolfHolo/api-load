@@ -236,12 +236,22 @@ export async function saveGroupModels(
   id: number,
   models: { id: string; alias: string }[],
   signal: AbortSignal,
+  expectedModels?: readonly { id: string; alias: string }[],
 ) {
   return readModels(
     await client.request(`/api/groups/${id}/models`, {
       method: 'PUT',
       signal,
       json: {
+        ...(expectedModels === undefined
+          ? {}
+          : {
+              expected_models: expectedModels.map((model) => ({
+                id: model.id.trim(),
+                alias: model.alias.trim(),
+                alias_enabled: Boolean(model.alias.trim()),
+              })),
+            }),
         models: models.map((model) => ({
           id: model.id.trim(),
           alias: model.alias.trim(),
