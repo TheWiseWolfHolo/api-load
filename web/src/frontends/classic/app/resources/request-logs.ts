@@ -121,17 +121,25 @@ export interface RequestLogFilters {
 }
 
 export interface RequestLogPricingLineDto {
-  code: 'input' | 'cache_read' | 'cache_write_5m' | 'cache_write_1h' | 'cache_write' | 'output'
+  code:
+    | 'input'
+    | 'cache_read'
+    | 'cache_write_5m'
+    | 'cache_write_1h'
+    | 'cache_write'
+    | 'output'
+    | 'request'
   quantity: string
   rate_nano_usd_per_million: string | null
+  rate_nano_usd_per_request: string | null
   multiplier: { numerator: string; denominator: string }
   state: RequestLogReceiptLineState
   amount_nano_usd: string | null
 }
 
 export interface RequestLogPricingReceiptDto {
-  schema_version: 1 | 2 | 3 | 4 | 5 | 6
-  method: 'unit_rate_sum'
+  schema_version: 1 | 2 | 3 | 4 | 5 | 6 | 7
+  method: 'unit_rate_sum' | 'fixed_per_request'
   method_version: 1
   currency: 'USD'
   pricing_mode: string
@@ -323,6 +331,7 @@ const usageStates = ['complete', 'partial', 'missing', 'not_applicable'] as cons
 const costStates = ['priced', 'unpriced', 'not_applicable'] as const
 const pricingCompletenessValues = ['complete', 'partial', 'unavailable', 'not_applicable'] as const
 const receiptCodes = [
+  'request',
   'input',
   'cache_read',
   'cache_write_5m',
@@ -444,6 +453,7 @@ function projectPricingReceipt(value: unknown): RequestLogPricingReceiptDto | nu
       'code',
       'quantity',
       'rate_nano_usd_per_million',
+      'rate_nano_usd_per_request',
       'multiplier',
       'state',
       'amount_nano_usd',
@@ -456,6 +466,10 @@ function projectPricingReceipt(value: unknown): RequestLogPricingReceiptDto | nu
     return {
       code: projectEnum(line.code, receiptCodes),
       quantity: projectNonNegativeInt64String(line.quantity),
+      rate_nano_usd_per_request:
+        line.rate_nano_usd_per_request == null
+          ? null
+          : projectNonNegativeInt64String(line.rate_nano_usd_per_request),
       rate_nano_usd_per_million:
         line.rate_nano_usd_per_million === null
           ? null
@@ -469,8 +483,24 @@ function projectPricingReceipt(value: unknown): RequestLogPricingReceiptDto | nu
         line.amount_nano_usd === null ? null : projectNonNegativeInt64String(line.amount_nano_usd),
     }
   })
-  const schemaVersion = projectSafeInteger(record.schema_version, { minimum: 1, maximum: 6 }) as
-    1 | 2 | 3 | 4 | 5 | 6
+  const schemaVersion = projectSafeInteger(record.schema_version, { minimum: 1, maximum: 7 }) as
+    1 | 2 | 3 | 4 | 5 | 6 | 7
+  if (
+    schemaVersion < 7 &&
+    lines.some((line) => line.code === 'request' || line.rate_nano_usd_per_request !== null)
+  )
+    invalidResponse()
+  if (
+    schemaVersion === 7 &&
+    (record.method !== 'fixed_per_request' ||
+      lines.length !== 1 ||
+      lines[0]?.code !== 'request' ||
+      lines[0]?.quantity !== '1' ||
+      lines[0]?.rate_nano_usd_per_request === null ||
+      lines[0]?.rate_nano_usd_per_million !== null ||
+      lines[0]?.state !== 'priced')
+  )
+    invalidResponse()
   let priceMultipliers: RequestLogPricingReceiptDto['price_multipliers']
   if (schemaVersion >= 5) {
     const multipliers = projectRecord(record.price_multipliers)
@@ -483,7 +513,7 @@ function projectPricingReceipt(value: unknown): RequestLogPricingReceiptDto | nu
     invalidResponse()
   }
   let baseTotal: string | undefined
-  if (schemaVersion === 6) {
+  if (schemaVersion >= 6) {
     baseTotal = projectNonNegativeInt64String(record.base_total_nano_usd)
   } else if (record.base_total_nano_usd !== undefined) {
     invalidResponse()
@@ -499,7 +529,10 @@ function projectPricingReceipt(value: unknown): RequestLogPricingReceiptDto | nu
   }
   return {
     schema_version: schemaVersion,
-    method: projectEnum(record.method, ['unit_rate_sum'] as const),
+    method: projectEnum(
+      record.method,
+      schemaVersion === 7 ? (['fixed_per_request'] as const) : (['unit_rate_sum'] as const),
+    ),
     method_version: projectSafeInteger(record.method_version, { minimum: 1, maximum: 1 }) as 1,
     currency: projectEnum(record.currency, ['USD'] as const),
     pricing_mode: projectPricingMode(record.pricing_mode),

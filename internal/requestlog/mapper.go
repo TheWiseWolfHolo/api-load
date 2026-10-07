@@ -216,6 +216,7 @@ func mapEvent(
 		CacheWriteUnknownTokens:     result.Tokens.CacheWriteUnknown,
 		EstimatedCostNanoUSD:        pricingObservation.EstimatedCostNanoUSD,
 		UsageState:                  string(result.State),
+		BillingUnit:                 normalizedBillingUnit(pricingObservation.BillingUnit),
 		CostState:                   pricingObservation.CostState,
 		PricingCompleteness:         pricingObservation.PricingCompleteness,
 		AttemptRows:                 attempts,
@@ -268,6 +269,9 @@ func canonicalPricingReceipt(
 	channelID string,
 ) (models.JSON, error) {
 	if observation.ReceiptJSON == "" {
+		if observation.BillingUnit == string(pricing.BillingUnitRequest) && observation.CostState == string(pricing.CostStatePriced) {
+			return nil, fmt.Errorf("fixed request charge requires a receipt")
+		}
 		return nil, nil
 	}
 	var receipt pricing.Receipt
@@ -277,7 +281,7 @@ func canonicalPricingReceipt(
 	if err := pricing.ValidateReceipt(receipt); err != nil {
 		return nil, err
 	}
-	if (receipt.SchemaVersion != 4 && receipt.SchemaVersion != 5 && receipt.SchemaVersion != 6) || receipt.Rule != (pricing.ReceiptRule{
+	if (receipt.SchemaVersion != 4 && receipt.SchemaVersion != 5 && receipt.SchemaVersion != 6 && receipt.SchemaVersion != 7) || (receipt.SchemaVersion == 7) != (observation.BillingUnit == string(pricing.BillingUnitRequest)) || receipt.Rule != (pricing.ReceiptRule{
 		ChannelID: channelID,
 		ModelID:   observation.UpstreamModel,
 	}) ||
@@ -321,7 +325,8 @@ func validateFrozenObservation(event telemetry.RequestEvent) error {
 	pricingObservation := event.Usage.Pricing
 	costState := pricing.CostState(pricingObservation.CostState)
 	completeness := pricing.Completeness(pricingObservation.PricingCompleteness)
-	if err := validateFrozenPricingState(
+	if err := ValidateBillingUsageCostState(
+		pricing.BillingUnit(pricingObservation.BillingUnit), event.Status,
 		result.State,
 		costState,
 		completeness,

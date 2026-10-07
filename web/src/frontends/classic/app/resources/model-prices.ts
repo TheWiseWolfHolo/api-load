@@ -50,6 +50,8 @@ export interface ModelPriceScheduleDto {
 }
 
 export interface ModelPriceDto {
+  billing_unit: 'token' | 'request'
+  request_price: string | null
   id: number
   channel_id: string
   channel_name: string
@@ -97,6 +99,8 @@ export interface ModelPriceScheduleUpdateRequest {
 }
 
 export interface ModelPriceUpdateRequest {
+  billing_unit: 'token' | 'request'
+  request_price: string | null
   input: string | null
   output: string | null
   cache_read: string | null
@@ -119,6 +123,8 @@ export type ModelPriceMutationIssue =
 const collectionFields = ['items', 'pagination'] as const
 const paginationFields = ['page', 'page_size', 'total_items', 'total_pages'] as const
 const itemFields = [
+  'billing_unit',
+  'request_price',
   'id',
   'channel_id',
   'channel_name',
@@ -143,6 +149,8 @@ const priceFields = ['input', 'output', 'cache_read', 'cache_write'] as const
 const contextTierFields = ['threshold_tokens', 'prices'] as const
 const modeScheduleFields = ['prices', 'context_tiers'] as const
 const updateFields = [
+  'billing_unit',
+  'request_price',
   ...priceFields,
   'context_tiers',
   'mode_schedules',
@@ -223,6 +231,8 @@ export function projectModelPrice(value: unknown): ModelPriceDto {
   const record = projectRecord(value)
   assertNoSecretLikeFields(record, itemFields)
   const result: ModelPriceDto = {
+    billing_unit: projectEnum(record.billing_unit ?? 'token', ['token', 'request'] as const),
+    request_price: projectNullableDecimalString(record.request_price ?? null),
     id: projectSafeInteger(record.id, { minimum: 1 }),
     channel_id: projectChannelID(record.channel_id),
     channel_name: projectDisplayString(record.channel_name),
@@ -369,7 +379,15 @@ export async function updateModelPrice(
   return projectModelPrice(
     await client.request(`/api/model-prices/${id}`, {
       method: 'PUT',
-      json: Object.fromEntries(updateFields.map((field) => [field, request[field]])),
+      json: Object.fromEntries(
+        updateFields
+          .filter(
+            (field) =>
+              request.billing_unit === 'request' ||
+              (field !== 'billing_unit' && field !== 'request_price'),
+          )
+          .map((field) => [field, request[field]]),
+      ),
       signal,
     }),
   )

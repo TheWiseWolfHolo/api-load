@@ -216,7 +216,15 @@ function pricingIdentityTooltip(upstream: ModelUpstreamDto): string {
                   class="model-tree__price"
                   :class="{ 'model-tree__price--empty': entry.prices[field] === null }"
                 >
-                  {{ entry.prices[field] ?? t('models.tree.noPrice') }}
+                  {{
+                    entry.upstream.price.billing_unit === 'request'
+                      ? field === 'input'
+                        ? (entry.upstream.price.request_price ?? t('models.tree.noPrice')) +
+                          ' ' +
+                          t('modelPrices.requestUnit')
+                        : ''
+                      : (entry.prices[field] ?? t('models.tree.noPrice'))
+                  }}
                 </span>
                 <AppTooltip
                   v-for="schedule in entry.modePrices"

@@ -300,6 +300,7 @@ export const zhCN = {
     probe: '探测',
   },
   priceLines: {
+    request: '请求',
     input: '输入',
     output: '输出',
     cache_read: '缓存读取',
@@ -615,6 +616,7 @@ export const enUS: typeof zhCN = {
     probe: 'Probe',
   },
   priceLines: {
+    request: 'Request',
     input: 'Input',
     output: 'Output',
     cache_read: 'Cache read',
@@ -928,6 +930,7 @@ export const jaJP: typeof zhCN = {
     probe: 'プローブ',
   },
   priceLines: {
+    request: 'リクエスト',
     input: '入力',
     output: '出力',
     cache_read: '読取',

@@ -1,5 +1,12 @@
 export default {
   modelPrices: {
+    billingUnit: '課金方式',
+    tokenBilling: 'トークン単位',
+    requestBilling: 'リクエスト単位',
+    requestUnit: 'USD / リクエスト',
+    requestPrice: 'リクエスト単価',
+    requestPriceHelp:
+      '成功したリクエストごとに固定額を課金します。失敗・キャンセル・中断は課金しません。',
     status: {
       pending: '価格待ち',
       configured: '設定済み',

@@ -298,6 +298,8 @@ function dispatchStateLabel(attempt: RequestLogAttemptDto): string {
 
 function formatFormulaLine(line: RequestLogPricingLineDto): string {
   const quantity = formatLogTokenCount(line.quantity, locale.value)
+  if (line.rate_nano_usd_per_request !== null)
+    return `${quantity} × ${formatExactNanoUSD(line.rate_nano_usd_per_request, locale.value)} (${t('modelPrices.requestUnit')})`
   const multipliers = receipt.value?.schema_version === 5 ? receipt.value.price_multipliers : null
   const priceMultiplier = multipliers ? ` × ${multipliers.group} × ${multipliers.access_key}` : ''
   if (line.state === 'unpriced' || line.rate_nano_usd_per_million === null) {
@@ -818,7 +820,9 @@ function toggleAttemptErrorMessage(sequence: number): void {
               !selfScoped &&
               (log.auto_decision ||
                 auditCalls.length ||
-                (costDisplayState !== 'unpriced' && receipt && usageDisplayState === 'reported'))
+                (costDisplayState !== 'unpriced' &&
+                  receipt &&
+                  (usageDisplayState === 'reported' || receipt.schema_version === 7)))
             "
             class="log-detail__wide"
           >
@@ -833,15 +837,18 @@ function toggleAttemptErrorMessage(sequence: number): void {
               <span v-if="log.auto_decision"
                 >{{ t('autoModel.decisionPriceItem') }} = {{ decisionFormula() }}</span
               >
-              <template v-if="receipt && usageDisplayState === 'reported'">
+              <span v-if="receipt?.schema_version === 7"
+                >{{ t('modelPrices.requestBilling') }} = {{ formula.input }}</span
+              >
+              <template v-else-if="receipt && usageDisplayState === 'reported'">
                 <span>{{ t('monitor.logs.receipt.input') }} = {{ formula.input }}</span>
                 <span>{{ t('monitor.logs.receipt.output') }} = {{ formula.output }}</span>
               </template>
               <template
                 v-if="
                   receipt &&
-                  usageDisplayState === 'reported' &&
-                  receipt.schema_version === 6 &&
+                  (usageDisplayState === 'reported' || receipt.schema_version === 7) &&
+                  receipt.schema_version >= 6 &&
                   receipt.base_total_nano_usd !== undefined &&
                   receipt.price_multipliers
                 "

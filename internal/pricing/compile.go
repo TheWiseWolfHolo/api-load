@@ -99,6 +99,21 @@ func validateRule(rule Rule) error {
 	if err := validateIdentity(rule.Identity); err != nil {
 		return err
 	}
+	switch rule.BillingUnit {
+	case "", BillingUnitToken:
+		if rule.RequestPrice != nil {
+			return fmt.Errorf("token rule must not contain a request price")
+		}
+	case BillingUnitRequest:
+		if rule.RequestPrice != nil && *rule.RequestPrice < 0 {
+			return fmt.Errorf("request price must be non-negative")
+		}
+		if hasSetPrice(rule.Prices) || len(rule.ContextTiers) > 0 || len(rule.ModeSchedules) > 0 {
+			return fmt.Errorf("request rule must not contain token schedules")
+		}
+	default:
+		return fmt.Errorf("invalid billing unit %q", rule.BillingUnit)
+	}
 	if err := validatePrices(rule.Prices); err != nil {
 		return err
 	}
@@ -186,7 +201,7 @@ func validateReceiptRule(rule ReceiptRule, schemaVersion int) error {
 			return fmt.Errorf("global receipt must not contain a channel ID")
 		}
 		return nil
-	case 3, 4, 5, 6:
+	case 3, 4, 5, 6, 7:
 		if rule.ScopeKey != "" {
 			return fmt.Errorf("channel receipt must not contain a scope key")
 		}
@@ -232,6 +247,10 @@ func hasSetPrice(prices Prices) bool {
 }
 
 func cloneRule(rule Rule) Rule {
+	if rule.RequestPrice != nil {
+		price := *rule.RequestPrice
+		rule.RequestPrice = &price
+	}
 	if rule.ContextTiers != nil {
 		rule.ContextTiers = append([]ContextTier(nil), rule.ContextTiers...)
 	}

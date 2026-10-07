@@ -13,6 +13,9 @@ import ChannelIcon from '@/components/brand/ChannelIcon.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppDateTime from '@/components/ui/AppDateTime.vue'
 import AppDrawer from '@/components/ui/AppDrawer.vue'
+import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
+import AppTextInput from '@/components/ui/AppTextInput.vue'
 import CopyChip from '@/components/ui/CopyChip.vue'
 import InlineFeedback from '@/components/ui/InlineFeedback.vue'
 import QueryFeedback from '@/components/ui/QueryFeedback.vue'
@@ -50,6 +53,8 @@ const detail = computed(() => detailQuery.data.value)
  * 待数据到达后 useModelPriceEditor 内部的 watch 会按 id 重建草稿。
  */
 const placeholderPrice: UpstreamModelDetailDto['price'] = {
+  billing_unit: 'token',
+  request_price: null,
   id: 0,
   channel_id: '',
   channel_name: '',
@@ -226,70 +231,113 @@ defineExpose({ requestClose, confirmDiscardSwitch, discardChanges, hasUnsavedCha
       <section class="upstream-drawer__section">
         <h3>
           {{ t('models.drawer.prices') }}
-          <span class="upstream-drawer__eyebrow">{{ t('modelPrices.matrix.unit') }}</span>
+          <span class="upstream-drawer__eyebrow">{{
+            t(
+              editor.draft.value.billingUnit === 'request'
+                ? 'modelPrices.requestUnit'
+                : 'modelPrices.matrix.unit',
+            )
+          }}</span>
         </h3>
-        <ModelPriceMatrix
-          v-model:draft="editor.draft.value"
-          v-model:unpriced-confirm-open="editor.unpricedConfirmOpen.value"
-          :model-id="detail.model_id"
-          :errors="editor.errors.value"
-          :pending="editor.pending.value"
-          :failure="editor.failure.value"
-          @add-tier="editor.addTier"
-          @remove-tier="editor.removeTier"
-          @confirm-unpriced="editor.confirmUnpricedSave"
+        <AppSelect
+          v-model="editor.draft.value.billingUnit"
+          :label="t('modelPrices.billingUnit')"
+          :options="[
+            { value: 'token', label: t('modelPrices.tokenBilling') },
+            { value: 'request', label: t('modelPrices.requestBilling') },
+          ]"
+          :disabled="editor.pending.value"
+          size="compact"
         />
-        <div v-if="hasFastSchedule" class="upstream-drawer__mode-heading">
-          <h3>
-            <span>
-              <Zap :size="13" aria-hidden="true" />
-              {{ t('models.drawer.fastPrices') }}
-            </span>
-            <span class="upstream-drawer__eyebrow">{{ t('modelPrices.matrix.unit') }}</span>
-          </h3>
-        </div>
-        <ModelPriceSlotsEditor
-          v-if="hasFastSchedule"
-          v-model:draft="fastDraft"
-          id-prefix="model-price-fast"
-          :errors="fastErrors"
-          :pending="editor.pending.value"
-        />
-        <div class="upstream-drawer__mode-heading">
-          <h3>
-            <span>
-              <Zap :size="13" aria-hidden="true" />
-              {{ t('models.drawer.ultrafastPrices') }}
-            </span>
-            <span class="upstream-drawer__eyebrow">{{ t('modelPrices.matrix.unit') }}</span>
-          </h3>
-          <AppButton
+        <template v-if="editor.draft.value.billingUnit === 'request'">
+          <AppTextInput
+            v-model="editor.draft.value.requestPrice"
+            :label="t('modelPrices.requestPrice')"
+            :invalid="Boolean(editor.errors.value.requestPrice)"
+            :disabled="editor.pending.value"
+            inputmode="decimal"
+          />
+          <InlineFeedback v-if="editor.errors.value.requestPrice" tone="danger">{{
+            t('modelPrices.matrix.errors.invalid_price')
+          }}</InlineFeedback>
+          <p class="upstream-drawer__faint">{{ t('modelPrices.requestPriceHelp') }}</p>
+          <AppConfirmDialog
+            v-model:open="editor.unpricedConfirmOpen.value"
+            :title="t('modelPrices.matrix.unpricedConfirm.title')"
+            :description="
+              t('modelPrices.matrix.unpricedConfirm.description', { model: detail.model_id })
+            "
+            :close-label="t('modelPrices.matrix.unpricedConfirm.close')"
+            :cancel-label="t('common.cancel')"
+            :confirm-label="t('modelPrices.matrix.unpricedConfirm.confirm')"
+            :pending="editor.pending.value"
+            @confirm="editor.confirmUnpricedSave"
+          />
+        </template>
+        <template v-else>
+          <ModelPriceMatrix
+            v-model:draft="editor.draft.value"
+            v-model:unpriced-confirm-open="editor.unpricedConfirmOpen.value"
+            :model-id="detail.model_id"
+            :errors="editor.errors.value"
+            :pending="editor.pending.value"
+            :failure="editor.failure.value"
+            @add-tier="editor.addTier"
+            @remove-tier="editor.removeTier"
+            @confirm-unpriced="editor.confirmUnpricedSave"
+          />
+          <div v-if="hasFastSchedule" class="upstream-drawer__mode-heading">
+            <h3>
+              <span>
+                <Zap :size="13" aria-hidden="true" />
+                {{ t('models.drawer.fastPrices') }}
+              </span>
+              <span class="upstream-drawer__eyebrow">{{ t('modelPrices.matrix.unit') }}</span>
+            </h3>
+          </div>
+          <ModelPriceSlotsEditor
+            v-if="hasFastSchedule"
+            v-model:draft="fastDraft"
+            id-prefix="model-price-fast"
+            :errors="fastErrors"
+            :pending="editor.pending.value"
+          />
+          <div class="upstream-drawer__mode-heading">
+            <h3>
+              <span>
+                <Zap :size="13" aria-hidden="true" />
+                {{ t('models.drawer.ultrafastPrices') }}
+              </span>
+              <span class="upstream-drawer__eyebrow">{{ t('modelPrices.matrix.unit') }}</span>
+            </h3>
+            <AppButton
+              v-if="hasUltrafastSchedule"
+              variant="ghost"
+              size="compact"
+              :disabled="editor.pending.value || resetting"
+              @click="removeUltrafastPrice"
+            >
+              {{ t('models.drawer.removeUltrafastPrice') }}
+            </AppButton>
+            <AppButton
+              v-else
+              variant="secondary"
+              size="compact"
+              :disabled="editor.pending.value || resetting"
+              @click="addUltrafastPrice"
+            >
+              {{ t('models.drawer.addUltrafastPrice') }}
+            </AppButton>
+          </div>
+          <ModelPriceSlotsEditor
             v-if="hasUltrafastSchedule"
-            variant="ghost"
-            size="compact"
-            :disabled="editor.pending.value || resetting"
-            @click="removeUltrafastPrice"
-          >
-            {{ t('models.drawer.removeUltrafastPrice') }}
-          </AppButton>
-          <AppButton
-            v-else
-            variant="secondary"
-            size="compact"
-            :disabled="editor.pending.value || resetting"
-            @click="addUltrafastPrice"
-          >
-            {{ t('models.drawer.addUltrafastPrice') }}
-          </AppButton>
-        </div>
-        <ModelPriceSlotsEditor
-          v-if="hasUltrafastSchedule"
-          v-model:draft="ultrafastDraft"
-          id-prefix="model-price-ultrafast"
-          :errors="ultrafastErrors"
-          :pending="editor.pending.value"
-        />
-        <p v-else class="upstream-drawer__faint">{{ t('models.drawer.ultrafastFallback') }}</p>
+            v-model:draft="ultrafastDraft"
+            id-prefix="model-price-ultrafast"
+            :errors="ultrafastErrors"
+            :pending="editor.pending.value"
+          />
+          <p v-else class="upstream-drawer__faint">{{ t('models.drawer.ultrafastFallback') }}</p>
+        </template>
       </section>
 
       <section class="upstream-drawer__section">

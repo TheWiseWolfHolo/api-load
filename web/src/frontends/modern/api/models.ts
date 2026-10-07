@@ -46,6 +46,8 @@ export interface PriceSchedule {
   context_tiers: PriceTier[]
 }
 export interface ModelPrice extends PriceSchedule {
+  billing_unit: 'token' | 'request'
+  request_price: string | null
   id: number
   model: string
   channel: { id: string; name: string; icon: string; mark: string }
@@ -150,6 +152,8 @@ function schedule(value: unknown): PriceSchedule {
 export function readModelPrice(value: unknown): ModelPrice {
   const row = record(value)
   return {
+    billing_unit: oneOf(row.billing_unit ?? 'token', ['token', 'request']),
+    request_price: decimal(row.request_price ?? null),
     ...schedule(row),
     id: integer(row.id, 1),
     model: text(row.model_id),
@@ -378,6 +382,8 @@ export async function getModelSource(
   }
 }
 export interface ModelPriceUpdate extends PriceSlots {
+  billing_unit: 'token' | 'request'
+  request_price: string | null
   context_tiers: (PriceSlots & { threshold_tokens: number })[]
   mode_schedules: Record<
     string,
@@ -392,7 +398,10 @@ export async function saveModelPrice(
   signal: AbortSignal,
 ): Promise<ModelPrice> {
   const path = `/api/model-prices/${id}` as const
-  return readModelPrice(await client.request(path, { method: 'PUT', json: patch, signal }))
+  const { billing_unit, request_price, ...tokenPatch } = patch
+  const json =
+    billing_unit === 'request' ? { ...tokenPatch, billing_unit, request_price } : tokenPatch
+  return readModelPrice(await client.request(path, { method: 'PUT', json, signal }))
 }
 export async function resetModelPrice(client: ApiClient, id: number, signal: AbortSignal) {
   const path = `/api/model-prices/${id}/reset` as const

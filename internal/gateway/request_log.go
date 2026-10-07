@@ -613,7 +613,7 @@ func (recorder *requestRecorder) bindUsage(
 		result.Diagnostics.Merge(requestDiagnostics)
 	}
 	pricingMode = effectivePricingMode(pricingMode)
-	pricingObservation := quoteFrozenAttempt(frozen, result, pricingMode)
+	pricingObservation := quoteFrozenAttempt(frozen, result, pricingMode, recorder.outcome.status == telemetry.RequestStatusSuccess)
 	recorder.usage = telemetry.UsageObservation{
 		Result:          result,
 		GroupID:         attempt.GroupID,
@@ -628,23 +628,31 @@ func quoteFrozenAttempt(
 	frozen frozenAttemptPricing,
 	result usage.Result,
 	pricingMode pricing.Mode,
+	successful bool,
 ) telemetry.PricingObservation {
 	observation := telemetry.PricingObservation{
 		UpstreamModel:       frozen.upstreamModel,
 		CostState:           string(pricing.CostStateUnpriced),
 		PricingCompleteness: string(pricing.CompletenessUnavailable),
 	}
-	if result.State == usage.StateNotApplicable || !frozen.applicable {
+	identity := pricing.Identity{ChannelID: frozen.channelID, ModelID: frozen.upstreamModel}
+	rule, matched := frozen.table.Lookup(identity)
+	requestBilling := matched && rule.BillingUnit == pricing.BillingUnitRequest
+	if requestBilling {
+		observation.BillingUnit = string(pricing.BillingUnitRequest)
+	}
+	if requestBilling && !successful {
+		observation.CostState = string(pricing.CostStateNotApplicable)
+		observation.PricingCompleteness = string(pricing.CompletenessNotApplicable)
+		return observation
+	}
+	if !requestBilling && (result.State == usage.StateNotApplicable || !frozen.applicable) {
 		observation.CostState = string(pricing.CostStateNotApplicable)
 		observation.PricingCompleteness = string(pricing.CompletenessNotApplicable)
 		return observation
 	}
 	if frozen.table == nil || frozen.upstreamModel == "" {
 		return observation
-	}
-	identity := pricing.Identity{
-		ChannelID: frozen.channelID,
-		ModelID:   frozen.upstreamModel,
 	}
 	quote, receipt := frozen.table.QuoteForModeWithMultipliers(identity, result, pricingMode, frozen.priceMultipliers)
 	observation.CostState = string(quote.State)

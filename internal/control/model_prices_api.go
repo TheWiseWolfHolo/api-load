@@ -54,6 +54,8 @@ type nullableDecimal struct {
 }
 
 type ModelPriceUpdateRequest struct {
+	BillingUnit     pricing.BillingUnit            `json:"billing_unit"`
+	RequestPrice    nullableDecimal                `json:"request_price"`
 	Input           nullableDecimal                `json:"input"`
 	Output          nullableDecimal                `json:"output"`
 	CacheRead       nullableDecimal                `json:"cache_read"`
@@ -137,6 +139,18 @@ type ModelPriceContextTierRequest struct {
 }
 
 func (request ModelPriceUpdateRequest) validate() error {
+	switch request.BillingUnit {
+	case "", pricing.BillingUnitToken:
+		if request.RequestPrice.nanoUSD != nil {
+			return fmt.Errorf("token billing must not contain a request price: %w", app_errors.ErrValidation)
+		}
+	case pricing.BillingUnitRequest:
+		if !request.RequestPrice.present || request.Input.nanoUSD != nil || request.Output.nanoUSD != nil || request.CacheRead.nanoUSD != nil || request.CacheWrite.nanoUSD != nil || len(request.ContextTiers.tiers) > 0 || len(request.ModeSchedules.schedules) > 0 {
+			return fmt.Errorf("request billing requires a request price field and empty token schedules: %w", app_errors.ErrValidation)
+		}
+	default:
+		return fmt.Errorf("invalid billing unit: %w", app_errors.ErrValidation)
+	}
 	if !request.Input.present ||
 		!request.Output.present ||
 		!request.CacheRead.present ||

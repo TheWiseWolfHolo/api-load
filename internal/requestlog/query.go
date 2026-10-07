@@ -415,6 +415,7 @@ func decodeRequestLogRows(rows []models.RequestLog) ([]Record, error) {
 			ChannelID:               channel.ID(row.ChannelID),
 			CredentialID:            row.CredentialID,
 			UsageState:              usage.State(row.UsageState),
+			BillingUnit:             pricing.BillingUnit(row.BillingUnit),
 			CostState:               pricing.CostState(row.CostState),
 			PricingCompleteness:     pricing.Completeness(row.PricingCompleteness),
 			UncachedInputTokens:     row.UncachedInputTokens,
@@ -457,7 +458,8 @@ func validateStoredModelObservation(row models.RequestLog) error {
 }
 
 func validateRequestLogUsageCost(row models.RequestLog) error {
-	if err := validateFrozenPricingState(
+	if err := ValidateBillingUsageCostState(
+		pricing.BillingUnit(row.BillingUnit), telemetry.RequestStatus(row.Status),
 		usage.State(row.UsageState),
 		pricing.CostState(row.CostState),
 		pricing.Completeness(row.PricingCompleteness),

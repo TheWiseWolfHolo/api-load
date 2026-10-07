@@ -67,7 +67,8 @@ func persistedPriceRule(
 		return pricing.Rule{}, err
 	}
 	rule := pricing.Rule{
-		Identity: identity,
+		BillingUnit: pricing.BillingUnit(row.BillingUnit),
+		Identity:    identity,
 		Prices: pricing.Prices{
 			Input:      priceFromStoragePointer(row.InputPriceNanoUSDPerMillionTokens),
 			Output:     priceFromStoragePointer(row.OutputPriceNanoUSDPerMillionTokens),
@@ -75,6 +76,10 @@ func persistedPriceRule(
 			CacheWrite: priceFromStoragePointer(row.CacheWritePriceNanoUSDPerMillionTokens),
 		},
 		IsManual: row.IsManual,
+	}
+	if row.RequestPriceNanoUSD != nil {
+		value := pricing.NanoUSD(*row.RequestPriceNanoUSD)
+		rule.RequestPrice = &value
 	}
 	rule.ContextTiers, err = decodePersistedContextTiers(row.ContextPriceTiers)
 	if err != nil {

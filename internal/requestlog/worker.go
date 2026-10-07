@@ -568,7 +568,7 @@ func (delta *usageStatDelta) addRow(row models.RequestLog) error {
 		return fmt.Errorf("aggregate request log %q: invalid usage state %q", row.ID, row.UsageState)
 	}
 	if (row.UsageState == string(usage.StateComplete) ||
-		row.UsageState == string(usage.StatePartial)) &&
+		row.UsageState == string(usage.StatePartial) || row.BillingUnit == string(pricing.BillingUnitRequest)) &&
 		row.CostState == string(pricing.CostStateUnpriced) {
 		if err := checkedInt64Add(&delta.UnpricedRequestCount, 1, "unpriced_request_count"); err != nil {
 			return err
@@ -584,24 +584,22 @@ func (delta *usageStatDelta) addRow(row models.RequestLog) error {
 		return fmt.Errorf("aggregate request log %q: %w", row.ID, err)
 	}
 
-	if row.UsageState != string(usage.StateComplete) &&
-		row.UsageState != string(usage.StatePartial) {
-		return nil
-	}
-	for _, field := range []struct {
-		name   string
-		target *int64
-		value  int64
-	}{
-		{name: "uncached_input_tokens", target: &delta.UncachedInputTokens, value: row.UncachedInputTokens},
-		{name: "output_tokens", target: &delta.OutputTokens, value: row.OutputTokens},
-		{name: "cache_read_tokens", target: &delta.CacheReadTokens, value: row.CacheReadTokens},
-		{name: "cache_write_5m_tokens", target: &delta.CacheWrite5MTokens, value: row.CacheWrite5MTokens},
-		{name: "cache_write_1h_tokens", target: &delta.CacheWrite1HTokens, value: row.CacheWrite1HTokens},
-		{name: "cache_write_unknown_tokens", target: &delta.CacheWriteUnknownTokens, value: row.CacheWriteUnknownTokens},
-	} {
-		if err := checkedInt64Add(field.target, field.value, field.name); err != nil {
-			return err
+	if row.UsageState == string(usage.StateComplete) || row.UsageState == string(usage.StatePartial) {
+		for _, field := range []struct {
+			name   string
+			target *int64
+			value  int64
+		}{
+			{name: "uncached_input_tokens", target: &delta.UncachedInputTokens, value: row.UncachedInputTokens},
+			{name: "output_tokens", target: &delta.OutputTokens, value: row.OutputTokens},
+			{name: "cache_read_tokens", target: &delta.CacheReadTokens, value: row.CacheReadTokens},
+			{name: "cache_write_5m_tokens", target: &delta.CacheWrite5MTokens, value: row.CacheWrite5MTokens},
+			{name: "cache_write_1h_tokens", target: &delta.CacheWrite1HTokens, value: row.CacheWrite1HTokens},
+			{name: "cache_write_unknown_tokens", target: &delta.CacheWriteUnknownTokens, value: row.CacheWriteUnknownTokens},
+		} {
+			if err := checkedInt64Add(field.target, field.value, field.name); err != nil {
+				return err
+			}
 		}
 	}
 	if row.CostState != string(pricing.CostStatePriced) {
@@ -641,7 +639,8 @@ func validatePersistedPricingState(row models.RequestLog) error {
 	}); !ok {
 		return fmt.Errorf("token total overflows int64")
 	}
-	return validateFrozenPricingState(
+	return ValidateBillingUsageCostState(
+		pricing.BillingUnit(row.BillingUnit), telemetry.RequestStatus(row.Status),
 		usage.State(row.UsageState),
 		pricing.CostState(row.CostState),
 		pricing.Completeness(row.PricingCompleteness),

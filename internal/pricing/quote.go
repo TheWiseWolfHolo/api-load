@@ -50,7 +50,9 @@ func (table *Table) QuoteForModeWithMultipliers(identity Identity, result usage.
 		quote.EstimatedCostNanoUSD = adjusted
 		receipt.TotalNanoUSD = int64(adjusted)
 	}
-	receipt.SchemaVersion = 6
+	if receipt.SchemaVersion < 6 {
+		receipt.SchemaVersion = 6
+	}
 	receipt.BaseTotalNanoUSD = &baseTotal
 	receipt.PriceMultipliers = &multipliers
 	return quote, receipt
@@ -64,6 +66,23 @@ func (table *Table) QuoteForModeWithReceipt(
 	result usage.Result,
 	mode Mode,
 ) (Quote, *Receipt) {
+	if result.State != usage.StateComplete && result.State != usage.StatePartial && result.State != usage.StateMissing && result.State != usage.StateNotApplicable {
+		return unavailableQuote(), nil
+	}
+	if rule, ok := table.Lookup(identity); ok && rule.BillingUnit == BillingUnitRequest {
+		if rule.RequestPrice == nil {
+			return unavailableQuote(), nil
+		}
+		price := int64(*rule.RequestPrice)
+		base := price
+		multipliers := PriceMultipliers{Group: DefaultPriceMultiplier, AccessKey: DefaultPriceMultiplier}
+		return Quote{State: CostStatePriced, Completeness: CompletenessComplete, EstimatedCostNanoUSD: *rule.RequestPrice}, &Receipt{
+			SchemaVersion: 7, Method: ReceiptMethodPerRequest, MethodVersion: 1, Currency: "USD", PricingMode: ModeStandard,
+			Rule:             ReceiptRule{ChannelID: identity.ChannelID, ModelID: identity.ModelID},
+			PriceMultipliers: &multipliers, BaseTotalNanoUSD: &base, TotalNanoUSD: price,
+			LineItems: []ReceiptLine{{Code: "request", Quantity: 1, RateNanoUSDPerRequest: &price, Multiplier: directPriceMultiplier, State: ReceiptLinePriced, AmountNanoUSD: &base}},
+		}
+	}
 	switch result.State {
 	case usage.StateNotApplicable:
 		return Quote{State: CostStateNotApplicable, Completeness: CompletenessNotApplicable}, nil
