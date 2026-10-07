@@ -1,4 +1,26 @@
 export const zhCN = {
+  keyBatch: {
+    title: '批量测试密钥',
+    testAll: '测试全部',
+    exportAll: '导出全部',
+    testSelected: '测试所选',
+    exportSelected: '导出所选',
+    allScope: '当前分组全部 {count} 把密钥，不受列表筛选或分页影响。',
+    selectedScope: '仅测试已选的 {count} 把密钥。',
+    help: '逐把密钥检测所选上游模型，最多同时检测 2 把。上游可能收费，协议适配可能产生回退请求。测试只报告结果，不修改密钥状态。关闭窗口后不保留报告。',
+    progress: '完成 {completed}/{total} · 通过 {passed} · 失败 {failed} · 待确认 {uncertain}',
+    start: '开始测试',
+    rerun: '重新测试全部目标',
+    stop: '停止测试',
+    stopped: '已停止，未完成的密钥没有结论',
+    states: {
+      queued: '等待检测',
+      running: '正在检测',
+      done: '已完成',
+      error: '请求未完成，结果待确认',
+      cancelled: '未完成',
+    },
+  },
   copyConfiguredIDs: '复制当前上游 ID',
   copyUpstreamIDs: '复制全部上游 ID',
   copyNewIDs: '复制全部新增 ID',
@@ -87,6 +109,29 @@ export const zhCN = {
 }
 
 export const enUS: typeof zhCN = {
+  keyBatch: {
+    title: 'Batch key test',
+    testAll: 'Test all',
+    exportAll: 'Export all',
+    testSelected: 'Test selected',
+    exportSelected: 'Export selected',
+    allScope: 'All {count} keys in this group, regardless of list filters or pagination.',
+    selectedScope: 'Test only the {count} selected keys.',
+    help: 'Probe the selected upstream model with each key, with at most 2 concurrent probes. Upstream charges may apply and protocol adaptation may make fallback requests. Tests only report results and leave key status unchanged. Reports are discarded when this dialog closes.',
+    progress:
+      'Completed {completed}/{total} · Passed {passed} · Failed {failed} · Uncertain {uncertain}',
+    start: 'Start testing',
+    rerun: 'Retest all targets',
+    stop: 'Stop testing',
+    stopped: 'Stopped; unfinished keys have no conclusion',
+    states: {
+      queued: 'Queued',
+      running: 'Testing',
+      done: 'Completed',
+      error: 'Request incomplete; result uncertain',
+      cancelled: 'Unfinished',
+    },
+  },
   copyConfiguredIDs: 'Copy current upstream IDs',
   copyUpstreamIDs: 'Copy all upstream IDs',
   copyNewIDs: 'Copy all new IDs',
@@ -186,6 +231,28 @@ export const enUS: typeof zhCN = {
 }
 
 export const jaJP: typeof zhCN = {
+  keyBatch: {
+    title: 'キーの一括テスト',
+    testAll: 'すべてテスト',
+    exportAll: 'すべてエクスポート',
+    testSelected: '選択分をテスト',
+    exportSelected: '選択分をエクスポート',
+    allScope: 'フィルターやページに関係なく、このグループの全 {count} 件のキーが対象です。',
+    selectedScope: '選択した {count} 件のキーのみテストします。',
+    help: '各キーで選択した上流モデルをテストします。同時実行は最大 2 件です。上流の料金やプロトコルのフォールバック要求が発生する場合があります。結果のみを報告し、キーの状態は変更しません。画面を閉じるとレポートは破棄されます。',
+    progress: '完了 {completed}/{total} · 成功 {passed} · 失敗 {failed} · 未確定 {uncertain}',
+    start: 'テスト開始',
+    rerun: '全対象を再テスト',
+    stop: 'テスト停止',
+    stopped: '停止済み。未完了のキーには結果がありません',
+    states: {
+      queued: '待機中',
+      running: 'テスト中',
+      done: '完了',
+      error: '要求未完了、結果未確定',
+      cancelled: '未完了',
+    },
+  },
   copyConfiguredIDs: '現在の上流 ID をコピー',
   copyUpstreamIDs: '上流 ID をすべてコピー',
   copyNewIDs: '新規 ID をすべてコピー',

@@ -10,7 +10,7 @@
 
 [English](README.md) · 中文 · [日本語](README_JP.md) | [官方网站](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2_candidate-blue)](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption)
+[![Release](https://img.shields.io/badge/API--Load-v2.0.0-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.0)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -141,7 +141,7 @@ docker compose pull && docker compose up -d   # 更新到最新 2.x 镜像
 docker compose stop         # 停止服务
 ```
 
-官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:v2-candidate`。GA 前，`2` 跟随已验证的 2.0 Beta 和 RC；GA 后只跟随稳定的 2.x。镜像精确标签会去掉 Git tag 的 `v` 前缀（例如 `2.0.0-beta.25`），`2.0-beta` 则保留为 2.0 Beta 通道；`latest` 继续留在 1.x。
+官方 Compose 使用开发分支镜像 `ghcr.io/thewisewolfholo/api-load:v2-candidate`。固定使用正式版 2.0.0 时，请改为 `ghcr.io/thewisewolfholo/api-load:v2.0.0`。Git 标签和镜像标签均为 `v2.0.0`。
 
 <details>
 <summary>使用原生二进制</summary>

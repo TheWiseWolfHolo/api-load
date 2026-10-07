@@ -653,11 +653,29 @@ func (s *Server) handleDownloadAllGroupCredentials(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := bindOptionalEmptyJSONObject(c); err != nil {
+	var request struct {
+		Scope         string          `json:"scope"`
+		CredentialIDs json.RawMessage `json:"credential_ids"`
+	}
+	if err := bindOptionalProbeJSON(c, &request); err != nil {
 		writeServiceError(c, "download_all_group_credentials", mapControlJSONError(err))
 		return
 	}
-	result, err := s.service.DownloadAllGroupCredentials(c.Request.Context(), groupID)
+	var result CredentialDownloadAllResult
+	var err error
+	switch {
+	case request.Scope == "selected":
+		var ids []uint
+		if json.Unmarshal(request.CredentialIDs, &ids) != nil {
+			err = app_errors.ErrBadRequest
+		} else {
+			result, err = s.service.DownloadSelectedGroupCredentials(c.Request.Context(), groupID, ids)
+		}
+	case request.Scope == "" && len(request.CredentialIDs) == 0:
+		result, err = s.service.DownloadAllGroupCredentials(c.Request.Context(), groupID)
+	default:
+		err = app_errors.ErrBadRequest
+	}
 	if err != nil {
 		writeServiceError(c, "download_all_group_credentials", err)
 		return

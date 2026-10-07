@@ -10,7 +10,7 @@ API キー、サブスクリプションアカウント、トラフィック制�
 
 [English](README.md) · [中文](README_CN.md) · 日本語 | [公式サイト](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2_candidate-blue)](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption)
+[![Release](https://img.shields.io/badge/API--Load-v2.0.0-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.0)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -141,7 +141,7 @@ docker compose pull && docker compose up -d   # 最新の 2.x イメージへ更
 docker compose stop         # サービスを停止
 ```
 
-公式 Compose は `ghcr.io/thewisewolfholo/api-load:v2-candidate` を使用します。GA 前の `2` は検証済みの 2.0 Beta / RC を追跡し、GA 後は安定版 2.x のみを追跡します。イメージの完全なタグからは Git tag の `v` 接頭辞を除き（例：`2.0.0-beta.25`）、`2.0-beta` は 2.0 Beta チャネルとして残します。`latest` は引き続き 1.x を指します。
+公式 Compose は開発ブランチの `ghcr.io/thewisewolfholo/api-load:v2-candidate` を使用します。正式版 2.0.0 に固定するには `ghcr.io/thewisewolfholo/api-load:v2.0.0` を指定してください。Git とコンテナのタグは両方とも `v2.0.0` です。
 
 <details>
 <summary>ネイティブバイナリを使う</summary>

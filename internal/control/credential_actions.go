@@ -82,6 +82,25 @@ func (s *Service) DownloadAllGroupCredentials(
 	ctx context.Context,
 	groupID uint,
 ) (CredentialDownloadAllResult, error) {
+	return s.downloadGroupCredentials(ctx, groupID, nil)
+}
+
+// DownloadSelectedGroupCredentials exports only the explicitly selected group members.
+func (s *Service) DownloadSelectedGroupCredentials(ctx context.Context, groupID uint, ids []uint) (CredentialDownloadAllResult, error) {
+	if len(ids) < 1 || len(ids) > 100 {
+		return CredentialDownloadAllResult{}, app_errors.ErrBadRequest
+	}
+	seen := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			return CredentialDownloadAllResult{}, app_errors.ErrBadRequest
+		}
+		seen[id] = true
+	}
+	return s.downloadGroupCredentials(ctx, groupID, ids)
+}
+
+func (s *Service) downloadGroupCredentials(ctx context.Context, groupID uint, ids []uint) (CredentialDownloadAllResult, error) {
 	if groupID == 0 {
 		return CredentialDownloadAllResult{}, app_errors.ErrBadRequest
 	}
@@ -94,7 +113,17 @@ func (s *Service) DownloadAllGroupCredentials(
 		if group.ChannelID == "" {
 			return app_errors.ErrValidation
 		}
-		return tx.Where("group_id = ?", groupID).Order("id ASC").Find(&rows).Error
+		query := tx.Where("group_id = ?", groupID).Order("id ASC")
+		if ids != nil {
+			query = query.Where("id IN ?", ids)
+		}
+		if err := query.Find(&rows).Error; err != nil {
+			return err
+		}
+		if ids != nil && len(rows) != len(ids) {
+			return credentialNotFoundError()
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

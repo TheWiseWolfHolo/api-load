@@ -37,11 +37,16 @@ export async function updateCredential(
   return Object.hasOwn(patch, 'weight_manual') ? { ...row, weightManual: patch.weight_manual } : row
 }
 
-export async function exportAllCredentials(client: ApiClient, group: number, signal: AbortSignal) {
+export async function exportAllCredentials(
+  client: ApiClient,
+  group: number,
+  signal: AbortSignal,
+  ids?: readonly number[],
+) {
   const data = record(
     await client.request(`/api/groups/${group}/credentials/download-all`, {
       method: 'POST',
-      json: {},
+      json: ids === undefined ? {} : { scope: 'selected', credential_ids: ids },
       signal,
     }),
   )
