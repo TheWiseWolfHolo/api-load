@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ListChecks, Plus, Search, Trash2 } from '@lucide/vue'
+import { Braces, ListChecks, Plus, Search, Trash2 } from '@lucide/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ModelCandidate } from '@modern/api/model-discovery'
@@ -17,6 +17,8 @@ import ModelSelectionDialog from '../models/ModelSelectionDialog.vue'
 import ModelSourceBadges from '../models/ModelSourceBadges.vue'
 import ModelPriceBadge from '../models/ModelPriceBadge.vue'
 import { modelErrors, type GroupDraftModel } from './group-create-rules'
+import GroupModelJSONDialog from './GroupModelJSONDialog.vue'
+import ModelIDsCopyButton from './ModelIDsCopyButton.vue'
 
 const props = defineProps<{
   layout?: 'form' | 'list'
@@ -55,6 +57,7 @@ const choosing = computed({
   },
 })
 const loaded = ref(false)
+const importing = ref(false)
 const search = computed({
   get: () => view.value.q,
   set: (value) => {
@@ -118,6 +121,7 @@ watch(
   () => {
     loaded.value = false
     choosing.value = false
+    importing.value = false
   },
 )
 watch(
@@ -185,6 +189,11 @@ function update(key: number, field: 'id' | 'alias', value: string): void {
       : model,
   )
 }
+function importModels(next: GroupDraftModel[]): void {
+  if (props.disabled) return
+  models.value = next
+  importing.value = false
+}
 defineExpose({
   focusFirstInvalid: async () => {
     const model = models.value.find((item) => errors.value.has(item.key))
@@ -232,6 +241,22 @@ useLoadingActivity(() => filtering.value || props.loading)
         }}</AppButton>
       </div>
     </div>
+    <div class="modern-model-bulk-tools">
+      <AppButton
+        :icon="Braces"
+        variant="ghost"
+        size="sm"
+        :disabled="disabled"
+        @click="importing = true"
+        >{{ t('groupWorkflows.redirects.title') }}</AppButton
+      >
+      <ModelIDsCopyButton
+        :ids="models.map((model) => model.id)"
+        :label="t('groupWorkflows.copyConfiguredIDs')"
+        :disabled="disabled"
+      />
+    </div>
+    <p class="modern-model-scope">{{ t('groupWorkflows.modelScope') }}</p>
     <AppTextField
       v-if="layout !== 'list' && (models.length > 5 || search)"
       v-model="search"
@@ -341,6 +366,12 @@ useLoadingActivity(() => filtering.value || props.loading)
     @refresh="emit('discover')"
     @confirm="addCandidates"
   />
+  <GroupModelJSONDialog
+    v-if="importing"
+    :models="models"
+    @close="importing = false"
+    @confirm="importModels"
+  />
 </template>
 
 <style scoped>
@@ -348,6 +379,15 @@ useLoadingActivity(() => filtering.value || props.loading)
   display: grid;
   gap: var(--modern-space-3);
   min-width: 0;
+}
+.modern-model-bulk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--modern-space-2);
+}
+.modern-model-scope {
+  color: var(--modern-muted);
+  font-size: var(--modern-font-size-small);
 }
 .modern-create-models--list {
   display: flex;
