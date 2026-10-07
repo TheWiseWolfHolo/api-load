@@ -1,4 +1,10 @@
 export const zhCN = {
+  testModelHelp:
+    '每次打开默认选模型列表第一项，可下拉选择或临时指定，留空也使用第一项。显示公开名称，按映射请求上游；未配置的名称视为上游 ID。',
+  forcedTestModelHelp:
+    '此设置用于分组自动验证。留空使用第一项；手动密钥测试每次默认选择当前列表第一项。',
+  testDefaultModel: '本次默认测试 {model}',
+  testUpstreamModel: '本次请求的上游 ID 为 {model}',
   name: '名称',
   namePlaceholder: '可选，用于识别此凭据',
   nameSaveFailed: '名称保存失败，请重试',
@@ -139,6 +145,12 @@ export const zhCN = {
   },
 }
 export const enUS: typeof zhCN = {
+  testDefaultModel: 'Default model for this test is {model}',
+  testModelHelp:
+    'Each dialog starts with the first listed model. Choose another or enter a temporary name; blank also uses the first model. Public names resolve through the group mapping; unlisted names are treated as upstream IDs.',
+  forcedTestModelHelp:
+    'This setting is for automatic group validation. Leave empty to use the first model. Manual key tests always start with the first currently listed model.',
+  testUpstreamModel: 'Upstream ID for this test is {model}',
   name: 'Name',
   namePlaceholder: 'Optional credential alias',
   nameSaveFailed: 'Could not save the name. Try again.',
@@ -284,6 +296,12 @@ export const enUS: typeof zhCN = {
   },
 }
 export const jaJP: typeof zhCN = {
+  testDefaultModel: '今回の既定モデルは {model} です',
+  testModelHelp:
+    '開くたびに一覧の先頭が既定になります。別のモデルを選択するか一時的に指定できます。空欄でも先頭を使用します。公開名は上流 ID に変換し、未登録の名前は上流 ID として扱います。',
+  forcedTestModelHelp:
+    'グループの自動検証用です。空欄なら先頭を使用します。手動キーテストは毎回、現在の一覧の先頭から始まります。',
+  testUpstreamModel: '今回の上流 ID は {model} です',
   name: '名前',
   namePlaceholder: '認証情報の表示名（任意）',
   nameSaveFailed: '名前を保存できませんでした。再試行してください。',

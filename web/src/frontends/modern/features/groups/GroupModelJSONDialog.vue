@@ -80,6 +80,7 @@ function apply(): void {
     "
   >
     <AppDialogContent
+      class="modern-model-json-dialog"
       size="wide"
       :title="t('groupWorkflows.redirects.title')"
       :description="t('groupWorkflows.redirects.help')"
@@ -105,51 +106,64 @@ function apply(): void {
         <AppNotice v-if="mode === 'replace'" tone="warning">{{
           t('groupWorkflows.redirects.replaceWarning')
         }}</AppNotice>
-        <AppTextArea
-          v-model="text"
-          :label="t('groupWorkflows.redirects.json')"
-          :rows="7"
-          mono
-          spellcheck="false"
-          :placeholder="'{\n  &quot;my-model&quot;: &quot;vendor/model-id&quot;\n}'"
-          :error="parsed.error || undefined"
-        />
-        <template v-if="text.trim() && !parsed.error">
-          <p class="modern-model-json-summary">
-            {{ t('groupWorkflows.redirects.summary', counts) }}
-          </p>
-          <div class="modern-model-json-preview">
-            <div v-for="row in plan.changes" :key="row.name" class="modern-model-json-row">
-              <div class="modern-model-json-names">
-                <strong>{{ row.name }}</strong>
-                <span>{{ t('groupWorkflows.redirects.target') }} {{ row.id }}</span>
-                <span
-                  v-if="
-                    row.previous.length && (row.action === 'update' || row.action === 'conflict')
-                  "
-                  >{{ t('groupWorkflows.redirects.previous') }} {{ row.previous.join(', ') }}</span
-                >
+        <div
+          class="modern-model-json-workspace"
+          :class="{ 'has-preview': text.trim() && !parsed.error }"
+        >
+          <AppTextArea
+            v-model="text"
+            class="modern-model-json-input"
+            :label="t('groupWorkflows.redirects.json')"
+            :rows="5"
+            mono
+            spellcheck="false"
+            :placeholder="'{\n  &quot;my-model&quot;: &quot;vendor/model-id&quot;\n}'"
+            :error="parsed.error || undefined"
+          />
+          <section v-if="text.trim() && !parsed.error" class="modern-model-json-review">
+            <p class="modern-model-json-summary">
+              {{ t('groupWorkflows.redirects.summary', counts) }}
+            </p>
+            <div class="modern-model-json-preview">
+              <div v-for="row in plan.changes" :key="row.name" class="modern-model-json-row">
+                <div class="modern-model-json-names">
+                  <strong>{{ row.name }}</strong>
+                  <span>{{ t('groupWorkflows.redirects.target') }} {{ row.id }}</span>
+                  <span
+                    v-if="
+                      row.previous.length && (row.action === 'update' || row.action === 'conflict')
+                    "
+                    >{{ t('groupWorkflows.redirects.previous') }}
+                    {{ row.previous.join(', ') }}</span
+                  >
+                </div>
+                <AppCheckbox
+                  v-if="row.action === 'conflict' || (mode === 'merge' && row.action === 'update')"
+                  :model-value="overwrite.has(row.name)"
+                  :label="t('groupWorkflows.redirects.useIncoming')"
+                  @update:model-value="setOverwrite(row.name, $event)"
+                />
+                <span v-else class="modern-model-json-action">{{
+                  t('groupWorkflows.redirects.actions.' + row.action)
+                }}</span>
               </div>
-              <AppCheckbox
-                v-if="row.action === 'conflict' || (mode === 'merge' && row.action === 'update')"
-                :model-value="overwrite.has(row.name)"
-                :label="t('groupWorkflows.redirects.useIncoming')"
-                @update:model-value="setOverwrite(row.name, $event)"
-              />
-              <span v-else class="modern-model-json-action">{{
-                t('groupWorkflows.redirects.actions.' + row.action)
-              }}</span>
             </div>
-          </div>
-          <AppNotice v-if="plan.changes.some((row) => row.action === 'conflict')" tone="warning">{{
-            t('groupWorkflows.redirects.conflictHelp')
-          }}</AppNotice>
-          <AppNotice v-if="plan.removedNames.length" tone="warning">
-            {{ t('groupWorkflows.redirects.removedNames', { count: n(plan.removedNames.length) }) }}
-            <div class="modern-model-json-removed">{{ plan.removedNames.join(', ') }}</div>
-          </AppNotice>
-          <AppNotice v-if="!plan.changed">{{ t('groupWorkflows.redirects.noChanges') }}</AppNotice>
-        </template>
+            <AppNotice
+              v-if="plan.changes.some((row) => row.action === 'conflict')"
+              tone="warning"
+              >{{ t('groupWorkflows.redirects.conflictHelp') }}</AppNotice
+            >
+            <AppNotice v-if="plan.removedNames.length" tone="warning">
+              {{
+                t('groupWorkflows.redirects.removedNames', { count: n(plan.removedNames.length) })
+              }}
+              <div class="modern-model-json-removed">{{ plan.removedNames.join(', ') }}</div>
+            </AppNotice>
+            <AppNotice v-if="!plan.changed">{{
+              t('groupWorkflows.redirects.noChanges')
+            }}</AppNotice>
+          </section>
+        </div>
       </div>
       <footer class="modern-model-json-footer">
         <AppButton @click="emit('close')">{{ t('ui.cancel') }}</AppButton>
@@ -161,11 +175,54 @@ function apply(): void {
   </DialogRoot>
 </template>
 <style scoped>
+:global(.modern-model-json-dialog) {
+  --modern-dialog-top: min(4dvh, 32px);
+  height: calc(100dvh - 2 * var(--modern-dialog-top));
+  max-height: calc(100dvh - 2 * var(--modern-dialog-top));
+}
 .modern-model-json-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: var(--modern-space-4);
   padding: var(--modern-space-4) var(--modern-space-6);
   overflow-y: auto;
+}
+.modern-model-json-body > * {
+  flex-shrink: 0;
+}
+.modern-model-json-body > .modern-model-json-workspace {
+  flex: 1 1 auto;
+  min-height: min(300px, 42dvh);
+}
+.modern-model-json-workspace.has-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+  gap: var(--modern-space-5);
+}
+.modern-model-json-input {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.modern-model-json-input :deep(textarea) {
+  flex: 1;
+  height: 100%;
+  min-height: 160px;
+}
+.modern-model-json-review {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--modern-space-3);
+}
+.modern-model-json-review > :not(.modern-model-json-preview) {
+  flex-shrink: 0;
+}
+.modern-model-json-summary {
+  margin: 0;
 }
 .modern-model-json-summary,
 .modern-model-json-action,
@@ -174,8 +231,28 @@ function apply(): void {
   font-size: var(--modern-font-size-small);
 }
 .modern-model-json-preview {
-  max-height: 260px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+@media (max-width: 820px) {
+  .modern-model-json-workspace.has-preview {
+    display: flex;
+    flex-direction: column;
+  }
+  .modern-model-json-input {
+    flex: none;
+    height: auto;
+  }
+  .modern-model-json-review {
+    flex: none;
+    min-height: 280px;
+  }
+  .modern-model-json-preview {
+    flex: none;
+    max-height: 45dvh;
+    min-height: 240px;
+  }
 }
 .modern-model-json-row {
   display: flex;
@@ -203,6 +280,7 @@ function apply(): void {
 }
 .modern-model-json-footer {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--modern-space-3);

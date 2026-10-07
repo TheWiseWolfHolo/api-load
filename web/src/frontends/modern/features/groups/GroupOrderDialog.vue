@@ -39,10 +39,21 @@ function move(id: number, index: number) {
   rows.value = next
 }
 function start(event: DragEvent, id: number) {
+  const target = event.target as HTMLElement
+  if (
+    props.pending ||
+    (target.closest('input, button') && !target.closest('.modern-group-order-grip'))
+  ) {
+    event.preventDefault()
+    return
+  }
   dragging.value = id
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(id))
+    const row = event.currentTarget as HTMLElement
+    const bounds = row.getBoundingClientRect()
+    event.dataTransfer.setDragImage(row, event.clientX - bounds.left, event.clientY - bounds.top)
   }
 }
 function stopDragging() {
@@ -79,17 +90,21 @@ function drop(index: number) {
           <li
             v-for="(row, index) in rows"
             :key="row.id"
-            :class="{ 'is-over': hover === row.id && dragging !== row.id }"
+            :class="{
+              'is-over': hover === row.id && dragging !== row.id,
+              'is-dragging': dragging === row.id,
+            }"
+            :draggable="!pending"
+            @dragstart="start($event, row.id)"
+            @dragend="stopDragging"
             @dragover.prevent="hover = row.id"
             @drop.prevent="drop(index)"
           >
             <button
               type="button"
               class="modern-group-order-grip"
-              draggable="true"
               :aria-label="t('groups.order.drag', { name: row.name })"
-              @dragstart="start($event, row.id)"
-              @dragend="stopDragging"
+              :disabled="pending"
             >
               <AppIcon :icon="GripVertical" />
             </button>
@@ -99,20 +114,21 @@ function drop(index: number) {
               :value="index + 1"
               min="1"
               :max="rows.length"
+              :disabled="pending"
               :aria-label="t('groups.order.position', { name: row.name })"
               @change="move(row.id, Number(($event.target as HTMLInputElement).value) - 1)"
             />
             <AppIconButton
               :icon="ArrowUp"
               :label="t('groups.order.up')"
-              :disabled="index === 0"
+              :disabled="pending || index === 0"
               size="sm"
               @click="move(row.id, index - 1)"
             />
             <AppIconButton
               :icon="ArrowDown"
               :label="t('groups.order.down')"
-              :disabled="index === rows.length - 1"
+              :disabled="pending || index === rows.length - 1"
               size="sm"
               @click="move(row.id, index + 1)"
             />
@@ -160,6 +176,11 @@ function drop(index: number) {
   min-height: var(--modern-control-nav);
   padding-block: var(--modern-space-1);
   border-bottom: var(--modern-line-width) solid var(--modern-border);
+  cursor: grab;
+}
+.modern-group-order-list li.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
 }
 .modern-group-order-list li.is-over {
   background: var(--modern-control-hover);

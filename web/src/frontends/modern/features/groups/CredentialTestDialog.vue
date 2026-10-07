@@ -29,7 +29,7 @@ import {
 } from '@modern/components/ui'
 import { useApiClient } from '@shared/http/client-context'
 import AppDraftGuard from '@modern/components/AppDraftGuard.vue'
-import { groupValidationModelOptions } from './group-model-options'
+import { defaultTestModel, groupTestModelOptions, resolveTestModel } from './group-test-models'
 const props = defineProps<{ groupId: number; row: CredentialRow }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 const { t } = useI18n()
@@ -57,8 +57,8 @@ watch(
       protocol.value = value.validationProtocol ?? value.validationProtocols[0] ?? ''
       protocolInitialized = true
     }
-    if (value && !modelInitialized && (value.validationModel || items)) {
-      model.value = value.validationModel ?? items?.[0]?.id ?? ''
+    if (value && items && !modelInitialized) {
+      model.value = defaultTestModel(items)
       modelInitialized = true
     }
   },
@@ -74,13 +74,13 @@ const protocols = computed(() =>
     label: protocolLabel(value, t),
   })),
 )
-const modelOptions = computed(() => {
-  const options = groupValidationModelOptions(models.data.value ?? [])
-  const configured = settings.data.value?.validationModel
-  return configured && !options.some((item) => item.value === configured)
-    ? [{ value: configured, label: configured }, ...options]
-    : options
-})
+const modelOptions = computed(() => groupTestModelOptions(models.data.value ?? []))
+const effectiveModel = computed(
+  () => model.value.trim() || defaultTestModel(models.data.value ?? []),
+)
+const upstreamModel = computed(() =>
+  resolveTestModel(models.data.value ?? [], effectiveModel.value),
+)
 function updateModel(value: string): void {
   modelInitialized = true
   model.value = value
@@ -93,7 +93,7 @@ async function reloadSettings(): Promise<void> {
   await Promise.all([settings.refetch(), models.refetch()])
 }
 async function run(restore = false): Promise<void> {
-  if (pending.value || (!restore && (!model.value.trim() || !protocol.value))) return
+  if (pending.value || (!restore && (!effectiveModel.value || !protocol.value))) return
   pending.value = true
   error.value = ''
   try {
@@ -114,7 +114,7 @@ async function run(restore = false): Promise<void> {
         props.groupId,
         props.row.id,
         protocol.value,
-        model.value.trim(),
+        upstreamModel.value,
         controller.signal,
       )
       emit('changed')
@@ -172,10 +172,17 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
           :model-value="model"
           :label="t('groupDetail.validationModel')"
           :options="modelOptions"
+          :description="t('credentialCards.testModelHelp')"
           allow-custom
           :disabled="pending || models.isPending.value"
           @update:model-value="updateModel"
         />
+        <AppNotice v-if="!model.trim() && effectiveModel">{{
+          t('credentialCards.testDefaultModel', { model: effectiveModel })
+        }}</AppNotice>
+        <AppNotice v-if="effectiveModel && upstreamModel !== effectiveModel">{{
+          t('credentialCards.testUpstreamModel', { model: upstreamModel })
+        }}</AppNotice>
         <AppNotice v-if="settings.data.value && !protocols.length" tone="warning">{{
           t('credentialCards.noTestProtocol')
         }}</AppNotice>
@@ -216,7 +223,7 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
             type="submit"
             variant="primary"
             :loading="pending"
-            :disabled="!model.trim() || !protocol || pending"
+            :disabled="!effectiveModel || !protocol || pending"
             >{{ t('credentialCards.test') }}</AppButton
           >
         </div>

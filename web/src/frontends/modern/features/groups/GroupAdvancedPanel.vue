@@ -435,6 +435,7 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
           <AppSearchSelect
             v-model="validationModel"
             :label="t('groupDetail.validationModel')"
+            :description="t('credentialCards.forcedTestModelHelp')"
             :options="modelOptions"
             allow-custom
             size="sm"

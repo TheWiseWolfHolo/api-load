@@ -23,7 +23,7 @@ import {
 import AppDraftGuard from '@modern/components/AppDraftGuard.vue'
 import { useApiClient } from '@shared/http/client-context'
 import { protocolLabel } from '@modern/i18n/protocols'
-import { groupValidationModelOptions } from './group-model-options'
+import { defaultTestModel, groupTestModelOptions, resolveTestModel } from './group-test-models'
 
 const props = defineProps<{ groupId: number; rows?: CredentialRow[] }>()
 const emit = defineEmits<{ close: []; changed: []; pending: [value: boolean] }>()
@@ -41,7 +41,6 @@ const targets = useQuery({
   queryKey: ['modern', 'credential-test-targets', props.groupId],
   enabled: props.rows === undefined,
   staleTime: 0,
-  refetchOnWindowFocus: false,
   queryFn: async ({ signal }) => {
     const rows: CredentialRow[] = []
     let pages = 1
@@ -65,9 +64,9 @@ let initialized = false
 watch(
   [settings.data, models.data],
   ([value, items]) => {
-    if (!value || initialized || (!value.validationModel && !items)) return
+    if (!value || !items || initialized) return
     protocol.value = value.validationProtocol ?? value.validationProtocols[0] ?? ''
-    model.value = value.validationModel ?? items?.[0]?.id ?? ''
+    model.value = defaultTestModel(items)
     initialized = true
   },
   { immediate: true },
@@ -78,13 +77,13 @@ const protocols = computed(() =>
     label: protocolLabel(value, t),
   })),
 )
-const modelOptions = computed(() => {
-  const options = groupValidationModelOptions(models.data.value ?? [])
-  const configured = settings.data.value?.validationModel
-  return configured && !options.some((item) => item.value === configured)
-    ? [{ value: configured, label: configured }, ...options]
-    : options
-})
+const modelOptions = computed(() => groupTestModelOptions(models.data.value ?? []))
+const effectiveModel = computed(
+  () => model.value.trim() || defaultTestModel(models.data.value ?? []),
+)
+const upstreamModel = computed(() =>
+  resolveTestModel(models.data.value ?? [], effectiveModel.value),
+)
 type Entry = {
   row: CredentialRow
   state: 'queued' | 'running' | 'done' | 'error' | 'cancelled'
@@ -128,11 +127,11 @@ async function run(): Promise<void> {
     loading.value ||
     loadFailed.value ||
     !rows.value.length ||
-    !model.value.trim() ||
+    !effectiveModel.value ||
     !protocol.value
   )
     return
-  const activeModel = model.value.trim()
+  const activeModel = upstreamModel.value
   const activeProtocol = protocol.value
   const abort = new AbortController()
   controller = abort
@@ -225,9 +224,16 @@ onScopeDispose(() => {
           v-model="model"
           :label="t('groupDetail.validationModel')"
           :options="modelOptions"
+          :description="t('credentialCards.testModelHelp')"
           allow-custom
           :disabled="pending || loading"
         />
+        <AppNotice v-if="!model.trim() && effectiveModel">{{
+          t('credentialCards.testDefaultModel', { model: effectiveModel })
+        }}</AppNotice>
+        <AppNotice v-if="effectiveModel && upstreamModel !== effectiveModel">{{
+          t('credentialCards.testUpstreamModel', { model: upstreamModel })
+        }}</AppNotice>
         <p class="key-batch-help">{{ t('groupWorkflows.keyBatch.help') }}</p>
         <AppNotice v-if="loading">{{ t('ui.loading') }}</AppNotice>
         <AppNotice v-if="!loading && !protocols.length" tone="warning">{{
@@ -277,7 +283,7 @@ onScopeDispose(() => {
           <AppButton
             v-else
             variant="primary"
-            :disabled="loading || loadFailed || !rows.length || !model.trim() || !protocol"
+            :disabled="loading || loadFailed || !rows.length || !effectiveModel || !protocol"
             @click="run"
             >{{
               t(entries.length ? 'groupWorkflows.keyBatch.rerun' : 'groupWorkflows.keyBatch.start')

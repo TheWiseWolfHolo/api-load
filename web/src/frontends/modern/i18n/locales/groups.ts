@@ -28,7 +28,7 @@ export const zhCN = {
     },
     order: {
       title: '调整顺序',
-      help: '拖动手柄、输入位置或使用上下按钮。保存到服务端，不改变转发优先级和权重。',
+      help: '拖动整行、输入位置或使用上下按钮。保存到服务端，不改变转发优先级和权重。',
       drag: '拖动 {name}',
       position: '{name} 的位置',
       up: '上移',
@@ -165,7 +165,7 @@ export const enUS: typeof zhCN = {
     },
     order: {
       title: 'Arrange groups',
-      help: 'Drag a handle, enter a position, or use the arrow buttons. Saved on the server without changing routing priorities or weights.',
+      help: 'Drag a row, enter a position, or use the arrow buttons. Saved on the server without changing routing priorities or weights.',
       drag: 'Drag {name}',
       position: 'Position of {name}',
       up: 'Move up',

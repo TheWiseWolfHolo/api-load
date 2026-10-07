@@ -172,7 +172,8 @@ watch(open, async (value) => {
     if (!props.allowCustom) search.value = ''
     return
   }
-  if (!inputChanged) search.value = props.allowCustom ? model.value : ''
+  // Opening the menu shows every candidate; the selected value is not a search query.
+  if (!inputChanged) search.value = ''
   await nextTick()
   if (!open.value) return
   input.value?.$el.focus({ preventScroll: true })
