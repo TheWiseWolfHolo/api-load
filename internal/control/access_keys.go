@@ -22,17 +22,19 @@ import (
 )
 
 type AccessKeyFilters struct {
-	Groups       []uint              `json:"groups"`
-	Protocols    []protocol.Protocol `json:"protocols"`
-	Models       []string            `json:"models"`
-	AllowedCIDRs []string            `json:"allowed_cidrs"`
+	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
+	Groups           []uint              `json:"groups"`
+	Protocols        []protocol.Protocol `json:"protocols"`
+	Models           []string            `json:"models"`
+	AllowedCIDRs     []string            `json:"allowed_cidrs"`
 }
 
 type storedAccessKeyFilters struct {
-	Groups       []uint              `json:"groups"`
-	Protocols    []protocol.Protocol `json:"protocols"`
-	Models       []string            `json:"models"`
-	AllowedCIDRs []string            `json:"allowed_cidrs,omitempty"`
+	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
+	Groups           []uint              `json:"groups"`
+	Protocols        []protocol.Protocol `json:"protocols"`
+	Models           []string            `json:"models"`
+	AllowedCIDRs     []string            `json:"allowed_cidrs,omitempty"`
 }
 
 type OptionalRPMLimit struct {
@@ -300,6 +302,9 @@ func (s *Service) CreateAccessKey(
 	if err != nil {
 		return AccessKeyCreateResult{}, err
 	}
+	if filters.GroupsRestricted && len(filters.Groups) == 0 {
+		return AccessKeyCreateResult{}, app_errors.ErrValidation
+	}
 	rpmLimit, err := normalizeRPMLimit(request.RPMLimit, 0)
 	if err != nil {
 		return AccessKeyCreateResult{}, err
@@ -529,6 +534,9 @@ func (s *Service) accessKeyUpdateMutation(
 		if filters != nil {
 			currentFilters = *filters
 			updates["filters"] = models.JSON(encodedFilters)
+		}
+		if status == state.AccessKeyStatusActive && currentFilters.GroupsRestricted && len(currentFilters.Groups) == 0 {
+			return result, app_errors.ErrValidation
 		}
 		if request.ConcurrencyLimit.Set {
 			row.ConcurrencyLimit = concurrencyLimit
@@ -761,6 +769,7 @@ func normalizeAccessKeyFilters(input *AccessKeyFilters) (AccessKeyFilters, error
 	if input == nil {
 		return result, nil
 	}
+	result.GroupsRestricted = input.GroupsRestricted
 
 	seenGroups := make(map[uint]struct{}, len(input.Groups))
 	for _, groupID := range input.Groups {
@@ -807,10 +816,11 @@ func normalizeAccessKeyFilters(input *AccessKeyFilters) (AccessKeyFilters, error
 
 func encodeStoredAccessKeyFilters(filters AccessKeyFilters) ([]byte, error) {
 	return json.Marshal(storedAccessKeyFilters{
-		Groups:       filters.Groups,
-		Protocols:    filters.Protocols,
-		Models:       filters.Models,
-		AllowedCIDRs: filters.AllowedCIDRs,
+		GroupsRestricted: filters.GroupsRestricted,
+		Groups:           filters.Groups,
+		Protocols:        filters.Protocols,
+		Models:           filters.Models,
+		AllowedCIDRs:     filters.AllowedCIDRs,
 	})
 }
 
@@ -911,7 +921,8 @@ func decodeStoredAccessKeyFilters(raw models.JSON) (AccessKeyFilters, error) {
 		return AccessKeyFilters{}, err
 	}
 	return normalizeAccessKeyFilters(&AccessKeyFilters{
-		Groups: decoded.Groups, Protocols: decoded.Protocols, Models: decoded.Models,
+		GroupsRestricted: decoded.GroupsRestricted,
+		Groups:           decoded.Groups, Protocols: decoded.Protocols, Models: decoded.Models,
 		AllowedCIDRs: decoded.AllowedCIDRs,
 	})
 }

@@ -202,8 +202,6 @@ function hiddenGroupsLabel(source: ModelSource): string {
   border-color: var(--modern-segmented-active-border);
   box-shadow: var(--modern-shadow-control);
 }
-/* 自右上角发散的椭圆晕染，向左下淡出——与用量统计顶部卡片同一套手法。
-   线性渐变在 15:1 的扁盒子里只会变成一条生硬的色带。 */
 .modern-model-card-heading {
   position: relative;
   isolation: isolate;
@@ -216,18 +214,7 @@ function hiddenGroupsLabel(source: ModelSource): string {
   border-radius: var(--modern-radius-panel) var(--modern-radius-panel) 0 0;
   padding: var(--modern-space-3) var(--modern-space-4);
 }
-.modern-model-card-heading::before {
-  position: absolute;
-  z-index: var(--modern-layer-underlay);
-  inset: 0;
-  background: radial-gradient(
-    ellipse at top right,
-    color-mix(in srgb, var(--modern-model-card-tint) 14%, var(--modern-surface)),
-    transparent 72%
-  );
-  content: '';
-  pointer-events: none;
-}
+
 /* 把后面三项统计推到右侧，模型名独占左端。 */
 .modern-model-card-name {
   margin-inline-end: auto;

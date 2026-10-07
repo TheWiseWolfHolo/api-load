@@ -96,12 +96,12 @@ The complete Mozilla Public License 2.0 text is distributed in
 
 ## Lobe Icons
 
-- Source: `@lobehub/icons-static-svg` `1.94.0` (vendored subset, not an npm
+- Source: `@lobehub/icons-static-svg` `1.95.1` (vendored subset, not an npm
   dependency of the management UI)
 - Copyright: 2023 LobeHub
 - License: MIT License
 
-GPT-Load vendors a subset of Lobe Icons' SVG marks (`web/src/assets/channels/`)
+API-Load vendors a subset of Lobe Icons' SVG marks (`web/src/frontends/*/assets/channels/`)
 to identify built-in channel presets by their upstream provider's brand in the
 management UI. The vendored icons and this notice do not grant any trademark
 rights in the marks they depict.

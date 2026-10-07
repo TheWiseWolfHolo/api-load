@@ -132,7 +132,13 @@ function projectNonBlankTrimmedString(value: unknown): string {
 
 function projectFilters(value: unknown): AccessKeyFiltersDto {
   const record = projectRecord(value)
-  assertNoSecretLikeFields(record, ['groups', 'protocols', 'models', 'allowed_cidrs'])
+  assertNoSecretLikeFields(record, [
+    'groups',
+    'groups_restricted',
+    'protocols',
+    'models',
+    'allowed_cidrs',
+  ])
   const groups = projectArray(record.groups, (id) => projectSafeInteger(id, { minimum: 1 }))
   const protocols = projectArray(record.protocols, (protocol) =>
     projectEnum(protocol, knownAccessProtocols),
@@ -148,7 +154,15 @@ function projectFilters(value: unknown): AccessKeyFiltersDto {
   ) {
     invalidResponse()
   }
-  return { groups, protocols, models, allowed_cidrs: allowedCIDRs }
+  return {
+    groups,
+    protocols,
+    models,
+    allowed_cidrs: allowedCIDRs,
+    ...(record.groups_restricted === undefined
+      ? {}
+      : { groups_restricted: projectBoolean(record.groups_restricted) }),
+  }
 }
 
 function projectUSD(value: unknown, positive = false): string {

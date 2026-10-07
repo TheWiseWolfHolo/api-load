@@ -19,10 +19,10 @@ type GroupInUseData struct {
 	AccessKeys []AccessKeyReferenceSummary `json:"access_keys"`
 }
 
-func explicitGroupReferences(
+func detachGroupReferences(
 	tx *gorm.DB,
 	groupID uint,
-) ([]AccessKeyReferenceSummary, error) {
+) error {
 	type accessKeyFilterRow struct {
 		ID      uint
 		Name    string
@@ -33,29 +33,47 @@ func explicitGroupReferences(
 		Select("id", "name", "filters").
 		Order("id ASC").
 		Scan(&rows).Error; err != nil {
-		return nil, app_errors.ParseDBError(err)
+		return app_errors.ParseDBError(err)
 	}
-	result := make([]AccessKeyReferenceSummary, 0)
 	for _, row := range rows {
 		filters, err := decodeStoredAccessKeyFilters(row.Filters)
 		if err != nil {
-			return nil, fmt.Errorf(
+			return fmt.Errorf(
 				"decode access key %d filters for group delete: %w",
 				row.ID,
 				app_errors.ErrInternalServer,
 			)
 		}
+		remaining := make([]uint, 0, len(filters.Groups))
+		found := false
 		for _, referencedID := range filters.Groups {
 			if referencedID == groupID {
-				result = append(result, AccessKeyReferenceSummary{
-					ID:   row.ID,
-					Name: row.Name,
-				})
-				break
+				found = true
+			} else {
+				remaining = append(remaining, referencedID)
 			}
 		}
+		if !found {
+			continue
+		}
+		filters.Groups = remaining
+		if len(remaining) == 0 {
+			// Empty explicit scope must never become unrestricted access.
+			filters.GroupsRestricted = true
+		}
+		encoded, err := encodeStoredAccessKeyFilters(filters)
+		if err != nil {
+			return fmt.Errorf("encode access key %d filters for group delete: %w", row.ID, err)
+		}
+		updates := map[string]any{"filters": models.JSON(encoded)}
+		if len(remaining) == 0 {
+			updates["status"] = "disabled"
+		}
+		if err := tx.Model(&models.AccessKey{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+			return app_errors.ParseDBError(err)
+		}
 	}
-	return result, nil
+	return nil
 }
 
 func (s *Service) DeleteGroup(ctx context.Context, groupID uint) error {
@@ -74,15 +92,8 @@ func (s *Service) DeleteGroup(ctx context.Context, groupID uint) error {
 			return fmt.Errorf("decode group %d models: %w", groupID, app_errors.ErrInternalServer)
 		}
 		providerReferencesChanged = len(groupModels) > 0
-		references, err := explicitGroupReferences(tx, groupID)
-		if err != nil {
+		if err := detachGroupReferences(tx, groupID); err != nil {
 			return err
-		}
-		if len(references) > 0 {
-			return app_errors.NewAPIErrorWithData(
-				app_errors.ErrGroupInUse,
-				GroupInUseData{AccessKeys: references},
-			)
 		}
 		if err := tx.Model(&models.Credential{}).
 			Where("group_id = ?", groupID).

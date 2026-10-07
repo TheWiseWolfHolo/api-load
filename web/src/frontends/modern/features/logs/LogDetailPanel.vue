@@ -696,7 +696,7 @@ function resolveRedactedLog(): Promise<string> {
   border: var(--modern-line-width) solid var(--modern-border);
   border-top: var(--modern-focus-width) solid var(--modern-accent);
   border-radius: var(--modern-radius-panel);
-  background: linear-gradient(var(--modern-key-card-tint), var(--modern-surface) 45%);
+  background: var(--modern-surface);
 }
 .modern-log-result--success {
   border-top-color: var(--modern-success);

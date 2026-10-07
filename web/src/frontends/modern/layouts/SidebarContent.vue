@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { BookOpen, Heart, Send } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
@@ -23,10 +22,7 @@ const sections = computed(() =>
   navigationSections.filter((section) => navigation.value.some((item) => item.section === section)),
 )
 const footerLinks = computed(() => [
-  { label: t('shell.documentation'), href: 'https://www.gpt-load.com/docs', icon: BookOpen },
-  { label: t('shell.sponsor'), href: 'https://www.gpt-load.com/sponsor', icon: Heart },
   { label: 'GitHub', href: 'https://github.com/TheWiseWolfHolo/api-load', icon: GitHubIcon },
-  { label: 'Telegram', href: 'https://t.me/+GHpy5SwEllg3MTUx', icon: Send },
 ])
 </script>
 
@@ -129,8 +125,8 @@ const footerLinks = computed(() => [
   color: var(--modern-text);
 }
 .modern-nav-link.is-active {
-  background: var(--modern-accent-soft);
-  color: var(--modern-accent);
+  background: var(--modern-control-hover);
+  color: var(--modern-text);
   font-weight: var(--modern-weight-semibold);
 }
 .modern-nav-link.is-active::before {

@@ -97,7 +97,7 @@ func matchesAccessKeyCollectionQuery(
 		}
 	}
 	// 未限制分组的密钥同样可以访问所选分组。
-	if query.GroupID != 0 && len(record.Filters.Groups) > 0 {
+	if query.GroupID != 0 && (record.Filters.GroupsRestricted || len(record.Filters.Groups) > 0) {
 		matched := false
 		for _, id := range record.Filters.Groups {
 			if id == query.GroupID {

@@ -13,6 +13,7 @@ import {
   groupCredentialsKey,
 } from '@modern/api/group-detail'
 import { getGroupUsage, getGroupWorkspace, groupQueryKey } from '@modern/api/groups'
+import { getGroupPresentation, groupPresentationKey } from '@modern/api/group-presentation'
 import { getGroupUsageTrend } from '@modern/api/group-usage-trend'
 import { usePageRefresh } from '@modern/app/page-refresh'
 import {
@@ -44,6 +45,11 @@ const valid = computed(() => Number.isSafeInteger(id.value) && id.value > 0)
 const groups = useQuery({
   queryKey: groupQueryKey,
   queryFn: ({ signal }) => getGroupWorkspace(client, signal),
+  enabled: valid,
+})
+const presentation = useQuery({
+  queryKey: groupPresentationKey,
+  queryFn: ({ signal }) => getGroupPresentation(client, signal),
   enabled: valid,
 })
 const channels = useQuery({
@@ -248,6 +254,8 @@ useMessageSource(() =>
           />
           <AppChannelIcon
             :icon="group.channelIcon"
+            :custom-icon="presentation.data.value?.icons[String(group.id)]"
+            :group-name="group.name"
             :mark="group.channelMark"
             :name="group.channelName"
             size="hero"

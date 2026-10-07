@@ -92,6 +92,7 @@ export default {
     createdAt: '创建时间',
     updatedAt: '更新时间',
     allGroups: '全部分组',
+    noGroups: '未授权分组',
     allProtocols: '全部协议',
     allModels: '全部模型',
     unlimited: '不限',

@@ -116,18 +116,7 @@ const cards = computed<UsageCard[]>(() => {
   border-radius: var(--modern-radius-panel);
   background: var(--modern-surface);
 }
-.modern-usage-stat::before {
-  position: absolute;
-  inset: 0;
-  z-index: var(--modern-layer-underlay);
-  background: radial-gradient(
-    ellipse at top right,
-    color-mix(in srgb, var(--modern-usage-stat-tone) 8%, var(--modern-surface)),
-    transparent 75%
-  );
-  content: '';
-  pointer-events: none;
-}
+
 .modern-usage-stat[data-kind='tokens'] {
   --modern-usage-stat-tone: var(--modern-chart-input);
 }

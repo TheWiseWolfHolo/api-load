@@ -49,12 +49,7 @@ withDefaults(
 .skeleton-block::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--color-skeleton-highlight) 50%,
-    transparent 100%
-  );
+  background: var(--color-skeleton-base);
   content: '';
   transform: translateX(-100%);
   animation: skeleton-shift var(--duration-skeleton) linear infinite;

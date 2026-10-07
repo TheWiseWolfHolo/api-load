@@ -163,7 +163,7 @@ func evaluateTargets(
 			decision.target.UpstreamModelID = *query.externalModel
 		}
 		groupFiltered := false
-		if len(query.accessKey.Filters.Groups) > 0 {
+		if query.accessKey.Filters.GroupsRestricted || len(query.accessKey.Filters.Groups) > 0 {
 			_, allowed := query.accessKey.Filters.Groups[route.GroupID]
 			groupFiltered = !allowed
 		}
@@ -250,11 +250,7 @@ func routeRequirementSatisfied(
 }
 
 func accessKeyAllowsGroup(accessKey state.AccessKeyView, groupID uint) bool {
-	if len(accessKey.Filters.Groups) == 0 {
-		return true
-	}
-	_, allowed := accessKey.Filters.Groups[groupID]
-	return allowed
+	return accessKey.Filters.AllowsGroup(groupID)
 }
 
 func effectiveWeight(groupManual, credentialManual *int) int64 {

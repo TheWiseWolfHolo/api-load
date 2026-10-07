@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Layers2, Plus, Search, SlidersHorizontal, TriangleAlert } from '@lucide/vue'
+import { ArrowDownUp, Layers2, Plus, Search, SlidersHorizontal, TriangleAlert } from '@lucide/vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, nextTick, onMounted, onScopeDispose, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +28,13 @@ import {
   type GroupRow,
   type GroupWorkspace,
 } from '@modern/api/groups'
+import {
+  getGroupPresentation,
+  groupPresentationKey,
+  updateGroupPresentation,
+} from '@modern/api/group-presentation'
+import GroupIconDialog from './GroupIconDialog.vue'
+import GroupOrderDialog from './GroupOrderDialog.vue'
 import { useMessageSource } from '@modern/app/messages'
 import { useURLState } from '@modern/app/url-state'
 import { usePageRefresh } from '@modern/app/page-refresh'
@@ -61,6 +68,44 @@ import { protocolLabel, protocolOrder } from '@modern/i18n/protocols'
 import { groupFilterQuery as serializeGroupFilters, parseGroupFilters } from './group-route'
 
 const { t, n, locale } = useI18n()
+const ordering = ref(false)
+const orderError = ref(false)
+const orderSaving = ref(false)
+const iconGroup = ref<GroupRow>()
+const iconError = ref(false)
+const iconSaving = ref(false)
+async function saveOrder(ids: number[]) {
+  orderSaving.value = true
+  orderError.value = false
+  try {
+    const saved = await updateGroupPresentation(client, { order: ids }, controller.signal)
+    queryClient.setQueryData(groupPresentationKey, saved)
+    ordering.value = false
+    await updateFilters({ sort: 'custom', page: 1 })
+  } catch {
+    orderError.value = true
+  } finally {
+    orderSaving.value = false
+  }
+}
+async function saveIcon(icon: string) {
+  if (!iconGroup.value) return
+  iconSaving.value = true
+  iconError.value = false
+  try {
+    const saved = await updateGroupPresentation(
+      client,
+      { group_id: iconGroup.value.id, icon },
+      controller.signal,
+    )
+    queryClient.setQueryData(groupPresentationKey, saved)
+    iconGroup.value = undefined
+  } catch {
+    iconError.value = true
+  } finally {
+    iconSaving.value = false
+  }
+}
 const client = useApiClient()
 const queryClient = useQueryClient()
 const route = useRoute()
@@ -163,6 +208,12 @@ const query = useQuery(
     },
   })),
 )
+const presentationQuery = useQuery({
+  queryKey: groupPresentationKey,
+  queryFn: ({ signal }) => getGroupPresentation(client, signal),
+})
+const presentation = presentationQuery.data
+const savedOrder = computed(() => presentation.value?.order ?? [])
 const data = query.data
 const channelCatalog = useQuery({
   queryKey: ['modern', 'group-channels'],
@@ -284,6 +335,12 @@ const filtered = computed(() => {
       return words.every((word) => text.includes(word))
     })
     .sort((a, b) => {
+      if (f.sort === 'custom') {
+        const order = savedOrder.value
+        const ai = order.indexOf(a.id),
+          bi = order.indexOf(b.id)
+        return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi) || a.id - b.id
+      }
       if (f.sort === 'priority' && rank(a) !== rank(b)) return rank(a) - rank(b)
       if (f.sort !== 'name' && a.lastActiveHour !== b.lastActiveHour)
         return (b.lastActiveHour ?? -1) - (a.lastActiveHour ?? -1)
@@ -370,7 +427,7 @@ const activeFilters = computed(() => [
         },
       ]
     : []),
-  ...(filters.value.sort !== 'recent'
+  ...(filters.value.sort !== 'custom'
     ? [
         {
           key: 'sort',
@@ -391,7 +448,7 @@ function removeFilter(key: string): void {
     void updateFilters({ q: '' })
   } else if (key === 'view') void updateFilters({ view: 'all' })
   else if (key === 'channel') void updateFilters({ channel: '' })
-  else if (key === 'sort') void updateFilters({ sort: 'recent' })
+  else if (key === 'sort') void updateFilters({ sort: 'custom' })
 }
 
 usePageRefresh({
@@ -469,7 +526,7 @@ function resetFilters(): void {
     credential: '',
     protocol: '',
     view: 'all',
-    sort: 'recent',
+    sort: 'custom',
   })
 }
 function toggleExpanded(id: number): void {
@@ -778,6 +835,15 @@ useMessageSource(() =>
           aria-controls="modern-groups-more-filters"
           @click="moreFilters = !moreFilters"
         />
+        <AppButton
+          :icon="ArrowDownUp"
+          :disabled="pending.size > 0 || !data || !presentation || orderSaving"
+          @click="
+            ordering = true
+            orderError = false
+          "
+          >{{ t('groups.order.title') }}</AppButton
+        >
         <AppSortMenu
           :model-value="filters.sort"
           :label="t('groups.sort.label')"
@@ -921,6 +987,11 @@ useMessageSource(() =>
       </AppCollectionState>
       <template v-else>
         <GroupListRow
+          :presentation-icon="presentation?.icons[String(group.id)]"
+          @icon="
+            iconGroup = group
+            iconError = false
+          "
           v-for="group in visible"
           :key="group.id + ':' + rowRevision"
           :group="group"
@@ -975,6 +1046,24 @@ useMessageSource(() =>
       @close-auto-focus="restoreDiscardFocus"
     />
   </div>
+  <GroupOrderDialog
+    v-if="ordering && data"
+    :groups="data.items"
+    :order="savedOrder"
+    :pending="orderSaving"
+    :error="orderError"
+    @close="ordering = false"
+    @save="saveOrder"
+  />
+  <GroupIconDialog
+    v-if="iconGroup"
+    :group="iconGroup"
+    :value="presentation?.icons[String(iconGroup.id)]"
+    :pending="iconSaving"
+    :error="iconError"
+    @close="iconGroup = undefined"
+    @save="saveIcon"
+  />
 </template>
 
 <style scoped>

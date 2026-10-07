@@ -318,7 +318,7 @@ func accessibleHomeGroups(
 ) map[uint]struct{} {
 	result := make(map[uint]struct{})
 	for groupID, group := range snapshot.Groups {
-		if len(accessKey.Filters.Groups) > 0 {
+		if accessKey.Filters.GroupsRestricted || len(accessKey.Filters.Groups) > 0 {
 			if _, allowed := accessKey.Filters.Groups[groupID]; !allowed {
 				continue
 			}

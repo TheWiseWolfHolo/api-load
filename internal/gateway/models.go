@@ -104,7 +104,7 @@ func collectVisibleModelIDs(
 						continue
 					}
 				}
-				if !anyVisibleTarget(targets, accessKey.Filters.Groups) {
+				if !anyVisibleTarget(targets, accessKey.Filters.Groups, accessKey.Filters.GroupsRestricted) {
 					continue
 				}
 				visible[modelID] = struct{}{}
@@ -169,11 +169,11 @@ func modelListProtocols(value protocol.Protocol) []protocol.Protocol {
 	return []protocol.Protocol{value}
 }
 
-func anyVisibleTarget(targets []state.RouteTarget, groups map[uint]struct{}) bool {
+func anyVisibleTarget(targets []state.RouteTarget, groups map[uint]struct{}, restricted ...bool) bool {
 	if len(targets) == 0 {
 		return false
 	}
-	if len(groups) == 0 {
+	if len(groups) == 0 && (len(restricted) == 0 || !restricted[0]) {
 		return true
 	}
 	for _, target := range targets {

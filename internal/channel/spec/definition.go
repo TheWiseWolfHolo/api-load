@@ -41,6 +41,7 @@ const (
 	XAI              ID = "xai"
 	Cerebras         ID = "cerebras"
 	Mistral          ID = "mistral"
+	Fireworks        ID = "fireworks"
 	Nebius           ID = "nebius"
 	Parasail         ID = "parasail"
 	Wafer            ID = "wafer"

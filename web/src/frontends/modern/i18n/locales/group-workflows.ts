@@ -1,7 +1,8 @@
 export const zhCN = {
   openImport: '继续',
   deleteGroup: '删除分组',
-  deleteDescription: '将删除此分组及其凭据、模型和配置，此操作无法撤销。',
+  deleteDescription:
+    '将删除此分组及其凭据、模型和配置，并自动移除访问密钥中的对应引用。仅绑定此分组的访问密钥会停用。此操作无法撤销。',
   typeGroupName: '输入分组名称以确认',
   deleteInUse: '此分组仍被访问密钥引用，请先解除引用：',
   deleteFailed: '删除失败，请刷新分组状态后重试。',
@@ -33,7 +34,7 @@ export const enUS: typeof zhCN = {
   openImport: 'Continue',
   deleteGroup: 'Delete group',
   deleteDescription:
-    'Delete this group and its credentials, models, and configuration. This cannot be undone.',
+    'Delete this group and its credentials, models, and configuration. Its access-key references are removed automatically; keys with no remaining groups are disabled. This cannot be undone.',
   typeGroupName: 'Enter the group name to confirm',
   deleteInUse: 'Access keys still reference this group. Remove these references first:',
   deleteFailed: 'Deletion failed. Refresh the group and try again.',

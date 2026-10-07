@@ -7,6 +7,7 @@ import { protocolOrder, sortProtocols } from '@modern/i18n/protocols'
 export const accessKeySorts = ['updated_desc', 'cost_desc', 'expires_asc', 'rpm_peak_desc'] as const
 export const accessProtocols = protocolOrder
 export interface AccessScope {
+  groups_restricted?: boolean
   groups: number[]
   protocols: string[]
   models: string[]
@@ -120,6 +121,9 @@ function readAccessKey(value: unknown): AccessKey {
     masked_key: text(row.masked_key),
     status: oneOf(row.status, ['active', 'disabled'] as const),
     filters: {
+      ...(scope.groups_restricted === undefined
+        ? {}
+        : { groups_restricted: boolean(scope.groups_restricted) }),
       groups: list(scope.groups).map((id) => integer(id, 1)),
       protocols: sortProtocols(list(scope.protocols).map(text)),
       models: list(scope.models).map(text),

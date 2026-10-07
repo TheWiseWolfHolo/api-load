@@ -17,10 +17,11 @@ import (
 )
 
 type accessKeyFilterDigestBody struct {
-	Groups       []uint              `json:"groups"`
-	Protocols    []protocol.Protocol `json:"protocols"`
-	Models       []string            `json:"models"`
-	AllowedCIDRs []string            `json:"allowed_cidrs,omitempty"`
+	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
+	Groups           []uint              `json:"groups"`
+	Protocols        []protocol.Protocol `json:"protocols"`
+	Models           []string            `json:"models"`
+	AllowedCIDRs     []string            `json:"allowed_cidrs,omitempty"`
 }
 
 type accessKeyCreateDigestBody struct {
@@ -55,6 +56,9 @@ func (s *Service) CreateAccessKeyIdempotent(
 	filters, err := normalizeAccessKeyFilters(request.Filters)
 	if err != nil {
 		return AccessKeyCreateResult{}, err
+	}
+	if filters.GroupsRestricted && len(filters.Groups) == 0 {
+		return AccessKeyCreateResult{}, app_errors.ErrValidation
 	}
 	rpmLimit, err := normalizeRPMLimit(request.RPMLimit, 0)
 	if err != nil {
@@ -210,10 +214,11 @@ func (s *Service) CreateAccessKeyIdempotent(
 
 func canonicalAccessKeyFilterSet(filters AccessKeyFilters) accessKeyFilterDigestBody {
 	result := accessKeyFilterDigestBody{
-		Groups:       append([]uint(nil), filters.Groups...),
-		Protocols:    append([]protocol.Protocol(nil), filters.Protocols...),
-		Models:       append([]string(nil), filters.Models...),
-		AllowedCIDRs: append([]string(nil), filters.AllowedCIDRs...),
+		GroupsRestricted: filters.GroupsRestricted,
+		Groups:           append([]uint(nil), filters.Groups...),
+		Protocols:        append([]protocol.Protocol(nil), filters.Protocols...),
+		Models:           append([]string(nil), filters.Models...),
+		AllowedCIDRs:     append([]string(nil), filters.AllowedCIDRs...),
 	}
 	sort.Slice(result.Groups, func(left, right int) bool {
 		return result.Groups[left] < result.Groups[right]

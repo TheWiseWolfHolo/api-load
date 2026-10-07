@@ -45,14 +45,7 @@ const visible = useStableLoading(toRef(props, 'active'))
 .async-refresh-indicator__bar {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--color-skeleton-highlight) 35%,
-    var(--color-action) 50%,
-    var(--color-skeleton-highlight) 65%,
-    transparent 100%
-  );
+  background: var(--color-action);
   transform: translateX(-100%);
   animation: async-refresh-shift var(--duration-loading-indicator) linear infinite;
 }

@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { deleteGroup, type GroupRow } from '@modern/api/groups'
 import { AppIconButton, AppConfirmDialog, AppTextField } from '@modern/components/ui'
 import { useApiClient } from '@shared/http/client-context'
-import { ApiError } from '@shared/http/errors'
 
 const props = defineProps<{ group: GroupRow; disabled?: boolean }>()
 const emit = defineEmits<{ deleted: []; pending: [value: boolean] }>()
@@ -32,17 +31,9 @@ async function remove(): Promise<void> {
     if (controller.signal.aborted) return
     open.value = false
     emit('deleted')
-  } catch (cause) {
+  } catch {
     if (controller.signal.aborted) return
-    if (cause instanceof ApiError && cause.code === 'GROUP_IN_USE') {
-      const data = cause.data as { access_keys?: { name?: unknown }[] } | undefined
-      const names = Array.isArray(data?.access_keys)
-        ? data.access_keys
-            .map((item) => (typeof item?.name === 'string' ? item.name : ''))
-            .filter(Boolean)
-        : []
-      error.value = [t('groupWorkflows.deleteInUse'), names.join('、')].filter(Boolean).join(' ')
-    } else error.value = t('groupWorkflows.deleteFailed')
+    error.value = t('groupWorkflows.deleteFailed')
   } finally {
     pending.value = false
     emit('pending', false)

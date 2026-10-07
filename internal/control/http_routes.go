@@ -204,6 +204,8 @@ func (s *Server) HTTPModule() httproute.Module {
 			controlRoute("control.system.info", http.MethodGet, "/system/info", s.handleSystemInfo),
 			controlRoute("control.system.update", http.MethodGet, "/system/update", s.handleSystemUpdate),
 			controlRoute("control.modern.groups", http.MethodGet, "/modern/groups", s.handleListModernGroups),
+			controlRoute("control.groups.presentation.get", http.MethodGet, "/groups/presentation", s.handleGetGroupPresentation),
+			controlRoute("control.groups.presentation.update", http.MethodPut, "/groups/presentation", s.auditMutation(newMutationDescriptor("group_presentation_update", "group", staticMutationLocator("groups:presentation"))), s.handleUpdateGroupPresentation),
 			controlRoute("control.modern.access-keys", http.MethodGet, "/modern/access-keys", s.handleListModernAccessKeys),
 			controlRoute("control.modern.groups.usage", http.MethodGet, "/modern/groups/usage", s.handleModernGroupUsage),
 			controlRoute("control.modern.credentials.options", http.MethodGet, "/modern/credentials/options", s.handleModernCredentialOptions),

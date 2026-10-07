@@ -21,11 +21,8 @@
   }
   .modern-resizable-textarea::-webkit-resizer {
     color: var(--modern-control-border-hover);
-    background:
-      linear-gradient(currentColor, currentColor) center calc(50% - var(--modern-space-0-5)) /
-        var(--modern-space-2) var(--modern-line-width) no-repeat,
-      linear-gradient(currentColor, currentColor) center calc(50% + var(--modern-space-0-5)) /
-        var(--modern-space-2) var(--modern-line-width) no-repeat;
+    background: transparent;
+    border-bottom: var(--modern-line-width) solid currentColor;
     cursor: ns-resize;
   }
   .modern-resizable-textarea:hover::-webkit-resizer,

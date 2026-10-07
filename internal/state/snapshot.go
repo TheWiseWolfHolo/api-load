@@ -108,9 +108,19 @@ const (
 )
 
 type FilterSet struct {
-	Groups    map[uint]struct{}
-	Protocols map[protocol.Protocol]struct{}
-	Models    map[string]struct{}
+	GroupsRestricted bool
+	Groups           map[uint]struct{}
+	Protocols        map[protocol.Protocol]struct{}
+	Models           map[string]struct{}
+}
+
+// AllowsGroup preserves an explicitly empty scope after its last group is deleted.
+func (filters FilterSet) AllowsGroup(groupID uint) bool {
+	if !filters.GroupsRestricted && len(filters.Groups) == 0 {
+		return true
+	}
+	_, allowed := filters.Groups[groupID]
+	return allowed
 }
 
 type RouteTarget struct {
@@ -740,7 +750,7 @@ func validateFilterSet(accessKeyID uint, filters FilterSet) error {
 }
 
 func cloneFilterSet(source FilterSet) FilterSet {
-	cloned := FilterSet{}
+	cloned := FilterSet{GroupsRestricted: source.GroupsRestricted}
 	if source.Groups != nil {
 		cloned.Groups = make(map[uint]struct{}, len(source.Groups))
 		for id := range source.Groups {

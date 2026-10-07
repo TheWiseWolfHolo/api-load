@@ -41,6 +41,7 @@ export function draftFor(row?: AccessKey, duplicate = false): AccessDraft {
   const scope = row
     ? {
         groups: [...row.filters.groups],
+        ...(row.filters.groups_restricted ? { groups_restricted: true } : {}),
         protocols: [...row.filters.protocols],
         models: [...row.filters.models],
         allowed_cidrs: [...row.filters.allowed_cidrs],
@@ -57,7 +58,7 @@ export function draftFor(row?: AccessKey, duplicate = false): AccessDraft {
     price: row?.price_multiplier ?? '1',
     scope,
     modes: {
-      groups: scope.groups.length ? 'specified' : 'all',
+      groups: scope.groups.length || scope.groups_restricted ? 'specified' : 'all',
       protocols: scope.protocols.length ? 'specified' : 'all',
       models: scope.models.length ? 'specified' : 'all',
     },
@@ -94,6 +95,9 @@ export function inputFor(draft: AccessDraft): AccessInput {
     price_multiplier: normalizeDecimal(draft.price),
     filters: {
       groups: draft.modes.groups === 'all' ? [] : unique(draft.scope.groups),
+      ...(draft.modes.groups !== 'all' && !draft.scope.groups.length
+        ? { groups_restricted: true }
+        : {}),
       protocols: draft.modes.protocols === 'all' ? [] : clean(draft.scope.protocols),
       models: draft.modes.models === 'all' ? [] : clean(draft.scope.models),
       allowed_cidrs: draft.source === 'all' ? [] : clean(draft.cidrs.split(/\r?\n/)),

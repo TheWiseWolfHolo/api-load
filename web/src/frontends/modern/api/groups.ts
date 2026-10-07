@@ -6,7 +6,7 @@ import { InvalidResponseError } from '@shared/http/errors'
 import { boolean, integer, list, oneOf, record, text } from './response'
 
 export const groupViews = ['all', 'serving', 'attention', 'paused'] as const
-export const groupSorts = ['recent', 'priority', 'name'] as const
+export const groupSorts = ['custom', 'recent', 'priority', 'name'] as const
 export const availabilityStates = [
   'ready',
   'limited',
