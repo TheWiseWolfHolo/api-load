@@ -79,9 +79,12 @@ export const enUS: typeof zhCN = {
   baseURL: 'Upstream URL',
   defaultURLs: 'Default URL(s): {urls}',
   defaultURLHelp: 'Leave blank to use the default.',
-  baseURLHelp: 'Use the URL from the upstream docs. A trailing /v1 is optional; it is handled per channel type.',
-  compatibleURLHelp: 'Enter the API prefix, for example https://api.example.com/v1. A bare domain gets /v1 added.',
-  gatewayURLHelp: 'Enter the gateway root or deployment prefix. A trailing /v1 or /v1beta is removed.',
+  baseURLHelp:
+    'Use the URL from the upstream docs. A trailing /v1 is optional; it is handled per channel type.',
+  compatibleURLHelp:
+    'Enter the API prefix, for example https://api.example.com/v1. A bare domain gets /v1 added.',
+  gatewayURLHelp:
+    'Enter the gateway root or deployment prefix. A trailing /v1 or /v1beta is removed.',
   subscriptionURLHelp:
     'Enter an HTTPS root URL, optionally with a path prefix. Native API paths are appended; OAuth still uses the official URL.',
   urlVersionWarning: 'The version path may differ. Please check it.',
@@ -158,7 +161,8 @@ export const jaJP: typeof zhCN = {
   baseURL: '上流 URL',
   defaultURLs: '既定の URL：{urls}',
   defaultURLHelp: '空欄の場合は既定の URL を使用します。',
-  baseURLHelp: '上流ドキュメントの URL を入力してください。末尾の /v1 は有無どちらでもチャネルに合わせて処理されます。',
+  baseURLHelp:
+    '上流ドキュメントの URL を入力してください。末尾の /v1 は有無どちらでもチャネルに合わせて処理されます。',
   compatibleURLHelp:
     'https://api.example.com/v1 のように API プレフィックスを入力してください。ドメインのみの場合は /v1 を自動付加します。',
   gatewayURLHelp:
