@@ -1,47 +1,51 @@
 name: Publish API-Load image
 
+# 推 main 只发 edge 和 sha 镜像；推 vX.Y.Z 标签才发正式版本号和主版本通道。
+# 两种情况都先跑完整 CI，测试不过不发镜像。
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      run_checks:
-        description: Run the full backend test suite before publishing
-        type: boolean
-        default: false
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: api-load-image-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   image:
+    needs: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version-file: go.mod
-      - name: Check pricing, migration, logs and gateway on Linux
-        if: github.event_name != 'workflow_dispatch' || inputs.run_checks
-        run: go test -count=1 -timeout=10m ./internal/pricing ./internal/control ./internal/storage ./internal/requestlog ./internal/telemetry ./internal/accessquota ./internal/gateway
       - name: Resolve API-Load version
         id: version
         shell: bash
         run: |
+          version="$(tr -d '[:space:]' < VERSION)"
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            version="${GITHUB_REF_NAME#v}"
+            if [[ "${GITHUB_REF_NAME#v}" != "$version" ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match VERSION $version"
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
           else
-            version="$(cat VERSION)"
+            version="${version}-edge.${GITHUB_SHA::7}"
+            echo "release=false" >> "$GITHUB_OUTPUT"
           fi
-          printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
@@ -55,10 +59,9 @@ jobs:
           flavor: latest=false
           tags: |
             type=sha,prefix=v2-sha-
-            type=raw,value=v2-candidate,enable=${{ github.ref == 'refs/heads/feat/gpt-load-v2-adoption' }}
-            type=raw,value=2,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=v${{ steps.version.outputs.value }}
-            type=ref,event=tag
+            type=raw,value=edge,enable=${{ steps.version.outputs.release != 'true' }}
+            type=raw,value=v${{ steps.version.outputs.value }},enable=${{ steps.version.outputs.release == 'true' }}
+            type=raw,value=2,enable=${{ steps.version.outputs.release == 'true' }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: .

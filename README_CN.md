@@ -141,24 +141,12 @@ docker compose pull && docker compose up -d   # 更新到最新 2.x 镜像
 docker compose stop         # 停止服务
 ```
 
-官方 Compose 使用开发分支镜像 `ghcr.io/thewisewolfholo/api-load:v2-candidate`。固定使用正式版 2.0.1 时，请改为 `ghcr.io/thewisewolfholo/api-load:v2.0.1`。Git 标签和镜像标签均为 `v2.0.1`。
+官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:2`，跟随最新的 2.x 正式版。需要固定版本时改成具体版本号，例如 `ghcr.io/thewisewolfholo/api-load:v2.0.4`；`edge` 跟随 main 分支。
 
 <details>
 <summary>使用原生二进制</summary>
 
-从 [GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption) 下载对应平台的文件，建议先用随附的 `SHA256SUMS` 校验：
-
-```bash
-chmod +x ./gpt-load-linux-amd64
-
-HOST=127.0.0.1 DATA_DIR=./data ./gpt-load-linux-amd64
-```
-
-启动后访问 <http://127.0.0.1:3001>。提供 Linux、macOS（amd64 / arm64）与 Windows 共五个平台的便携构建；`gpt-load-windows-amd64.exe` 继续以前台模式运行。
-
-Windows 普通用户可改为下载 `gpt-load-windows-setup.exe`。双击并确认管理员权限后，安装器会注册并启动低权限 Windows 服务、设置开机启动，并创建桌面和开始菜单中的 GPT-Load 管理页面快捷方式。安装过程中会显示首次生成的管理密钥，请在关闭页面前保存；密钥仍保存在 `%ProgramData%\GPT-Load\data\auth.key`。服务配置目录为 `%ProgramData%\GPT-Load` 并从其中读取 `.env`，数据目录为 `%ProgramData%\GPT-Load\data`。
-
-覆盖安装会先优雅停止服务再更新，Windows 卸载会移除程序和服务但保留数据。高级用户仍可使用 `gpt-load-windows-amd64.exe service start|stop|restart|status` 管理已安装服务。
+API-Load 只发布容器镜像。需要原生二进制时，请用 `make build` 从源码构建（需要 Go 和 pnpm）。
 
 </details>
 

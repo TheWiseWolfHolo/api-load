@@ -141,24 +141,12 @@ docker compose pull && docker compose up -d   # 最新の 2.x イメージへ更
 docker compose stop         # サービスを停止
 ```
 
-公式 Compose は開発ブランチの `ghcr.io/thewisewolfholo/api-load:v2-candidate` を使用します。正式版 2.0.1 に固定するには `ghcr.io/thewisewolfholo/api-load:v2.0.1` を指定してください。Git とコンテナのタグは両方とも `v2.0.1` です。
+公式 Compose は最新の 2.x 正式版に追従する `ghcr.io/thewisewolfholo/api-load:2` を使用します。バージョンを固定するには `ghcr.io/thewisewolfholo/api-load:v2.0.4` のように指定してください。`edge` は main ブランチに追従します。
 
 <details>
 <summary>ネイティブバイナリを使う</summary>
 
-[GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption) からプラットフォームに合ったファイルをダウンロードし、同梱の `SHA256SUMS` で検証してから使用してください：
-
-```bash
-chmod +x ./gpt-load-linux-amd64
-
-HOST=127.0.0.1 DATA_DIR=./data ./gpt-load-linux-amd64
-```
-
-起動後 <http://127.0.0.1:3001> にアクセスします。Linux、macOS（amd64 / arm64）、Windows の計 5 種類のポータブルビルドを提供し、`gpt-load-windows-amd64.exe` は従来どおりフォアグラウンドで動作します。
-
-Windows の一般ユーザーは代わりに `gpt-load-windows-setup.exe` を利用できます。管理者権限を一度承認すると、低権限の Windows サービスをインストールして起動し、自動起動を設定したうえで、デスクトップとスタートメニューに GPT-Load 管理画面へのショートカットを作成します。インストール中に生成された管理キーが表示されるため、画面を閉じる前に保存してください。保護されたキーは `%ProgramData%\GPT-Load\data\auth.key` に残ります。サービス設定と `.env` は `%ProgramData%\GPT-Load`、永続データは `%ProgramData%\GPT-Load\data` に保存されます。
-
-新しい Setup による上書きインストールでは、サービスを安全に停止してから更新します。Windows のアンインストールはプログラムとサービスを削除しますが、データは保持します。上級ユーザーは `gpt-load-windows-amd64.exe service start|stop|restart|status` でもサービスを管理できます。
+API-Load はコンテナイメージのみを配布しています。ネイティブバイナリが必要な場合は `make build` でソースからビルドしてください（Go と pnpm が必要）。
 
 </details>
 

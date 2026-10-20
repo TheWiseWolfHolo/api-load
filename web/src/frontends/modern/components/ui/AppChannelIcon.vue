@@ -19,6 +19,7 @@ const props = withDefaults(
   }>(),
   {
     icon: undefined,
+    customIcon: undefined,
     mark: undefined,
     name: undefined,
     groupName: undefined,

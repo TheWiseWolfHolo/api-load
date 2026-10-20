@@ -994,10 +994,9 @@ useMessageSource(() =>
       </AppCollectionState>
       <template v-else>
         <GroupListRow
-          :presentation-icon="presentation?.icons[String(group.id)]"
-          @icon="editIcon(group)"
           v-for="group in visible"
           :key="group.id + ':' + rowRevision"
+          :presentation-icon="presentation?.icons[String(group.id)]"
           :group="group"
           :expanded="expanded.has(group.id)"
           :pending="pending.get(group.id)"
@@ -1007,6 +1006,7 @@ useMessageSource(() =>
           :usage-incomplete="usage.data.value?.incomplete ?? false"
           :priority-error="inlineErrors.get(`${group.id}:priority`)"
           :weight-error="inlineErrors.get(`${group.id}:weight`)"
+          @icon="editIcon(group)"
           @expand="toggleExpanded(group.id)"
           @toggle="mutate(group, { enabled: $event }, 'toggle')"
           @priority="mutate(group, { priority: $event }, 'priority')"
