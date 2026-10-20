@@ -1,6 +1,6 @@
 services:
   api-load:
-    image: ghcr.io/thewisewolfholo/api-load:v2-candidate
+    image: ghcr.io/thewisewolfholo/api-load:2
     # build:
     #   context: .
     #   dockerfile: Dockerfile

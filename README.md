@@ -143,24 +143,12 @@ docker compose pull && docker compose up -d   # update to the latest 2.x image
 docker compose stop         # stop the service
 ```
 
-The official Compose file uses `ghcr.io/thewisewolfholo/api-load:v2-candidate` for the development branch. Use `ghcr.io/thewisewolfholo/api-load:v2.0.1` to pin the formal 2.0.1 release. The Git tag and container tag are both `v2.0.1`.
+The official Compose file uses `ghcr.io/thewisewolfholo/api-load:2`, which follows the latest 2.x release. Pin an exact release such as `ghcr.io/thewisewolfholo/api-load:v2.0.4` when you need a fixed version; `edge` tracks the main branch.
 
 <details>
 <summary>Using a native binary</summary>
 
-Download the build for your platform from [GitHub Releases](https://github.com/TheWiseWolfHolo/api-load/tree/feat/gpt-load-v2-adoption), and verify it against the bundled `SHA256SUMS` first:
-
-```bash
-chmod +x ./gpt-load-linux-amd64
-
-HOST=127.0.0.1 DATA_DIR=./data ./gpt-load-linux-amd64
-```
-
-Then open <http://127.0.0.1:3001>. Portable builds are provided for five targets across Linux, macOS (amd64 / arm64), and Windows; `gpt-load-windows-amd64.exe` keeps running in the foreground as before.
-
-Windows desktop users can instead download `gpt-load-windows-setup.exe`. After one administrator approval, Setup installs and starts a low-privilege Windows service, enables automatic startup, and creates desktop and Start Menu shortcuts to the GPT-Load management page. Setup displays the generated management key before it finishes; save it before closing the page. The protected copy remains at `%ProgramData%\GPT-Load\data\auth.key`. Service configuration and its `.env` live in `%ProgramData%\GPT-Load`, with persistent data in `%ProgramData%\GPT-Load\data`.
-
-Installing a newer Setup stops the service gracefully before updating it. Windows uninstall removes the program and service but preserves data. Advanced users can still manage an installed service with `gpt-load-windows-amd64.exe service start|stop|restart|status`.
+API-Load publishes container images only. To run a native binary, build it from source with `make build` (requires Go and pnpm).
 
 </details>
 
