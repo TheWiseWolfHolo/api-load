@@ -99,6 +99,7 @@ func TestGroupCollectionHTTPRoutesDeclareStaticOptionsBeforeDynamicDetail(t *tes
 		got = append(got, routeContract{name: route.Name, path: route.Path})
 	}
 	want := []routeContract{
+		{name: "control.groups.presentation.get", path: "/groups/presentation"},
 		{name: "control.groups.list", path: "/groups"},
 		{name: "control.groups.options", path: "/groups/options"},
 		{name: "control.groups.get", path: "/groups/:group_id"},

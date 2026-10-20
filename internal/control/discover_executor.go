@@ -138,7 +138,7 @@ func (s *Service) discoverLiveModels(
 			}
 			if result.Validate() != nil || result.Error != nil ||
 				result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
-				logModelDiscoveryFailure(target.channelID, clientProtocol, result)
+				logModelDiscoveryFailure(target.channelID, result)
 				break
 			}
 			discoveredPage, parseErr := parseDiscoveredModelsPage(clientProtocol, result.Body)
@@ -170,9 +170,9 @@ func (s *Service) discoverLiveModels(
 
 // logModelDiscoveryFailure records why an upstream refused to list its models.
 // It carries status and error codes only, never request or response bodies.
-func logModelDiscoveryFailure(channelID channel.ID, clientProtocol protocol.Protocol, result execution.AttemptResult) {
+func logModelDiscoveryFailure(channelID channel.ID, result execution.AttemptResult) {
 	fields := logrus.Fields{
-		"channel": channelID, "protocol": clientProtocol, "status": result.StatusCode,
+		"channel": channelID, "status": result.StatusCode,
 		"dispatch": result.DispatchState,
 	}
 	if result.Error != nil {

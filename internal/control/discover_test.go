@@ -638,7 +638,7 @@ func TestDiscoverModelsUsesChannelNativeDiscoveryProtocol(t *testing.T) {
 			_ state.HeaderRules,
 		) ([]string, error) {
 			calls++
-			if baseURL != "https://api.example.com" ||
+			if baseURL != "https://api.example.com/v1" ||
 				apiKey != "key-a" {
 				t.Fatalf("ListModels target = %q/%q", baseURL, apiKey)
 			}
