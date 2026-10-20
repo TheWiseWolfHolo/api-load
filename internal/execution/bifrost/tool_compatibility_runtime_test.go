@@ -41,7 +41,7 @@ func TestCompatibleBestEffortToolConversion(t *testing.T) {
 						t.Error(err)
 						return
 					}
-					if r.URL.Path != "/chat/completions" || gjson.GetBytes(body, "tools.#").Int() != test.wantTools {
+					if r.URL.Path != "/v1/chat/completions" || gjson.GetBytes(body, "tools.#").Int() != test.wantTools {
 						t.Errorf("unexpected SDK fallback wire: path=%s body=%s", r.URL.Path, body)
 					}
 					if test.wantTools == 1 {
@@ -61,7 +61,7 @@ func TestCompatibleBestEffortToolConversion(t *testing.T) {
 				}))
 				defer server.Close()
 				runtime := newRuntimeForTest(t, testRuntimeOptions{allowPrivateNetwork: true})
-				runtime.baseURLs[channel.OpenAICompatible] = server.URL
+				runtime.baseURLs[channel.OpenAICompatible] = server.URL + "/v1"
 				op, path := execution.OperationResponsesCreate, "/v1/responses"
 				if test.client == protocol.Anthropic {
 					op, path = execution.OperationChatCompletion, "/v1/messages"
