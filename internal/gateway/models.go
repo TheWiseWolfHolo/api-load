@@ -1,15 +1,18 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"gpt-load/internal/connection"
 	"gpt-load/internal/dialect"
 	"gpt-load/internal/execution"
 	"gpt-load/internal/protocol"
@@ -22,7 +25,24 @@ const (
 	modelPlaceholderUnix    = int64(1735689600)
 )
 
-var errModelListTooLarge = errors.New("model list exceeds response limit")
+var (
+	errModelListTooLarge     = errors.New("model list exceeds response limit")
+	errLiveModelsUnavailable = errors.New("upstream model list unavailable")
+)
+
+// liveModelListTimeout bounds the whole upstream lookup behind one /models call.
+const liveModelListTimeout = 20 * time.Second
+
+// LiveModelLister reads the model IDs a group's upstream reports right now.
+type LiveModelLister interface {
+	LiveGroupModels(ctx context.Context, groupID uint) ([]string, error)
+}
+
+// SetLiveModelLister turns on transparent model lists. It is called during
+// dependency assembly, before HTTP traffic.
+func (handler *Handler) SetLiveModelLister(lister LiveModelLister) {
+	handler.liveModels = lister
+}
 
 type openAIModelList struct {
 	Object string        `json:"object"`
@@ -76,6 +96,18 @@ func collectVisibleModelIDs(
 	value protocol.Protocol,
 	limit int64,
 ) ([]string, error) {
+	return collectVisibleModelIDsExcluding(snapshot, accessKey, value, limit, nil)
+}
+
+// collectVisibleModelIDsExcluding lists catalog models, leaving out routes of
+// the excluded groups. Transparent groups publish their live list instead.
+func collectVisibleModelIDsExcluding(
+	snapshot *state.ConfigSnapshot,
+	accessKey state.AccessKeyView,
+	value protocol.Protocol,
+	limit int64,
+	exclude map[uint]struct{},
+) ([]string, error) {
 	emptyBody, err := marshalModelList(value, nil)
 	if err != nil {
 		return nil, err
@@ -103,6 +135,9 @@ func collectVisibleModelIDs(
 					if _, ok := accessKey.Filters.Models[modelID]; !ok {
 						continue
 					}
+				}
+				if len(exclude) > 0 {
+					targets = targetsOutside(targets, exclude)
 				}
 				if !anyVisibleTarget(targets, accessKey.Filters.Groups, accessKey.Filters.GroupsRestricted) {
 					continue
@@ -169,6 +204,90 @@ func modelListProtocols(value protocol.Protocol) []protocol.Protocol {
 	return []protocol.Protocol{value}
 }
 
+func targetsOutside(targets []state.RouteTarget, exclude map[uint]struct{}) []state.RouteTarget {
+	kept := make([]state.RouteTarget, 0, len(targets))
+	for _, target := range targets {
+		if _, skipped := exclude[target.GroupID]; !skipped {
+			kept = append(kept, target)
+		}
+	}
+	return kept
+}
+
+// transparentModelGroups returns the enabled API-key groups this key may use
+// that publish whatever their upstream reports.
+func transparentModelGroups(snapshot *state.ConfigSnapshot, accessKey state.AccessKeyView) []uint {
+	groups := make([]uint, 0)
+	if snapshot == nil {
+		return groups
+	}
+	for id, group := range snapshot.Groups {
+		if !group.TransparentModels || connection.Normalize(group.ConnectionType) != connection.APIKey {
+			continue
+		}
+		if len(accessKey.Filters.Groups) > 0 || accessKey.Filters.GroupsRestricted {
+			if _, allowed := accessKey.Filters.Groups[id]; !allowed {
+				continue
+			}
+		}
+		groups = append(groups, id)
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i] < groups[j] })
+	return groups
+}
+
+// buildLiveModelList publishes the upstream's current models for transparent
+// groups and the catalog for the others. A group whose upstream cannot be
+// reached contributes nothing; the call fails only when nothing is left.
+func (handler *Handler) buildLiveModelList(
+	ctx context.Context,
+	snapshot *state.ConfigSnapshot,
+	accessKey state.AccessKeyView,
+	value protocol.Protocol,
+) ([]byte, error) {
+	transparent := transparentModelGroups(snapshot, accessKey)
+	exclude := make(map[uint]struct{}, len(transparent))
+	for _, id := range transparent {
+		exclude[id] = struct{}{}
+	}
+	ids, err := collectVisibleModelIDsExcluding(snapshot, accessKey, value, math.MaxInt64, exclude)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		seen[id] = struct{}{}
+	}
+	ctx, cancel := context.WithTimeout(ctx, liveModelListTimeout)
+	defer cancel()
+	failed := 0
+	for _, groupID := range transparent {
+		live, liveErr := handler.liveModels.LiveGroupModels(ctx, groupID)
+		if liveErr != nil {
+			failed++
+			continue
+		}
+		for _, id := range live {
+			if _, duplicate := seen[id]; !duplicate {
+				seen[id] = struct{}{}
+				ids = append(ids, id)
+			}
+		}
+	}
+	if failed > 0 && len(ids) == 0 {
+		return nil, errLiveModelsUnavailable
+	}
+	sort.Strings(ids)
+	body, err := marshalModelList(value, ids)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > handler.modelListLimit {
+		return nil, errModelListTooLarge
+	}
+	return body, nil
+}
+
 func anyVisibleTarget(targets []state.RouteTarget, groups map[uint]struct{}, restricted ...bool) bool {
 	if len(targets) == 0 {
 		return false
@@ -193,12 +312,19 @@ func (handler *Handler) writeVisibleModelList(
 	var body []byte
 	var err error
 	codexRequest := value == protocol.OpenAICompletions && ginContext.Query("client_version") != ""
-	if codexRequest {
+	switch {
+	case codexRequest:
 		body, err = buildCodexModelList(snapshot, accessKey, handler.modelListLimit, ginContext.Query("client_version"))
-	} else {
+	case handler.liveModels != nil:
+		body, err = handler.buildLiveModelList(ginContext.Request.Context(), snapshot, accessKey, value)
+	default:
 		body, err = buildVisibleModelList(snapshot, accessKey, value, handler.modelListLimit)
 	}
 	if err != nil {
+		if errors.Is(err, errLiveModelsUnavailable) {
+			_ = handler.writeReason(ginContext, reasonModelListUpstream)
+			return
+		}
 		_ = handler.writeReason(ginContext, reasonModelListTooLarge)
 		return
 	}

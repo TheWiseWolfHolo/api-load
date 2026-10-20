@@ -16,6 +16,7 @@ import (
 	"gpt-load/internal/channel"
 	"gpt-load/internal/execution"
 	"gpt-load/internal/parameteroverride"
+	"gpt-load/internal/platform/config"
 	"gpt-load/internal/state"
 )
 
@@ -82,6 +83,11 @@ func TestWebsocketNoRouteIsNotCapabilityFailure(t *testing.T) {
 			switch missing {
 			case "model":
 				model = "unknown"
+				// A transparent group would forward the unknown model; this case is the catalog-only one.
+				input.Groups[0].Settings = config.Settings{state.SettingTransparentModels: false}
+				if _, err := h.manager.Publish(input); err != nil {
+					t.Fatal(err)
+				}
 			case "credential":
 				if err := h.registry.(*state.CredentialRegistry).ReplaceCredentials(nil); err != nil {
 					t.Fatal(err)

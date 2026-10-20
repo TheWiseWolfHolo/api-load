@@ -1544,6 +1544,10 @@ func TestHistoricalCredentialLabelsPreserveUnavailableDataWithoutSchedulingIt(t 
 			setGroupCollectionRoute(t, fixture, group, "", `[{"id":"model-a"}]`)
 			if scenario == "no models" {
 				setGroupCollectionRoute(t, fixture, group, "", `[]`)
+				// Transparent groups forward any model, so only a catalog-only group has nothing to route.
+				if err := fixture.db.Model(group).Update("overrides", models.JSON(`{"transparent_models":false}`)).Error; err != nil {
+					t.Fatalf("turn transparent mode off: %v", err)
+				}
 			}
 			entry := createGroupCollectionKey(t, fixture, group.ID, models.CredentialStatusActive, nil)
 			switch scenario {

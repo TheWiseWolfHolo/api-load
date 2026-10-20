@@ -255,8 +255,10 @@ func BuildContainer() (*dig.Container, error) {
 		handler *gateway.Handler,
 		adapter *cpaexecutor.Adapter,
 		cfg *config.Config,
+		service *control.Service,
 	) *gateway.Handler {
 		handler.ConfigureCodexLive(adapter, cfg.CodexLive)
+		handler.SetLiveModelLister(service)
 		return handler
 	}); err != nil {
 		return nil, err

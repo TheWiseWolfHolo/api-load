@@ -115,6 +115,7 @@ type Handler struct {
 	now                 func() time.Time
 	writeTimeout        time.Duration
 	modelListLimit      int64
+	liveModels          LiveModelLister
 	logger              *logrus.Logger
 	authFailureEvents   *utils.RateLimitedEventCounter
 	routeNotFoundEvents *utils.RateLimitedEventCounter

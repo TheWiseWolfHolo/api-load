@@ -59,6 +59,7 @@ var (
 		Message: "The gateway can only return an identity-encoded response.",
 	}
 	reasonModelListTooLarge    = reason{Status: http.StatusInternalServerError, Code: "model_list_too_large", Message: "Model list is too large."}
+	reasonModelListUpstream    = reason{Status: http.StatusBadGateway, Code: "upstream_models_unavailable", Message: "Upstream model list is unavailable."}
 	reasonAccessKeyRateLimited = reason{
 		Status:  http.StatusTooManyRequests,
 		Code:    "access_key_rate_limited",

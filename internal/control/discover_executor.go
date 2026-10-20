@@ -49,30 +49,55 @@ func (s *Service) executeModelDiscovery(
 	ctx context.Context,
 	target discoveryTarget,
 ) (ModelDiscoveryResult, error) {
-	if err := ctx.Err(); err != nil {
+	live, err := s.discoverLiveModels(ctx, target)
+	if err != nil {
 		return ModelDiscoveryResult{}, err
 	}
+	discoveryCtx, cancel := context.WithTimeout(ctx, s.modelDiscoveryTimeout)
+	defer cancel()
+	return s.mergeDiscoveredModels(discoveryCtx, live, target)
+}
+
+// LiveGroupModels returns the model IDs a group's upstream reports right now,
+// without the pricing catalog candidates that discovery adds for the admin UI.
+func (s *Service) LiveGroupModels(ctx context.Context, groupID uint) ([]string, error) {
+	target, err := s.buildGroupDiscoveryTarget(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	return s.discoverLiveModels(ctx, target)
+}
+
+// discoverLiveModels asks the upstream for its model list, trying credentials
+// in order until one answers, and returns the normalized model IDs.
+func (s *Service) discoverLiveModels(
+	ctx context.Context,
+	target discoveryTarget,
+) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if s == nil || s.executor == nil {
-		return ModelDiscoveryResult{}, app_errors.ErrInternalServer
+		return nil, app_errors.ErrInternalServer
 	}
 	if target.channelID == "" ||
 		target.resolvedTarget.ChannelID != target.channelID || len(target.credentials) == 0 {
-		return ModelDiscoveryResult{}, app_errors.ErrValidation
+		return nil, app_errors.ErrValidation
 	}
 	clientProtocol, routeMode, supported := target.resolvedTarget.PreferredRoute(execution.OperationListModels, "")
 	if !supported {
-		return ModelDiscoveryResult{}, app_errors.ErrValidation
+		return nil, app_errors.ErrValidation
 	}
 	clientProtocol, method, path, body, err := utilityRequestShape(clientProtocol, execution.OperationListModels)
 	if err != nil {
-		return ModelDiscoveryResult{}, err
+		return nil, err
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, s.modelDiscoveryTimeout)
 	defer cancel()
 	requestID, err := s.newExecutionID()
 	if err != nil {
-		return ModelDiscoveryResult{}, fmt.Errorf("create discovery request identity: %w", app_errors.ErrInternalServer)
+		return nil, fmt.Errorf("create discovery request identity: %w", app_errors.ErrInternalServer)
 	}
 	var sequence uint32
 	for _, credential := range target.credentials {
@@ -82,7 +107,7 @@ func (s *Service) executeModelDiscovery(
 		for pageNumber := 0; pageNumber < maxModelDiscoveryPages; pageNumber++ {
 			attemptID, identityErr := s.newExecutionID()
 			if identityErr != nil {
-				return ModelDiscoveryResult{}, fmt.Errorf("create discovery attempt identity: %w", app_errors.ErrInternalServer)
+				return nil, fmt.Errorf("create discovery attempt identity: %w", app_errors.ErrInternalServer)
 			}
 			sequence++
 			spec := execution.NewAttemptSpec(execution.AttemptSpec{
@@ -100,14 +125,14 @@ func (s *Service) executeModelDiscovery(
 				ProxyFingerprint:  credential.proxyFingerprint,
 			})
 			if validationErr := spec.Validate(); validationErr != nil {
-				return ModelDiscoveryResult{}, fmt.Errorf("build discovery attempt: %w", app_errors.ErrInternalServer)
+				return nil, fmt.Errorf("build discovery attempt: %w", app_errors.ErrInternalServer)
 			}
 			result := s.executor.Execute(discoveryCtx, spec)
 			if parentErr := ctx.Err(); parentErr != nil {
-				return ModelDiscoveryResult{}, parentErr
+				return nil, parentErr
 			}
 			if errors.Is(discoveryCtx.Err(), context.DeadlineExceeded) {
-				return ModelDiscoveryResult{}, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
+				return nil, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
 			}
 			if result.Validate() != nil || result.Error != nil ||
 				result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
@@ -122,11 +147,7 @@ func (s *Service) executeModelDiscovery(
 				break
 			}
 			if discoveredPage.nextRawQuery == "" {
-				return s.mergeDiscoveredModels(
-					discoveryCtx,
-					normalizeDiscoveredModels(models),
-					target,
-				)
+				return normalizeDiscoveredModels(models), nil
 			}
 			if _, repeated := seenCursors[discoveredPage.nextRawQuery]; repeated {
 				break
@@ -136,9 +157,9 @@ func (s *Service) executeModelDiscovery(
 		}
 	}
 	if parentErr := ctx.Err(); parentErr != nil {
-		return ModelDiscoveryResult{}, parentErr
+		return nil, parentErr
 	}
-	return ModelDiscoveryResult{}, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
+	return nil, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
 }
 
 func (s *Service) newExecutionID() (string, error) {

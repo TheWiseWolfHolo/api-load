@@ -164,6 +164,7 @@ func (rules HeaderRules) ConfiguredNames() []string {
 
 type GroupView struct {
 	ErrorRules                health.ErrorRules
+	TransparentModels         bool
 	Priority                  int32
 	ConcurrencyLimit          int64
 	PriceMultiplier           pricing.PriceMultiplier
@@ -223,6 +224,10 @@ type ConfigSnapshot struct {
 	Settings              RuntimeSettings
 	ExecutionCandidates   ExecutionCandidateIndex
 	ExecutionRouteCatalog ExecutionCandidateIndex
+	// WildcardCandidates lists groups that forward any model name to the upstream
+	// unchanged, by client protocol and operation. Consulted only when a model has
+	// no exact route in ExecutionCandidates.
+	WildcardCandidates map[protocol.Protocol]map[execution.Operation][]RouteTarget
 	Groups                map[uint]GroupView
 	AccessKeysByHash      map[string]AccessKeyView
 	GroupCatalog          map[uint]GroupCatalogView
@@ -330,6 +335,7 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 		Settings:              runtimeSettings,
 		ExecutionCandidates:   make(ExecutionCandidateIndex),
 		ExecutionRouteCatalog: make(ExecutionCandidateIndex),
+		WildcardCandidates:    make(map[protocol.Protocol]map[execution.Operation][]RouteTarget),
 		Groups:                make(map[uint]GroupView),
 		AccessKeysByHash:      make(map[string]AccessKeyView),
 		GroupCatalog:          make(map[uint]GroupCatalogView),
@@ -375,6 +381,7 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 			HeaderRules:               resolved.HeaderRules,
 			BlacklistThreshold:        resolved.BlacklistThreshold,
 			AffinityEnabled:           resolved.AffinityEnabled,
+			TransparentModels:         resolved.TransparentModels,
 			CodexLiveMode:             resolved.CodexLiveMode,
 			ResponsesWebsocketEnabled: resolved.ResponsesWebsocketEnabled,
 			EmptyResponseRetry:        resolved.EmptyResponseRetry,
@@ -399,6 +406,9 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 		view.ClientProtocols = append([]protocol.Protocol(nil), descriptor.ClientProtocols...)
 		if err := appendExecutionTargets(snapshot.ExecutionCandidates, input.ChannelRegistry, group); err != nil {
 			return nil, err
+		}
+		if view.TransparentModels && connection.Normalize(group.ConnectionType) == connection.APIKey {
+			appendWildcardTargets(snapshot.WildcardCandidates, group.ID, target, descriptor)
 		}
 		snapshot.Groups[group.ID] = view
 	}
@@ -544,6 +554,53 @@ func appendExecutionTargets(
 		}
 	}
 	return nil
+}
+
+// appendWildcardTargets registers a group that forwards whatever model the
+// client names. The route mode here is a default; the scheduler resolves it
+// again for the requested model.
+func appendWildcardTargets(
+	index map[protocol.Protocol]map[execution.Operation][]RouteTarget,
+	groupID uint,
+	target channel.ResolvedTarget,
+	descriptor channel.Descriptor,
+) {
+	for _, clientProtocol := range descriptor.ClientProtocols {
+		for _, operation := range target.Operations(clientProtocol) {
+			switch operation {
+			case execution.OperationChatCompletion,
+				execution.OperationResponsesCreate,
+				execution.OperationResponsesCompact,
+				execution.OperationResponsesInputTokens,
+				execution.OperationWebSearch,
+				execution.OperationCountTokens,
+				execution.OperationImagesGenerate,
+				execution.OperationImagesEdit,
+				execution.OperationEmbeddingsCreate, execution.OperationRerank,
+				execution.OperationDecisionsCreate,
+				execution.OperationMistralOCR,
+				execution.OperationMistralFIM,
+				execution.OperationMistralAudioTranscription,
+				execution.OperationMistralAudioSpeech,
+				execution.OperationMistralModeration,
+				execution.OperationMistralChatModeration,
+				execution.OperationMistralClassification,
+				execution.OperationMistralRealtimeTranscription:
+			default:
+				continue
+			}
+			mode, ok := target.Mode(clientProtocol, operation)
+			if !ok {
+				continue
+			}
+			if index[clientProtocol] == nil {
+				index[clientProtocol] = make(map[execution.Operation][]RouteTarget)
+			}
+			index[clientProtocol][operation] = append(index[clientProtocol][operation], RouteTarget{
+				GroupID: groupID, Mode: mode, ResolvedTarget: cloneResolvedTarget(target),
+			})
+		}
+	}
 }
 
 func appendExecutionTarget(
