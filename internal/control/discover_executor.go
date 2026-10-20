@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"gpt-load/internal/catalog"
 	"gpt-load/internal/channel"
 	"gpt-load/internal/execution"
@@ -136,10 +138,14 @@ func (s *Service) discoverLiveModels(
 			}
 			if result.Validate() != nil || result.Error != nil ||
 				result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
+				logModelDiscoveryFailure(target.channelID, clientProtocol, result)
 				break
 			}
 			discoveredPage, parseErr := parseDiscoveredModelsPage(clientProtocol, result.Body)
 			if parseErr != nil {
+				logrus.WithFields(logrus.Fields{
+					"channel": target.channelID, "protocol": clientProtocol, "status": result.StatusCode,
+				}).Warn("[CONTROL] Upstream model list could not be parsed")
 				break
 			}
 			models = append(models, discoveredPage.models...)
@@ -160,6 +166,25 @@ func (s *Service) discoverLiveModels(
 		return nil, parentErr
 	}
 	return nil, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
+}
+
+// logModelDiscoveryFailure records why an upstream refused to list its models.
+// It carries status and error codes only, never request or response bodies.
+func logModelDiscoveryFailure(channelID channel.ID, clientProtocol protocol.Protocol, result execution.AttemptResult) {
+	fields := logrus.Fields{
+		"channel": channelID, "protocol": clientProtocol, "status": result.StatusCode,
+		"dispatch": result.DispatchState,
+	}
+	if result.Error != nil {
+		fields["error_kind"] = result.Error.Kind
+		fields["error_code"] = result.Error.Code
+		fields["error_status"] = result.Error.StatusCode
+		fields["error_summary"] = result.Error.Summary
+	}
+	if validationErr := result.Validate(); validationErr != nil {
+		fields["validation"] = validationErr.Error()
+	}
+	logrus.WithFields(fields).Warn("[CONTROL] Upstream model list request failed")
 }
 
 func (s *Service) newExecutionID() (string, error) {
