@@ -594,11 +594,19 @@ func (r *Registry) ResolveExecutionTarget(id ID, raw json.RawMessage) (ResolvedT
 func resolvedTargetConfig(definition definition, params Params) json.RawMessage {
 	if len(definition.fixedTargetConfig) > 0 {
 		if baseURL, overridden := params.Value("base_url"); overridden {
-			return canonicalJSON(map[string]string{"base_url": baseURL})
+			return canonicalJSON(map[string]string{"base_url": normalizeEndpointVersion(definition, baseURL)})
 		}
 		return append(json.RawMessage(nil), definition.fixedTargetConfig...)
 	}
 	if len(definition.params) > 0 {
+		if baseURL, ok := params.Value("base_url"); ok && baseURL != "" {
+			values := make(map[string]string, len(params.values))
+			for key, value := range params.values {
+				values[key] = value
+			}
+			values["base_url"] = normalizeEndpointVersion(definition, baseURL)
+			return canonicalJSON(values)
+		}
 		return params.CanonicalJSON()
 	}
 	return json.RawMessage(`{}`)
