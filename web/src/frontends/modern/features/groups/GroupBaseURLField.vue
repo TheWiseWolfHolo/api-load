@@ -52,16 +52,15 @@ function versionPath(url: string): string | undefined {
     .find((segment) => /^v\d+[a-z]*$/iu.test(segment))
     ?.toLowerCase()
 }
+// 服务端会按渠道类型补上或去掉末尾的 /v1，只在两边都写了版本号且对不上时提醒。
 const warning = computed(() => {
   const value = model.value.trim()
-  if (!value || !validBaseURL(value) || subscription.value) return undefined
-  if (gateway.value)
-    return /\/v1(?:beta)?\/?$/iu.test(new URL(value).pathname)
-      ? t('groupCreate.gatewayURLWarning')
-      : undefined
-  const references = defaults.value.filter(validBaseURL)
-  return references.length &&
-    references.every((reference) => versionPath(reference) !== versionPath(value))
+  if (!value || !validBaseURL(value) || subscription.value || gateway.value) return undefined
+  const version = versionPath(value)
+  const references = defaults.value.filter(validBaseURL).map(versionPath)
+  return version &&
+    references.length &&
+    references.every((reference) => reference && reference !== version)
     ? t('groupCreate.urlVersionWarning')
     : undefined
 })
