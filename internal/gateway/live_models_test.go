@@ -35,6 +35,12 @@ func (fake *fakeLiveModels) LiveGroupModels(_ context.Context, groupID uint) ([]
 
 func newLiveModelsEngine(t *testing.T, fake *fakeLiveModels, transparentOne bool) *gin.Engine {
 	t.Helper()
+	return newLiveModelsEngineWithCatalog(t, fake, []state.ModelConfig{{ID: "old-model"}}, transparentOne)
+}
+
+func newLiveModelsEngineWithCatalog(t *testing.T, fake *fakeLiveModels, catalog []state.ModelConfig, transparentOne ...bool) *gin.Engine {
+	t.Helper()
+	transparent := len(transparentOne) == 0 || transparentOne[0]
 	keyService := encryptiontest.Service(t, "live-models-test-master-key")
 	manager := state.NewManager()
 	setting := func(on bool) config.Settings { return config.Settings{state.SettingTransparentModels: on} }
@@ -42,7 +48,7 @@ func newLiveModelsEngine(t *testing.T, fake *fakeLiveModels, transparentOne bool
 		ChannelRegistry: channel.NewRegistry(),
 		Groups: []state.GroupConfig{
 			{ConnectionType: "api_key", ID: 1, Name: "live", ChannelID: channel.OpenAI, Params: json.RawMessage(`{}`),
-				Models: []state.ModelConfig{{ID: "old-model"}}, Enabled: true, Settings: setting(transparentOne),
+				Models: catalog, Enabled: true, Settings: setting(transparent),
 			},
 			{ConnectionType: "api_key", ID: 2, Name: "catalog", ChannelID: channel.OpenAI, Params: json.RawMessage(`{}`),
 				Models: []state.ModelConfig{{ID: "pinned"}}, Enabled: true, Settings: setting(false),
@@ -135,9 +141,22 @@ func TestModelListOfTurnedOffGroupStaysTheCatalog(t *testing.T) {
 	}
 }
 
-func TestModelListReportsUpstreamFailureInsteadOfAStaleCatalog(t *testing.T) {
+func TestModelListFallsBackToTheCatalogWhenTheUpstreamCannotList(t *testing.T) {
 	fake := &fakeLiveModels{errs: map[uint]error{1: errors.New("upstream down")}}
 	engine := newLiveModelsEngine(t, fake, true)
+
+	recorder := listModels(t, engine, "gl-live")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if got := strings.Join(modelIDs(t, recorder.Body.String()), ","); got != "old-model" {
+		t.Fatalf("models = %s, want the group's catalog while its upstream cannot list", got)
+	}
+}
+
+func TestModelListFailsWhenTheUpstreamCannotListAndThereIsNoCatalog(t *testing.T) {
+	fake := &fakeLiveModels{errs: map[uint]error{1: errors.New("upstream down")}}
+	engine := newLiveModelsEngineWithCatalog(t, fake, nil)
 
 	recorder := listModels(t, engine, "gl-live")
 	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), `"code":"upstream_models_unavailable"`) {
@@ -145,7 +164,7 @@ func TestModelListReportsUpstreamFailureInsteadOfAStaleCatalog(t *testing.T) {
 	}
 }
 
-func TestModelListSurvivesOneFailingGroupWhenOthersAnswer(t *testing.T) {
+func TestModelListMergesCatalogOfFailingGroupWithOthers(t *testing.T) {
 	fake := &fakeLiveModels{errs: map[uint]error{1: errors.New("upstream down")}}
 	engine := newLiveModelsEngine(t, fake, true)
 
@@ -153,8 +172,8 @@ func TestModelListSurvivesOneFailingGroupWhenOthersAnswer(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
 	}
-	if got := strings.Join(modelIDs(t, recorder.Body.String()), ","); got != "pinned" {
-		t.Fatalf("models = %s, want the catalog group's model only", got)
+	if got := strings.Join(modelIDs(t, recorder.Body.String()), ","); got != "old-model,pinned" {
+		t.Fatalf("models = %s, want both catalogs", got)
 	}
 }
 
