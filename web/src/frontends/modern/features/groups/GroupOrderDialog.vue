@@ -8,8 +8,8 @@ import {
   AppButton,
   AppDialogContent,
   AppDialogHeader,
-  AppIcon,
   AppIconButton,
+  AppInlineNumber,
   AppNotice,
 } from '@modern/components/ui'
 
@@ -100,23 +100,21 @@ function drop(index: number) {
             @dragover.prevent="hover = row.id"
             @drop.prevent="drop(index)"
           >
-            <button
-              type="button"
+            <AppIconButton
               class="modern-group-order-grip"
-              :aria-label="t('groups.order.drag', { name: row.name })"
+              :icon="GripVertical"
+              :label="t('groups.order.drag', { name: row.name })"
               :disabled="pending"
-            >
-              <AppIcon :icon="GripVertical" />
-            </button>
+              size="sm"
+            />
             <span class="modern-group-order-name">{{ row.name }}</span>
-            <input
-              type="number"
-              :value="index + 1"
-              min="1"
+            <AppInlineNumber
+              :model-value="index + 1"
+              :min="1"
               :max="rows.length"
               :disabled="pending"
-              :aria-label="t('groups.order.position', { name: row.name })"
-              @change="move(row.id, Number(($event.target as HTMLInputElement).value) - 1)"
+              :label="t('groups.order.position', { name: row.name })"
+              @submit="move(row.id, $event - 1)"
             />
             <AppIconButton
               :icon="ArrowUp"
@@ -179,7 +177,7 @@ function drop(index: number) {
   cursor: grab;
 }
 .modern-group-order-list li.is-dragging {
-  opacity: 0.55;
+  opacity: var(--modern-opacity-disabled);
   cursor: grabbing;
 }
 .modern-group-order-list li.is-over {
@@ -202,16 +200,6 @@ function drop(index: number) {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.modern-group-order-list input {
-  width: var(--modern-inline-number-width);
-  min-height: var(--modern-control-sm);
-  border: var(--modern-line-width) solid var(--modern-control-border);
-  border-radius: var(--modern-radius-small);
-  padding-inline: var(--modern-space-2);
-  color: var(--modern-text);
-  background: var(--modern-surface);
-  font: inherit;
 }
 .modern-group-order-actions {
   display: flex;

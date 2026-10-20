@@ -1,9 +1,9 @@
 package scheduler
 
 import (
-	"gpt-load/internal/platform/config"
 	"encoding/json"
 	"errors"
+	"gpt-load/internal/platform/config"
 	"math/rand"
 	"reflect"
 	"sort"

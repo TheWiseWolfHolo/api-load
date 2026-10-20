@@ -235,7 +235,7 @@ function apply(): void {
   min-height: 0;
   overflow-y: auto;
 }
-@media (max-width: 820px) {
+@media (max-width: 760px) {
   .modern-model-json-workspace.has-preview {
     display: flex;
     flex-direction: column;
