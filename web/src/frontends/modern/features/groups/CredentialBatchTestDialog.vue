@@ -319,7 +319,7 @@ onScopeDispose(() => {
   justify-content: space-between;
   gap: var(--modern-space-2);
   padding: var(--modern-space-3) 0;
-  border-bottom: 1px solid var(--modern-border);
+  border-bottom: var(--modern-line-width) solid var(--modern-border);
   overflow-wrap: anywhere;
 }
 .key-batch-actions {

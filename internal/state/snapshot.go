@@ -227,13 +227,13 @@ type ConfigSnapshot struct {
 	// WildcardCandidates lists groups that forward any model name to the upstream
 	// unchanged, by client protocol and operation. Consulted only when a model has
 	// no exact route in ExecutionCandidates.
-	WildcardCandidates map[protocol.Protocol]map[execution.Operation][]RouteTarget
-	Groups                map[uint]GroupView
-	AccessKeysByHash      map[string]AccessKeyView
-	GroupCatalog          map[uint]GroupCatalogView
-	AccessKeysByID        map[uint]AccessKeyView
-	ClientModelOverrides  map[string]catalog.ClientModelOverrides
-	GlobalProxy           outboundproxy.Effective
+	WildcardCandidates   map[protocol.Protocol]map[execution.Operation][]RouteTarget
+	Groups               map[uint]GroupView
+	AccessKeysByHash     map[string]AccessKeyView
+	GroupCatalog         map[uint]GroupCatalogView
+	AccessKeysByID       map[uint]AccessKeyView
+	ClientModelOverrides map[string]catalog.ClientModelOverrides
+	GlobalProxy          outboundproxy.Effective
 }
 
 func Compile(input CompileInput) (*ConfigSnapshot, error) {

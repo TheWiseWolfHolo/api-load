@@ -8,6 +8,7 @@ import {
   AppChannelIcon,
   AppDialogContent,
   AppDialogHeader,
+  AppFileButton,
   AppNotice,
   AppSearchSelect,
   AppSelect,
@@ -90,9 +91,8 @@ function imageFailed() {
   imageError.value = true
   imagePending.value = false
 }
-async function choose(event: Event) {
-  const field = event.target as HTMLInputElement
-  const file = field.files?.[0]
+async function choose(files: File[]) {
+  const file = files[0]
   if (!file) return
   reading.value = true
   fileError.value = false
@@ -118,7 +118,6 @@ async function choose(event: Event) {
     fileError.value = true
   } finally {
     reading.value = false
-    field.value = ''
   }
 }
 </script>
@@ -163,14 +162,14 @@ async function choose(event: Event) {
           :placeholder="mode === 'url' ? 'https://...' : 'deepseek-color'"
           :disabled="pending"
         />
-        <label v-else-if="mode === 'image'" class="modern-group-icon-upload"
-          >{{ t('groups.icons.choose')
-          }}<input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            :disabled="pending || reading"
-            @change="choose"
-        /></label>
+        <AppFileButton
+          v-else-if="mode === 'image'"
+          :label="t('groups.icons.choose')"
+          accept="image/png,image/jpeg,image/webp"
+          :disabled="pending"
+          :loading="reading"
+          @select="choose"
+        />
         <p>
           {{
             t(
@@ -245,10 +244,6 @@ async function choose(event: Event) {
   width: var(--modern-channel-hero);
   height: var(--modern-channel-hero);
   object-fit: contain;
-}
-.modern-group-icon-upload {
-  display: grid;
-  gap: var(--modern-space-2);
 }
 .modern-group-icon-actions {
   display: flex;

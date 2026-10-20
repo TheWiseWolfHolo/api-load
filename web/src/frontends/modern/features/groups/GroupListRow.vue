@@ -172,8 +172,8 @@ const lastActive = computed(() =>
   <article class="modern-group-entry" :aria-labelledby="`${id}-name`">
     <div class="modern-group-row">
       <div class="modern-group-identity">
-        <button
-          type="button"
+        <AppButton
+          variant="ghost"
           class="modern-group-icon-button"
           :aria-label="t('groups.icons.edit', { name: group.name })"
           @click="$emit('icon')"
@@ -186,7 +186,7 @@ const lastActive = computed(() =>
             :mark="group.channelMark"
             :name="group.channelName"
           />
-        </button>
+        </AppButton>
         <div class="modern-group-heading">
           <div class="modern-group-name-line">
             <h2 :id="`${id}-name`">
@@ -381,12 +381,10 @@ const lastActive = computed(() =>
 
 <style scoped>
 .modern-group-icon-button {
-  display: inline-flex;
+  min-height: 0;
   border: 0;
   padding: 0;
   background: transparent;
-  cursor: pointer;
-  border-radius: var(--modern-radius-small);
 }
 .modern-group-icon-button:focus-visible {
   outline: var(--modern-focus-width) solid var(--modern-accent);
