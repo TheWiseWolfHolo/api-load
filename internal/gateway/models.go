@@ -237,41 +237,41 @@ func transparentModelGroups(snapshot *state.ConfigSnapshot, accessKey state.Acce
 }
 
 // buildLiveModelList publishes the upstream's current models for transparent
-// groups and the catalog for the others. A group whose upstream cannot be
-// reached contributes nothing; the call fails only when nothing is left.
+// groups and the catalog for the others. A transparent group whose upstream
+// cannot list its models falls back to its catalog; the call fails only when
+// nothing is left to show.
 func (handler *Handler) buildLiveModelList(
 	ctx context.Context,
 	snapshot *state.ConfigSnapshot,
 	accessKey state.AccessKeyView,
 	value protocol.Protocol,
 ) ([]byte, error) {
-	transparent := transparentModelGroups(snapshot, accessKey)
-	exclude := make(map[uint]struct{}, len(transparent))
-	for _, id := range transparent {
-		exclude[id] = struct{}{}
+	ctx, cancel := context.WithTimeout(ctx, liveModelListTimeout)
+	defer cancel()
+	exclude := make(map[uint]struct{})
+	live := make([]string, 0)
+	failed := 0
+	for _, groupID := range transparentModelGroups(snapshot, accessKey) {
+		models, err := handler.liveModels.LiveGroupModels(ctx, groupID)
+		if err != nil {
+			failed++
+			continue
+		}
+		exclude[groupID] = struct{}{}
+		live = append(live, models...)
 	}
 	ids, err := collectVisibleModelIDsExcluding(snapshot, accessKey, value, math.MaxInt64, exclude)
 	if err != nil {
 		return nil, err
 	}
-	seen := make(map[string]struct{}, len(ids))
+	seen := make(map[string]struct{}, len(ids)+len(live))
 	for _, id := range ids {
 		seen[id] = struct{}{}
 	}
-	ctx, cancel := context.WithTimeout(ctx, liveModelListTimeout)
-	defer cancel()
-	failed := 0
-	for _, groupID := range transparent {
-		live, liveErr := handler.liveModels.LiveGroupModels(ctx, groupID)
-		if liveErr != nil {
-			failed++
-			continue
-		}
-		for _, id := range live {
-			if _, duplicate := seen[id]; !duplicate {
-				seen[id] = struct{}{}
-				ids = append(ids, id)
-			}
+	for _, id := range live {
+		if _, duplicate := seen[id]; !duplicate {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
 		}
 	}
 	if failed > 0 && len(ids) == 0 {
