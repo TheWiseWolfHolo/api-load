@@ -35,7 +35,7 @@ type GroupPresentationUpdate struct {
 func loadGroupPresentation(tx *gorm.DB) (GroupPresentation, error) {
 	result := GroupPresentation{Order: []uint{}, Icons: map[uint]string{}}
 	var row models.SystemSetting
-	err := tx.Where("key = ?", groupPresentationSetting).Take(&row).Error
+	err := tx.Where(&models.SystemSetting{Key: groupPresentationSetting}).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return result, nil
 	}

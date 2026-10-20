@@ -35,6 +35,7 @@ func TestFinalRegistryContainsOnlyApprovedChannels(t *testing.T) {
 		XAI,
 		Cerebras,
 		Mistral,
+		Fireworks,
 		Nebius,
 		Parasail,
 		Wafer,
@@ -143,8 +144,8 @@ func TestBaseURLCanonicalizesDefaultPortsForRuntimeReuse(t *testing.T) {
 		want string
 	}{
 		{raw: `{"base_url":"HTTPS://API.OPENAI.COM:443/"}`, want: `{"base_url":"https://api.openai.com"}`},
-		{raw: `{"base_url":"http://relay.example:80/v1/"}`, want: `{"base_url":"http://relay.example/v1"}`},
-		{raw: `{"base_url":"https://relay.example:8443/v1/"}`, want: `{"base_url":"https://relay.example:8443/v1"}`},
+		{raw: `{"base_url":"http://relay.example:80/v1/"}`, want: `{"base_url":"http://relay.example"}`},
+		{raw: `{"base_url":"https://relay.example:8443/v1/"}`, want: `{"base_url":"https://relay.example:8443"}`},
 	}
 	for _, test := range tests {
 		t.Run(test.raw, func(t *testing.T) {

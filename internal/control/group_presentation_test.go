@@ -1,15 +1,30 @@
 package control
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
+
+	"gpt-load/internal/channel"
 )
 
 func TestGroupPresentationPersistsWithoutChangingRouting(t *testing.T) {
 	t.Parallel()
 	fixture := newServiceFixture(t)
-	first := createGroupWithCredentials(t, fixture, "sk-presentation-a")
-	second := createGroupWithCredentials(t, fixture, "sk-presentation-b")
+	createGroup := func(baseURL, credentials string) uint {
+		t.Helper()
+		result, err := fixture.service.CreateGroup(t.Context(), GroupCreateRequest{
+			ChannelID: channel.OpenAICompatible, Params: json.RawMessage(`{"base_url":"` + baseURL + `"}`),
+			Models:      optionalGroupModels{Set: true, Values: []GroupModel{{ID: "gpt-4o"}}},
+			Credentials: credentials, ConnectionType: "api_key",
+		})
+		if err != nil {
+			t.Fatalf("CreateGroup(%q) error = %v", baseURL, err)
+		}
+		return result.GroupID
+	}
+	first := createGroup("https://presentation-a.example.com/v1", "sk-presentation-a")
+	second := createGroup("https://presentation-b.example.com/v1", "sk-presentation-b")
 	snapshot := fixture.manager.Current()
 	order := []uint{second, first}
 	saved, err := fixture.service.UpdateGroupPresentation(t.Context(), GroupPresentationUpdate{Order: &order})
