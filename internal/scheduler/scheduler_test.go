@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"gpt-load/internal/platform/config"
 	"encoding/json"
 	"errors"
 	"math/rand"
@@ -64,7 +65,7 @@ func TestFilterTargetsAppliesAccessKeyDimensions(t *testing.T) {
 			filters:    state.FilterSet{Models: map[string]struct{}{"gpt-4o-mini": {}}},
 			wantGroups: []uint{},
 		},
-		{name: "unknown model", protocol: protocol.OpenAICompletions, model: "missing", wantGroups: []uint{}},
+		{name: "unknown model reaches transparent groups", protocol: protocol.OpenAICompletions, model: "missing", wantGroups: []uint{1, 2}},
 	}
 
 	for _, tt := range tests {
@@ -704,4 +705,75 @@ func (source fakeCredentialSource) SchedulingState() *state.SchedulingState {
 		progress.SyncCredential(state.CredentialRuntimeView{ID: meta.ID, GroupID: meta.GroupID, IdentityGeneration: meta.IdentityGeneration, Status: state.CredentialStatusActive})
 	}
 	return progress
+}
+
+func transparentSnapshot(t *testing.T, enabledOne, enabledTwo bool) *state.ConfigSnapshot {
+	t.Helper()
+	settings := func(on bool) config.Settings {
+		return config.Settings{state.SettingTransparentModels: on}
+	}
+	snapshot, err := state.Compile(state.CompileInput{
+		ChannelRegistry: channel.NewRegistry(),
+		Groups: []state.GroupConfig{
+			{ConnectionType: "api_key", ID: 1, Name: "one", ChannelID: channel.OpenAI, Params: json.RawMessage(`{}`),
+				Models: []state.ModelConfig{{ID: "gpt-4o"}}, Enabled: true, Settings: settings(enabledOne),
+			},
+			{ConnectionType: "api_key", ID: 2, Name: "two", ChannelID: channel.OpenAICompatible,
+				Params: json.RawMessage(`{"base_url":"https://two.example/v1"}`),
+				Models: []state.ModelConfig{{ID: "provider-gpt-4o"}}, Enabled: true, Settings: settings(enabledTwo),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
+}
+
+func TestTransparentGroupsForwardUnknownModelsUnchanged(t *testing.T) {
+	snapshot := transparentSnapshot(t, true, false)
+	targets, reason := filterTargetsWithReason(snapshot, Query{
+		ClientProtocol: protocol.OpenAICompletions, Operation: execution.OperationChatCompletion,
+		ExternalModel: modelPointer("brand-new-model"), AccessKey: state.AccessKeyView{ID: 10},
+	})
+	if reason != "" || len(targets) != 1 {
+		t.Fatalf("targets = %d, reason = %q, want one transparent target", len(targets), reason)
+	}
+	if got := targets[0].target; got.GroupID != 1 || got.UpstreamModelID != "brand-new-model" {
+		t.Fatalf("target = group %d upstream %q, want group 1 forwarding the requested model", got.GroupID, got.UpstreamModelID)
+	}
+}
+
+func TestExactRouteBeatsTransparentFallback(t *testing.T) {
+	snapshot := transparentSnapshot(t, true, true)
+	targets, _ := filterTargetsWithReason(snapshot, Query{
+		ClientProtocol: protocol.OpenAICompletions, Operation: execution.OperationChatCompletion,
+		ExternalModel: modelPointer("gpt-4o"), AccessKey: state.AccessKeyView{ID: 10},
+	})
+	if len(targets) != 1 || targets[0].target.GroupID != 1 || targets[0].target.UpstreamModelID != "gpt-4o" {
+		t.Fatalf("exact route should win over transparent fallback, got %#v", targets)
+	}
+}
+
+func TestTransparentDisabledGroupsKeepCatalogOnly(t *testing.T) {
+	snapshot := transparentSnapshot(t, false, false)
+	targets, reason := filterTargetsWithReason(snapshot, Query{
+		ClientProtocol: protocol.OpenAICompletions, Operation: execution.OperationChatCompletion,
+		ExternalModel: modelPointer("brand-new-model"), AccessKey: state.AccessKeyView{ID: 10},
+	})
+	if len(targets) != 0 || reason != ReasonNoRouteTarget {
+		t.Fatalf("targets = %d, reason = %q, want no route when transparent mode is off", len(targets), reason)
+	}
+}
+
+func TestTransparentFallbackHonoursAccessKeyGroups(t *testing.T) {
+	snapshot := transparentSnapshot(t, true, true)
+	targets, _ := filterTargetsWithReason(snapshot, Query{
+		ClientProtocol: protocol.OpenAICompletions, Operation: execution.OperationChatCompletion,
+		ExternalModel: modelPointer("brand-new-model"),
+		AccessKey:     state.AccessKeyView{ID: 10, Filters: state.FilterSet{Groups: map[uint]struct{}{2: {}}}},
+	})
+	if len(targets) != 1 || targets[0].target.GroupID != 2 {
+		t.Fatalf("targets = %#v, want only group 2", targets)
+	}
 }

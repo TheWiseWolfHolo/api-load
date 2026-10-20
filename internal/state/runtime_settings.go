@@ -33,6 +33,7 @@ const (
 	SettingCodexLiveMode                    = "codex_live_mode"
 	SettingResponsesWebsocketEnabled        = "responses_websocket_enabled"
 	SettingEmptyResponseRetry               = "empty_response_retry"
+	SettingTransparentModels                = "transparent_models"
 	SettingAffinityTTL                      = "affinity_ttl"
 	SettingAffinityCapacity                 = "affinity_capacity"
 	SettingValidationInterval               = "validation_interval"
@@ -84,6 +85,7 @@ type RuntimeSettings struct {
 	CodexLiveMode                    CodexLiveMode
 	ResponsesWebsocketEnabled        bool
 	EmptyResponseRetry               bool
+	TransparentModels                bool
 	AffinityTTL                      time.Duration
 	AffinityCapacity                 int
 	ValidationInterval               time.Duration
@@ -101,6 +103,7 @@ type ResolvedGroupSettings struct {
 	CodexLiveMode             CodexLiveMode
 	ResponsesWebsocketEnabled bool
 	EmptyResponseRetry        bool
+	TransparentModels         bool
 	ParameterOverrides        parameteroverride.Rules
 }
 
@@ -119,6 +122,7 @@ func DefaultRuntimeSettings() RuntimeSettings {
 		CodexLiveMode:             CodexLiveDirect,
 		ResponsesWebsocketEnabled: true,
 		EmptyResponseRetry:        false,
+		TransparentModels:         true,
 		AffinityTTL:               time.Hour,
 		AffinityCapacity:          defaultAffinityCapacity,
 		ValidationInterval:        10 * time.Minute,
@@ -143,6 +147,7 @@ func IsRuntimeSettingKey(key string) bool {
 		SettingCodexLiveMode,
 		SettingResponsesWebsocketEnabled,
 		SettingEmptyResponseRetry,
+		SettingTransparentModels,
 		SettingAffinityTTL,
 		SettingAffinityCapacity,
 		SettingValidationInterval,
@@ -257,6 +262,12 @@ func ResolveRuntimeSettings(settings config.Settings) (RuntimeSettings, error) {
 				return RuntimeSettings{}, err
 			}
 			resolved.EmptyResponseRetry = value
+		case SettingTransparentModels:
+			value, err := strictBoolean(key, value)
+			if err != nil {
+				return RuntimeSettings{}, err
+			}
+			resolved.TransparentModels = value
 		case SettingAffinityTTL:
 			seconds, err := positiveWholeSeconds(key, value)
 			if err != nil {
@@ -317,6 +328,7 @@ func ResolveGroupRuntimeSettings(
 		CodexLiveMode:             base.CodexLiveMode,
 		ResponsesWebsocketEnabled: base.ResponsesWebsocketEnabled,
 		EmptyResponseRetry:        base.EmptyResponseRetry,
+		TransparentModels:         base.TransparentModels,
 	}
 	for key, value := range settings {
 		switch key {
@@ -383,6 +395,12 @@ func ResolveGroupRuntimeSettings(
 				return ResolvedGroupSettings{}, err
 			}
 			resolved.EmptyResponseRetry = parsed
+		case SettingTransparentModels:
+			parsed, err := strictBoolean(key, value)
+			if err != nil {
+				return ResolvedGroupSettings{}, err
+			}
+			resolved.TransparentModels = parsed
 		case SettingParameterOverrides:
 			parsed, err := parameteroverride.Compile(value)
 			if err != nil {
@@ -431,7 +449,7 @@ func ValidateRuntimeSetting(key string, value any) error {
 	case SettingRouteStrategy:
 		_, err := parseRouteStrategy(value)
 		return err
-	case SettingAffinityEnabled, SettingResponsesWebsocketEnabled, SettingEmptyResponseRetry:
+	case SettingAffinityEnabled, SettingResponsesWebsocketEnabled, SettingEmptyResponseRetry, SettingTransparentModels:
 		_, err := strictBoolean(key, value)
 		return err
 	case SettingAffinityTTL:

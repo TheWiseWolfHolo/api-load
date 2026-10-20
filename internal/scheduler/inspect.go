@@ -100,6 +100,7 @@ func evaluateTargets(
 	snapshot *state.ConfigSnapshot,
 	index state.ExecutionCandidateIndex,
 	query normalizedQuery,
+	allowWildcard bool,
 ) ([]targetDecision, ReasonCode, error) {
 	if snapshot == nil {
 		return nil, "", fmt.Errorf("%w: nil ConfigSnapshot", ErrInconsistentSnapshot)
@@ -124,22 +125,36 @@ func evaluateTargets(
 		!query.routeRequirement.Valid() || !query.responsesStorePreference.Valid() {
 		return []targetDecision{}, ReasonOperationUnsupported, nil
 	}
-	byOperation := index[query.clientProtocol]
-	if len(byOperation) == 0 {
-		return []targetDecision{}, ReasonNoRouteTarget, nil
-	}
-	byModel, operationSupported := byOperation[query.operation]
-	if !operationSupported {
-		return []targetDecision{}, ReasonOperationUnsupported, nil
-	}
 	modelKey := state.NoModelRouteKey
 	clientSelectedLiveModel := query.clientProtocol == protocol.CodexLive && query.operation == execution.OperationLiveCall
 	if query.externalModel != nil && !clientSelectedLiveModel {
 		modelKey = *query.externalModel
 	}
-	routes := byModel[modelKey]
-	if len(routes) == 0 {
-		return []targetDecision{}, ReasonNoRouteTarget, nil
+	byOperation := index[query.clientProtocol]
+	byModel, operationSupported := byOperation[query.operation]
+	var routes []state.RouteTarget
+	if operationSupported {
+		routes = byModel[modelKey]
+	}
+	// A model without an exact route goes to the groups that forward any model
+	// name unchanged. The upstream model and route mode are set per request.
+	wildcard := false
+	if len(routes) == 0 && allowWildcard && modelKey != state.NoModelRouteKey && !clientSelectedLiveModel {
+		if candidates := snapshot.WildcardCandidates[query.clientProtocol][query.operation]; len(candidates) > 0 {
+			routes = candidates
+			wildcard = true
+		}
+	}
+	if !wildcard {
+		if len(byOperation) == 0 {
+			return []targetDecision{}, ReasonNoRouteTarget, nil
+		}
+		if !operationSupported {
+			return []targetDecision{}, ReasonOperationUnsupported, nil
+		}
+		if len(routes) == 0 {
+			return []targetDecision{}, ReasonNoRouteTarget, nil
+		}
 	}
 
 	decisions := make([]targetDecision, 0, len(routes))
@@ -152,6 +167,14 @@ func evaluateTargets(
 				ErrInconsistentSnapshot,
 				route.GroupID,
 			)
+		}
+		if wildcard {
+			mode, supported := route.ResolvedTarget.ModeForModel(query.clientProtocol, query.operation, modelKey)
+			if !supported {
+				continue
+			}
+			route.Mode = mode
+			route.UpstreamModelID = modelKey
 		}
 		requirementOK, storeDowngraded, requirementReason := routeRequirementSatisfied(query, route)
 		decision := targetDecision{
@@ -365,6 +388,7 @@ func Inspect(
 		snapshot,
 		snapshot.ExecutionRouteCatalog,
 		normalized,
+		false,
 	)
 	if err != nil {
 		return Inspection{}, err

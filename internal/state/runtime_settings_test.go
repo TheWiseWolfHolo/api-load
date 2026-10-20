@@ -60,6 +60,7 @@ func TestCompilePublishesDefaultRuntimeSettingsWithoutGroups(t *testing.T) {
 		AffinityEnabled:           true,
 		CodexLiveMode:             CodexLiveDirect,
 		ResponsesWebsocketEnabled: true,
+		TransparentModels:         true,
 		AffinityTTL:               time.Hour,
 		AffinityCapacity:          10_000,
 		ValidationInterval:        10 * time.Minute,

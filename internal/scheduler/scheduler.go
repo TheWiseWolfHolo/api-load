@@ -107,6 +107,7 @@ func CandidateGroupIDsForQuery(snapshot *state.ConfigSnapshot, query Query) []ui
 		snapshot,
 		snapshot.ExecutionCandidates,
 		normalizeQuery(query),
+		true,
 	)
 	if err != nil {
 		return []uint{}
@@ -406,6 +407,7 @@ func filterTargetsWithReason(
 		snapshot,
 		snapshot.ExecutionCandidates,
 		normalizeQuery(query),
+		true,
 	)
 	if err != nil {
 		return nil, ""
