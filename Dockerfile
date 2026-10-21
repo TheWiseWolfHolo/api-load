@@ -8,7 +8,7 @@ COPY ./web .
 RUN VITE_VERSION=${VERSION} npm run build
 
 
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder2
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS builder2
 
 ARG VERSION=1.0.0
 ARG TARGETOS
