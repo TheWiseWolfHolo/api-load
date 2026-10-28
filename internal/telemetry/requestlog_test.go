@@ -17,6 +17,7 @@ func TestNoopRequestLogSinkDropsSafely(t *testing.T) {
 func TestRequestTelemetryContractUsesExactFieldAllowlist(t *testing.T) {
 	allowlists := map[reflect.Type][]string{
 		reflect.TypeOf(RequestEvent{}): {
+			"ServiceEvidence",
 			"RequestAudit",
 			"AutoDecision",
 			"RequestID",
@@ -41,6 +42,17 @@ func TestRequestTelemetryContractUsesExactFieldAllowlist(t *testing.T) {
 			"Reasoning",
 			"Attempts",
 			"Usage",
+		},
+		reflect.TypeOf(ServiceEvidence{}): {
+			"Format",
+			"Input",
+			"Query",
+			"Documents",
+			"InputType",
+			"RequestedDimensions",
+			"IdentityGeneration",
+			"ResultCheck",
+			"Quality",
 		},
 		reflect.TypeOf(Attempt{}): {
 			"Sequence",
