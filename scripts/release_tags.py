@@ -19,6 +19,13 @@ class ReleaseTagError(ValueError):
     pass
 
 
+def declared_version(source: Path) -> str:
+    version = (source / "VERSION").read_text(encoding="utf-8").strip()
+    if not _release_tag.fullmatch("v" + version):
+        raise ReleaseTagError("VERSION 必须是有效的 2.x 版本号，不带 v 前缀")
+    return version
+
+
 def parse_remote_tags(output: str) -> dict[str, str]:
     tags: dict[str, str] = {}
     for line in output.splitlines():

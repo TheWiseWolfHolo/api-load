@@ -1,3 +1,4 @@
+import type { TransparentPolicy } from '@shared/transparent'
 import type { CodexLiveMode } from '@shared/codex-live'
 import type { ErrorRule } from '@shared/error-rules'
 import type { ProtocolValue } from './protocols'
@@ -18,7 +19,8 @@ export type FailureCategory =
   | 'ambiguous'
 
 export type GroupCollectionStatus = 'available' | 'unavailable' | 'disabled'
-export type GroupUnavailableReason = 'no_available_credentials' | 'no_models'
+export type GroupUnavailableReason =
+  'no_available_credentials' | 'no_models' | 'transparent_proxy_disabled'
 export type GroupCollectionSort = 'recent' | 'status' | 'name' | 'credentials' | 'created'
 export type ModelPricingStatus = 'pending' | 'configured'
 export type ChannelParamsDto = Record<string, string>
@@ -316,6 +318,7 @@ export interface CredentialItemDto {
   recent_failure_count: number
   consecutive_failure_count: number
   last_failure_category: FailureCategory
+  last_failure_summary?: string
   last_status_code: number | null
   cooldown_until_ms: number | null
   last_used_at_ms?: number
@@ -522,6 +525,8 @@ export interface HealthQuotaCredentialDto {
 }
 
 export interface AccessKeyFiltersDto {
+  transparent?: TransparentPolicy
+  allow_model_less_resources?: boolean
   groups_restricted?: boolean
   groups: number[]
   protocols: AccessProtocol[]

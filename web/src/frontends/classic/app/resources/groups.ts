@@ -1,3 +1,4 @@
+import { readTransparentProxy, type TransparentProxy } from '@shared/transparent'
 import { readConcurrency } from '@shared/concurrency'
 import { codexLiveModes, type CodexLiveMode } from '@shared/codex-live'
 import { readErrorRules, type ErrorRule } from '@shared/error-rules'
@@ -121,9 +122,17 @@ const credentialCountFields = [
   'disabled',
 ] as const
 const groupCollectionStatuses = ['available', 'unavailable', 'disabled'] as const
-const groupUnavailableReasons = ['no_available_credentials', 'no_models'] as const
+const groupUnavailableReasons = [
+  'no_available_credentials',
+  'no_models',
+  'transparent_proxy_disabled',
+] as const
 const connectionTypes = ['api_key', 'subscription'] as const
 const runtimeSettingFields = [
+  'account_pool',
+  'transparent_proxy',
+  'account_concurrency_limit',
+  'account_rpm_limit',
   'error_rules',
   'concurrency_limit',
   'first_byte_timeout',
@@ -144,6 +153,10 @@ export interface HeaderRulesDto {
 }
 
 export interface GroupRuntimeConfigDto {
+  transparent_proxy?: TransparentProxy
+  account_pool?: string
+  account_concurrency_limit?: number
+  account_rpm_limit?: number
   error_rules?: ErrorRule[]
   first_byte_timeout?: number
   request_timeout?: number
@@ -159,6 +172,10 @@ export interface GroupRuntimeConfigDto {
 }
 
 export interface GroupEffectiveConfigDto {
+  transparent_proxy: TransparentProxy
+  account_pool: string
+  account_concurrency_limit: number
+  account_rpm_limit: number
   error_rules: ErrorRule[]
   first_byte_timeout: number
   request_timeout: number
@@ -381,6 +398,12 @@ function projectRuntimeConfig(
   const record = projectRecord(value)
   assertNoSecretLikeFields(record, complete ? runtimeSettingFields : groupRuntimeSettingFields)
   const result: GroupRuntimeConfigDto = {}
+  if (record.transparent_proxy !== undefined)
+    result.transparent_proxy = readTransparentProxy(record.transparent_proxy)
+  if (record.account_pool !== undefined) result.account_pool = projectString(record.account_pool)
+  for (const field of ['account_concurrency_limit', 'account_rpm_limit'] as const)
+    if (record[field] !== undefined)
+      result[field] = projectSafeInteger(record[field], { minimum: 0 })
   if (complete || Object.prototype.hasOwnProperty.call(record, 'error_rules'))
     result.error_rules = readErrorRules(record.error_rules ?? [])
 

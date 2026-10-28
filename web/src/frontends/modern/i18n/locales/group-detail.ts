@@ -143,7 +143,11 @@ export const zhCN = {
   channelSwitchAnyway: '仍然切换',
   channelSwitchConflict: '{groups} 已经使用相同的上游目标。',
   channelSwitchFailed: '切换渠道失败，请重试。',
+  accountPool: '共享账号标识',
+  accountPoolHelp: '属于同一供应商账号的分组填写相同标识。共同使用最小的非零共享限制；空值不合并。',
   runtimeFields: {
+    account_concurrency_limit: '账号共享并发上限',
+    account_rpm_limit: '账号共享每分钟请求上限',
     concurrency_limit: '并发上限',
     first_byte_timeout: '首响应超时',
     request_timeout: '单次请求超时',
@@ -309,7 +313,12 @@ export const enUS: typeof zhCN = {
   channelSwitchAnyway: 'Switch anyway',
   channelSwitchConflict: '{groups} already use the same upstream target.',
   channelSwitchFailed: 'Could not switch the channel. Try again.',
+  accountPool: 'Shared account identifier',
+  accountPoolHelp:
+    'Use the same identifier for groups belonging to one provider account. The smallest positive shared limit applies. Empty keeps groups separate.',
   runtimeFields: {
+    account_concurrency_limit: 'Shared account concurrency',
+    account_rpm_limit: 'Shared account requests per minute',
     concurrency_limit: 'Concurrency limit',
     first_byte_timeout: 'First response timeout',
     request_timeout: 'Request timeout',
@@ -472,7 +481,12 @@ export const jaJP: typeof zhCN = {
   channelSwitchAnyway: 'それでも切り替える',
   channelSwitchConflict: '{groups} が同じ上流ターゲットを使用しています。',
   channelSwitchFailed: 'チャネルを切り替えられませんでした。再試行してください。',
+  accountPool: '共有アカウント識別子',
+  accountPoolHelp:
+    '同じアカウントのグループに同じ識別子を設定します。正の共有制限の最小値を使用します。',
   runtimeFields: {
+    account_concurrency_limit: '共有同時実行数',
+    account_rpm_limit: '共有毎分リクエスト数',
     concurrency_limit: '同時実行数の上限',
     first_byte_timeout: '初回応答タイムアウト',
     request_timeout: 'リクエストタイムアウト',

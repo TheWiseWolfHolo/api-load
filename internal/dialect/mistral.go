@@ -2,6 +2,7 @@ package dialect
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -55,11 +56,51 @@ func (d *Mistral) InspectRequest(request *ParsedRequest) (RequestMetadata, error
 		Stream:           stream,
 		Operation:        operation,
 		RouteRequirement: execution.RouteRequirementNative,
+		ObserveUsage:     operation != execution.OperationMistralVoices,
 	}
 	if model != "" {
 		metadata.Model = &model
 	}
+	if operation == execution.OperationMistralOCR {
+		metadata.ResourceReferences, err = mistralOCRFileReferences(request.Body)
+		if err != nil {
+			return RequestMetadata{}, err
+		}
+	}
 	return metadata, nil
+}
+
+func mistralOCRFileReferences(body []byte) ([]string, error) {
+	root, err := decodeJSONObject(body)
+	if err != nil {
+		return nil, &RequestValidationError{Field: "body", Rule: "json_object_required"}
+	}
+	raw, exists := root["document"]
+	if !exists {
+		return nil, nil
+	}
+	document, err := decodeJSONObject(raw)
+	if err != nil {
+		return nil, &RequestValidationError{Field: "document", Rule: "object_required"}
+	}
+	var kind string
+	if raw, exists := document["type"]; exists && json.Unmarshal(raw, &kind) != nil {
+		return nil, &RequestValidationError{Field: "document.type", Rule: "string_required"}
+	}
+	rawID, hasID := document["file_id"]
+	// Mistral's FileChunk defaults its type to file, so an omitted type must
+	// receive the same ownership checks as an explicit file document.
+	if kind != "file" && !hasID {
+		return nil, nil
+	}
+	if kind != "" && kind != "file" {
+		return nil, &RequestValidationError{Field: "document.file_id", Rule: "conflicting_document_type"}
+	}
+	var id string
+	if !hasID || json.Unmarshal(rawID, &id) != nil || id == "" || strings.TrimSpace(id) != id || strings.ContainsAny(id, "/%\\?#\x00\r\n") {
+		return nil, &RequestValidationError{Field: "document.file_id", Rule: "invalid_resource_id"}
+	}
+	return []string{NativeResourceKey("mistral", "files", id)}, nil
 }
 
 // RewriteRequestModel replaces the client model with the upstream model id.

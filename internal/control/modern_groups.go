@@ -67,6 +67,9 @@ func (s *Service) ListModernGroups(ctx context.Context) (ModernGroupsResponse, e
 		if endpoint == "" {
 			endpoint = definition.DefaultBaseURL
 		}
+		if record.ChannelID == channel.TransparentHTTP {
+			endpoint = record.TransparentHTTPBaseURL
+		}
 		result.Items = append(result.Items, ModernGroupItem{
 			Priority:    record.Priority,
 			Concurrency: record.Concurrency,
@@ -91,7 +94,9 @@ func modernGroupAvailability(record groupCollectionRecord) string {
 		return "paused"
 	case record.CredentialCounts.Total == 0:
 		return "no_credentials"
-	case record.ModelCount == 0 && record.ChannelID != channel.Codex:
+	case record.ChannelID == channel.TransparentHTTP && !record.TransparentHTTPEnabled:
+		return "transparent_proxy_disabled"
+	case record.ModelCount == 0 && record.ChannelID != channel.Codex && !record.TransparentHTTPEnabled:
 		return "no_models"
 	case record.CredentialCounts.Available == 0:
 		return "unavailable"

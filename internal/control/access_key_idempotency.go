@@ -17,11 +17,13 @@ import (
 )
 
 type accessKeyFilterDigestBody struct {
-	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
-	Groups           []uint              `json:"groups"`
-	Protocols        []protocol.Protocol `json:"protocols"`
-	Models           []string            `json:"models"`
-	AllowedCIDRs     []string            `json:"allowed_cidrs,omitempty"`
+	Transparent             *state.TransparentScope `json:"transparent,omitempty"`
+	AllowModelLessResources bool                    `json:"allow_model_less_resources,omitempty"`
+	GroupsRestricted        bool                    `json:"groups_restricted,omitempty"`
+	Groups                  []uint                  `json:"groups"`
+	Protocols               []protocol.Protocol     `json:"protocols"`
+	Models                  []string                `json:"models"`
+	AllowedCIDRs            []string                `json:"allowed_cidrs,omitempty"`
 }
 
 type accessKeyCreateDigestBody struct {
@@ -71,6 +73,9 @@ func (s *Service) CreateAccessKeyIdempotent(
 	costLimitRules, err := normalizeAccessKeyCostLimitRules(request.CostLimitRules, false)
 	if err != nil {
 		return AccessKeyCreateResult{}, err
+	}
+	if filters.Transparent != nil && len(costLimitRules) > 0 {
+		return AccessKeyCreateResult{}, app_errors.ErrValidation
 	}
 	status := state.AccessKeyStatusActive
 	if request.Status != nil {
@@ -128,7 +133,7 @@ func (s *Service) CreateAccessKeyIdempotent(
 			if err := validateFutureExpiresAtMS(request.ExpiresAtMS, operationStartedAt); err != nil {
 				return idempotentMutationResult{}, err
 			}
-			if err := validateFilterGroupReferences(tx, filters.Groups); err != nil {
+			if err := validateFilterGroupReferences(tx, accessKeyGroupReferences(filters)); err != nil {
 				return idempotentMutationResult{}, err
 			}
 			row, plaintext, err := s.newAccessKeyRow(name, filters, rpmLimit, request.Key)
@@ -214,11 +219,13 @@ func (s *Service) CreateAccessKeyIdempotent(
 
 func canonicalAccessKeyFilterSet(filters AccessKeyFilters) accessKeyFilterDigestBody {
 	result := accessKeyFilterDigestBody{
-		GroupsRestricted: filters.GroupsRestricted,
-		Groups:           append([]uint(nil), filters.Groups...),
-		Protocols:        append([]protocol.Protocol(nil), filters.Protocols...),
-		Models:           append([]string(nil), filters.Models...),
-		AllowedCIDRs:     append([]string(nil), filters.AllowedCIDRs...),
+		Transparent:             filters.Transparent.Clone(),
+		AllowModelLessResources: filters.AllowModelLessResources,
+		GroupsRestricted:        filters.GroupsRestricted,
+		Groups:                  append([]uint(nil), filters.Groups...),
+		Protocols:               append([]protocol.Protocol(nil), filters.Protocols...),
+		Models:                  append([]string(nil), filters.Models...),
+		AllowedCIDRs:            append([]string(nil), filters.AllowedCIDRs...),
 	}
 	sort.Slice(result.Groups, func(left, right int) bool {
 		return result.Groups[left] < result.Groups[right]

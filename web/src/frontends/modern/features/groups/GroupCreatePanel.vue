@@ -659,6 +659,7 @@ useMessageSource(() => (errorText.value ? { text: errorText.value, tone: 'danger
             @dirty="stagingDirty = $event"
           />
           <GroupModelPicker
+            v-if="channel?.id !== 'transparent_http'"
             ref="modelPicker"
             v-model="models"
             :connection-revision="connectionRevision"

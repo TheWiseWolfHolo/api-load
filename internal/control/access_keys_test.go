@@ -17,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"gpt-load/internal/accessquota"
+
 	"gpt-load/internal/platform/config"
 	"gpt-load/internal/protocol"
 	"gpt-load/internal/state"
@@ -143,6 +145,65 @@ func TestAccessKeyFiltersNormalizeAndAcceptExistingDisabledGroups(t *testing.T) 
 	}
 }
 
+func TestAccessKeyResourcePermissionRoundTripsAndCanBeRevoked(t *testing.T) {
+	t.Parallel()
+	fixture := newServiceFixture(t)
+	filters := AccessKeyFilters{Protocols: []protocol.Protocol{protocol.NativeServices}, Models: []string{"allowed-model"}, AllowModelLessResources: true}
+	created, err := fixture.service.CreateAccessKey(t.Context(), AccessKeyCreateRequest{Name: "native resources", Filters: &filters})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row models.AccessKey
+	if err = fixture.db.First(&row, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !created.Filters.AllowModelLessResources || !fixture.manager.Current().AccessKeysByHash[row.KeyHash].Filters.AllowModelLessResources {
+		t.Fatal("explicit resource permission was lost")
+	}
+	filters.AllowModelLessResources = false
+	updated, err := fixture.service.UpdateAccessKey(t.Context(), created.ID, AccessKeyUpdateRequest{Filters: &filters})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Filters.AllowModelLessResources || fixture.manager.Current().AccessKeysByHash[row.KeyHash].Filters.AllowModelLessResources {
+		t.Fatal("resource permission was not revoked")
+	}
+}
+
+func TestTransparentAccessScopeIsPersistedWithoutModelOrCostBypass(t *testing.T) {
+	t.Parallel()
+	fixture := newServiceFixture(t)
+	group := validControlGroup("transparent-scope")
+	if err := fixture.db.Create(group).Error; err != nil {
+		t.Fatal(err)
+	}
+	filters := AccessKeyFilters{Protocols: []protocol.Protocol{protocol.TransparentHTTP}, Transparent: &state.TransparentScope{GroupIDs: []uint{group.ID}, Methods: []string{"GET", "POST"}, Paths: []state.TransparentPathRule{{Path: "/v1/files", Match: "subtree"}}}}
+	created, err := fixture.service.CreateAccessKey(t.Context(), AccessKeyCreateRequest{Name: "opaque scoped client", Filters: &filters})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row models.AccessKey
+	if err = fixture.db.First(&row, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if created.Filters.Transparent == nil || !fixture.manager.Current().AccessKeysByHash[row.KeyHash].Filters.AllowsTransparent(group.ID, "GET", "/v1/files/item") {
+		t.Fatal("transparent scope was not persisted and published")
+	}
+	filters.Models = []string{"model-restricted"}
+	if _, err = fixture.service.UpdateAccessKey(t.Context(), created.ID, AccessKeyUpdateRequest{Filters: &filters}); err == nil {
+		t.Fatal("opaque body bypassed a model restriction")
+	}
+	filters.Models = nil
+	limits := OptionalAccessKeyCostLimitRules{Set: true, Values: []AccessKeyCostLimitRuleRequest{{Kind: accessquota.KindTotal, LimitUSD: "1"}}}
+	if _, err = fixture.service.UpdateAccessKey(t.Context(), created.ID, AccessKeyUpdateRequest{CostLimitRules: limits}); err == nil {
+		t.Fatal("opaque usage was presented as cost-limited")
+	}
+	filters.Protocols = nil
+	if _, err = fixture.service.UpdateAccessKey(t.Context(), created.ID, AccessKeyUpdateRequest{Filters: &filters}); err == nil {
+		t.Fatal("implicit all-protocol permission authorized transparent access")
+	}
+}
+
 func TestAccessKeyCreateAcceptsAllEnabledProtocolsInCanonicalOrder(t *testing.T) {
 	t.Parallel()
 	fixture := newServiceFixture(t)
@@ -153,6 +214,7 @@ func TestAccessKeyCreateAcceptsAllEnabledProtocolsInCanonicalOrder(t *testing.T)
 		Filters: &AccessKeyFilters{
 			Protocols: []protocol.Protocol{
 				protocol.GeminiEmbeddings,
+				protocol.CohereEmbeddings, protocol.NativeServices, protocol.TransparentHTTP,
 				protocol.Gemini,
 				protocol.OpenAIImages,
 				protocol.OpenAIEmbeddings,

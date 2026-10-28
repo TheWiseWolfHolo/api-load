@@ -4,6 +4,8 @@ APP := gpt-load
 WEB_DIR := web
 GO ?= go
 PNPM ?= corepack pnpm
+VERSION := $(shell cat VERSION)
+VERSION_FLAGS := -ldflags "-X gpt-load/internal/platform/version.Version=$(VERSION)"
 
 .PHONY: _web-deps
 _web-deps:
@@ -15,15 +17,15 @@ _web-build: _web-deps
 
 .PHONY: dev
 dev: _web-build ## Build the Web UI and run with race detection
-	$(GO) run -race .
+	$(GO) run $(VERSION_FLAGS) -race .
 
 .PHONY: run
 run: _web-build ## Build the Web UI and run the application
-	$(GO) run .
+	$(GO) run $(VERSION_FLAGS) .
 
 .PHONY: build
 build: _web-build ## Build the Web UI and application binary
-	$(GO) build -o $(APP) .
+	$(GO) build $(VERSION_FLAGS) -o $(APP) .
 
 .PHONY: test
 test: ## Run Go unit tests
@@ -37,7 +39,7 @@ check: _web-deps ## Run source checks and build
 	$(PNPM) --dir $(WEB_DIR) run lint
 	$(PNPM) --dir $(WEB_DIR) run format
 	$(PNPM) --dir $(WEB_DIR) run build
-	$(GO) build -o $(APP) .
+	$(GO) build $(VERSION_FLAGS) -o $(APP) .
 	$(GO) test -count=1 . ./internal/...
 	git --no-pager diff --check
 

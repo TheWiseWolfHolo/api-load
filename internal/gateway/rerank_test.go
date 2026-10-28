@@ -97,7 +97,7 @@ func TestRerankGatewayRoutesObservesAndProtectsAccess(t *testing.T) {
 				if observation.Result.State != usage.StateComplete || observation.Result.Tokens.UncachedInput != 1_000_000 || observation.Pricing.EstimatedCostNanoUSD != 2_000_000_000 || observation.Pricing.CostState != "priced" {
 					t.Fatalf("usage=%#v", observation)
 				}
-			} else if observation.Result.State != usage.StateMissing || observation.Pricing.CostState != "unpriced" {
+			} else if observation.Result.State != usage.StatePartial || observation.Result.MeasuredUnits.SearchUnits == nil || observation.Pricing.CostState != "unpriced" {
 				t.Fatalf("usage=%#v", observation)
 			}
 			encoded, err := json.Marshal(events)

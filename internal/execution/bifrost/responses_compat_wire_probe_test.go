@@ -13,7 +13,7 @@ import (
 	"gpt-load/internal/protocol"
 )
 
-func TestOpenAICompatibleResponsesConversionDropsReasoningEffort(t *testing.T) {
+func TestOpenAICompatibleResponsesConversionPreservesReasoningEffort(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -43,7 +43,7 @@ func TestOpenAICompatibleResponsesConversionDropsReasoningEffort(t *testing.T) {
 			},
 		},
 		{
-			name: "reasoning effort is not forwarded",
+			name: "reasoning effort is forwarded",
 			body: `{"model":"deepseek-v4.1-flash","input":"hi","reasoning":{"effort":"medium"}}`,
 			want: map[string]any{
 				"model": "upstream-model",
@@ -53,7 +53,7 @@ func TestOpenAICompatibleResponsesConversionDropsReasoningEffort(t *testing.T) {
 			},
 		},
 		{
-			name: "reasoning budget is not forwarded",
+			name: "reasoning budget is rejected",
 			body: `{"model":"deepseek-v4.1-flash","input":"hi","reasoning":{"effort":"medium","max_tokens":32768}}`,
 			want: map[string]any{
 				"model": "upstream-model",
@@ -86,6 +86,12 @@ func TestOpenAICompatibleResponsesConversionDropsReasoningEffort(t *testing.T) {
 			spec.TargetConfig = target
 			spec = freezeTestAttempt(spec)
 			result := runtime.Execute(context.Background(), spec)
+			if test.name == "reasoning budget is rejected" {
+				if result.Error == nil || result.Error.Code != execution.ErrorCodeCriticalSemanticLoss || len(got) != 0 {
+					t.Fatal("exact budget was lost")
+				}
+				return
+			}
 			if result.Error != nil || result.StatusCode != http.StatusOK {
 				t.Fatalf("result = %+v body=%s", result, got)
 			}
@@ -93,9 +99,10 @@ func TestOpenAICompatibleResponsesConversionDropsReasoningEffort(t *testing.T) {
 			if err := json.Unmarshal(got, &payload); err != nil {
 				t.Fatalf("decode upstream body: %v; body=%s", err, got)
 			}
-			if _, ok := payload["reasoning_effort"]; ok {
-				t.Fatalf("forwarded reasoning_effort: %s", got)
+			if test.name == "reasoning effort is forwarded" {
+				test.want["reasoning_effort"] = "medium"
 			}
+
 			if _, ok := payload["reasoning"]; ok {
 				t.Fatalf("forwarded reasoning: %s", got)
 			}

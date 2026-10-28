@@ -14,7 +14,7 @@ func Cohere() spec.Module {
 			Mark:        "CO",
 			Icon:        "cohere",
 			SearchTerms: []string{"cohere ai", "rerank"},
-			Description: "Cohere text rerank API",
+			Description: "Cohere native multimodal embeddings and rerank API",
 			Connection: spec.Connection{
 				Type:            spec.ConnectionAPIKey,
 				CredentialInput: "batch_text",
@@ -34,6 +34,8 @@ func Cohere() spec.Module {
 				FixedBaseURL:      "https://api.cohere.ai/v2",
 			},
 			Routes: []spec.Route{
+				spec.NewRoute(protocol.CohereEmbeddings, execution.OperationEmbeddingsCreate, execution.RouteNative),
+				spec.NewRoute(protocol.CohereEmbeddings, execution.OperationProbe, execution.RouteNative),
 				spec.NewRoute(protocol.Rerank, execution.OperationRerank, execution.RouteNative),
 				spec.NewRoute(protocol.Rerank, execution.OperationProbe, execution.RouteNative),
 			},

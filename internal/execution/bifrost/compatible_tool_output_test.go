@@ -116,30 +116,17 @@ func toolMessageContent(t *testing.T, upstream []byte) any {
 // A tool result that carries an image used to be forwarded as a content array,
 // which strict Chat Completions upstreams reject with
 // "Input should be a valid string". See tbphp/gpt-load#743.
-func TestOpenAICompatibleToolOutputImageIsFlattenedToString(t *testing.T) {
-	t.Parallel()
-
+func TestOpenAICompatibleToolOutputImageIsRejectedBeforeDispatch(t *testing.T) {
 	for _, stream := range []bool{false, true} {
-		t.Run(fmt.Sprintf("stream=%t", stream), func(t *testing.T) {
-			t.Parallel()
-			upstream := runCompatibleResponses(t, toolOutputRequestBody(t, []any{
-				map[string]any{"type": "input_text", "text": "looked at the screenshot"},
-				map[string]any{"type": "input_image", "detail": "auto", "image_url": "data:image/png;base64,AA=="},
-			}, stream), stream)
-
-			content := toolMessageContent(t, upstream)
-			text, ok := content.(string)
-			if !ok {
-				t.Fatalf("tool content = %T (%v), want string; body=%s", content, content, upstream)
-			}
-			want := "looked at the screenshot\n\n[image omitted: unsupported by upstream]"
-			if text != want {
-				t.Fatalf("tool content = %q, want %q", text, want)
-			}
-			if strings.Contains(string(upstream), "image_url") {
-				t.Fatalf("text-only upstream still received an image part: %s", upstream)
-			}
-		})
+		assertRejectedToolOutput(t, toolOutputRequestBody(t, []any{map[string]any{"type": "input_image", "image_url": "data:image/png;base64,AA=="}}, stream), stream)
+	}
+}
+func assertRejectedToolOutput(t *testing.T, body []byte, stream bool) {
+	t.Helper()
+	spec := compatibleTestSpec(t, "https://synthetic.example", string(body), stream)
+	_, failure := newTestRuntime(t).prepare(spec, stream)
+	if failure == nil || failure.Error == nil || failure.Error.Code != execution.ErrorCodeCriticalSemanticLoss || failure.DispatchState != execution.DispatchNotSent {
+		t.Fatalf("expected semantic rejection before dispatch, got %+v", failure)
 	}
 }
 
@@ -183,6 +170,10 @@ func TestOpenAICompatibleToolOutputFlatteningCoversEveryPartType(t *testing.T) {
 		for _, stream := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/stream=%t", test.name, stream), func(t *testing.T) {
 				t.Parallel()
+				if test.name != "text only" {
+					assertRejectedToolOutput(t, toolOutputRequestBody(t, test.blocks, stream), stream)
+					return
+				}
 				upstream := runCompatibleResponses(t, toolOutputRequestBody(t, test.blocks, stream), stream)
 				content := toolMessageContent(t, upstream)
 				text, ok := content.(string)
@@ -240,13 +231,7 @@ func TestOpenAICompatibleUserImageContentIsNotFlattened(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			upstream := runCompatibleResponses(t, body, stream)
-			if !strings.Contains(string(upstream), "image_url") {
-				t.Fatalf("user image part was dropped: %s", upstream)
-			}
-			if content := toolMessageContent(t, upstream); content != "[image omitted: unsupported by upstream]" {
-				t.Fatalf("tool image was not flattened: %s", upstream)
-			}
+			assertRejectedToolOutput(t, body, stream)
 		})
 	}
 }

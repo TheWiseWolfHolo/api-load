@@ -135,6 +135,7 @@ type UsageObservation struct {
 }
 
 type RequestEvent struct {
+	ServiceEvidence       *ServiceEvidence
 	RequestAudit          *requestaudit.Result
 	AutoDecision          *automodel.Decision
 	RequestID             string
@@ -161,6 +162,19 @@ type RequestEvent struct {
 	Usage                 UsageObservation
 }
 
+// ServiceEvidence contains only enumerated format facts, never input values.
+type ServiceEvidence struct {
+	Format              string   `json:"format"`
+	Input               []string `json:"input,omitempty"`
+	Query               []string `json:"query,omitempty"`
+	Documents           []string `json:"documents,omitempty"`
+	InputType           string   `json:"input_type,omitempty"`
+	RequestedDimensions int      `json:"requested_dimensions,omitempty"`
+	IdentityGeneration  uint64   `json:"identity_generation"`
+	ResultCheck         string   `json:"result_check"`
+	Quality             string   `json:"quality"`
+}
+
 type RequestLogSink interface {
 	Emit(RequestEvent)
 }
@@ -174,4 +188,5 @@ const (
 	AffinityPromptPrefix       = "prompt_prefix"
 	AffinityPromptCacheKey     = "prompt_cache_key"
 	AffinityResponseContinuity = "response_continuity"
+	AffinityResourceOwnership  = "resource_ownership"
 )

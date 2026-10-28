@@ -20,6 +20,10 @@ const (
 	SettingDefaultAccessKeyConcurrencyLimit = "default_access_key_concurrency_limit"
 	SettingDefaultGroupConcurrencyLimit     = "default_group_concurrency_limit"
 	SettingConcurrencyLimit                 = "concurrency_limit"
+	SettingTransparentProxy                 = "transparent_proxy"
+	SettingAccountPool                      = "account_pool"
+	SettingAccountConcurrencyLimit          = "account_concurrency_limit"
+	SettingAccountRPMLimit                  = "account_rpm_limit"
 	SettingFirstByteTimeout                 = "first_byte_timeout"
 	SettingRequestTimeout                   = "request_timeout"
 	SettingStreamIdleTimeout                = "stream_idle_timeout"
@@ -94,6 +98,10 @@ type RuntimeSettings struct {
 }
 
 type ResolvedGroupSettings struct {
+	TransparentProxy          TransparentProxyConfig
+	AccountPool               string
+	AccountConcurrencyLimit   int64
+	AccountRPMLimit           int64
 	ErrorRules                health.ErrorRules
 	ConcurrencyLimit          int64
 	Timeouts                  TimeoutConfig
@@ -332,6 +340,28 @@ func ResolveGroupRuntimeSettings(
 	}
 	for key, value := range settings {
 		switch key {
+		case SettingTransparentProxy:
+			parsed, err := parseTransparentProxy(value)
+			if err != nil {
+				return ResolvedGroupSettings{}, err
+			}
+			resolved.TransparentProxy = parsed
+		case SettingAccountPool:
+			name, ok := value.(string)
+			if !ok || len(name) > 128 || strings.ContainsAny(name, "\r\n\x00") {
+				return ResolvedGroupSettings{}, fmt.Errorf("invalid shared account name")
+			}
+			resolved.AccountPool = strings.TrimSpace(name)
+		case SettingAccountConcurrencyLimit, SettingAccountRPMLimit:
+			limit, err := nonNegativeWholeNumber(key, value)
+			if err != nil {
+				return ResolvedGroupSettings{}, err
+			}
+			if key == SettingAccountConcurrencyLimit {
+				resolved.AccountConcurrencyLimit = int64(limit)
+			} else {
+				resolved.AccountRPMLimit = int64(limit)
+			}
 		case SettingConcurrencyLimit:
 			limit, err := nonNegativeWholeNumber(key, value)
 			if err != nil {
@@ -416,6 +446,9 @@ func ResolveGroupRuntimeSettings(
 		default:
 			return ResolvedGroupSettings{}, fmt.Errorf("unknown group setting %q", key)
 		}
+	}
+	if resolved.AccountPool == "" && (resolved.AccountConcurrencyLimit > 0 || resolved.AccountRPMLimit > 0) {
+		return ResolvedGroupSettings{}, fmt.Errorf("shared account name is required when setting shared limits")
 	}
 	return resolved, nil
 }

@@ -45,7 +45,7 @@ func convertedRouteImplemented(providerKind channel.ProviderKind, clientProtocol
 		return clientProtocol != protocol.OpenAIResponses && clientProtocol != protocol.Rerank &&
 			clientProtocol != protocol.Decisions && clientProtocol.Valid()
 	case execution.OperationProbe:
-		return clientProtocol != protocol.Rerank && clientProtocol.Valid()
+		return clientProtocol != protocol.Rerank && clientProtocol != protocol.CohereEmbeddings && clientProtocol.Valid()
 	case execution.OperationChatCompletion:
 		return clientProtocol == protocol.OpenAICompletions ||
 			clientProtocol == protocol.Anthropic ||
@@ -72,6 +72,12 @@ func nativeRouteImplemented(
 		}
 		return (providerKind == channel.ProviderJev || providerKind == channel.ProviderOpenRouter) &&
 			(operation == execution.OperationDecisionsCreate || operation == execution.OperationProbe)
+	}
+	if clientProtocol == protocol.NativeServices {
+		return providerKind == channel.ProviderOpenAICompatible && (operation == execution.OperationResourceCreate || operation == execution.OperationResourceRead || operation == execution.OperationResourceDelete || operation == execution.OperationResourceCancel)
+	}
+	if clientProtocol == protocol.CohereEmbeddings {
+		return (providerKind == channel.ProviderOpenAICompatible || providerKind == channel.ProviderMultiProtocolGateway) && (operation == execution.OperationEmbeddingsCreate || operation == execution.OperationProbe)
 	}
 	if clientProtocol == protocol.Rerank {
 		return (providerKind == channel.ProviderOpenAICompatible || providerKind == channel.ProviderMultiProtocolGateway) && (operation == execution.OperationRerank || operation == execution.OperationProbe)
@@ -148,6 +154,9 @@ func nativeRouteImplemented(
 	case channel.ProviderGroq:
 		return clientProtocol == protocol.OpenAICompletions && standardProtocolOperation(clientProtocol, operation)
 	case channel.ProviderGoogleVertex:
+		if clientProtocol == protocol.GeminiEmbeddings {
+			return operation == execution.OperationEmbeddingsCreate
+		}
 		return clientProtocol == protocol.Gemini &&
 			(operation == execution.OperationChatCompletion || operation == execution.OperationProbe)
 	default:

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { transparentMessages } from '@modern/i18n/locales/transparent'
+import { resourcePermissionMessages } from '@modern/i18n/locales/resource-permission'
 import { numberFormatter } from '@modern/components/ui/intl-formatters'
 import { protocolLabel } from '@modern/i18n/protocols'
 import { computed } from 'vue'
@@ -28,7 +30,25 @@ const tags = computed(() => {
     { key: 'models', label: t('accessKeys.models'), values: scope.models },
     { key: 'sources', label: t('accessKeys.sourceTag'), values: scope.allowed_cidrs },
   ]
+  const resourceLabels =
+    resourcePermissionMessages[locale.value as keyof typeof resourcePermissionMessages] ??
+    resourcePermissionMessages['en-US']
+  const transparentLabels =
+    transparentMessages[locale.value as keyof typeof transparentMessages] ??
+    transparentMessages['en-US']
   return [
+    ...(scope.transparent
+      ? [
+          {
+            key: 'transparent',
+            text: transparentLabels.scopeTag,
+            tooltip: transparentLabels.accessHelp,
+          },
+        ]
+      : []),
+    ...(scope.allow_model_less_resources
+      ? [{ key: 'resources', text: resourceLabels.title, tooltip: resourceLabels.help }]
+      : []),
     ...(scope.groups_restricted && !scope.groups.length
       ? [{ key: 'groups-empty', text: t('accessKeys.noGroups'), tooltip: t('accessKeys.noGroups') }]
       : []),

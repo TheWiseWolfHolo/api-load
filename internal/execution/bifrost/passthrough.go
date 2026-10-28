@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"gpt-load/internal/execution"
 	"gpt-load/internal/execution/geminiembedding"
 	"gpt-load/internal/execution/geminiimage"
+	"gpt-load/internal/platform/contentcoding"
 	"gpt-load/internal/platform/httpheader"
 	"gpt-load/internal/protocol"
 )
@@ -401,7 +404,8 @@ complete:
 	if spec.ClientProtocol != protocol.OpenAIImages {
 		bodyBytes = bytes.Clone(bodyBytes)
 	}
-	if headers.Get("Content-Encoding") == "" && looksLikeEncodedResponse(bodyBytes) {
+	if headers.Get("Content-Encoding") == "" && looksLikeEncodedResponse(bodyBytes) &&
+		(!nativeSpeechAudio(spec, headers) || encodedAudio(bodyBytes, r.unaryResponseBodyLimit(spec))) {
 		return startedUnaryFailure(status, headers, execution.ErrorKindInternal, "encoded upstream response cannot be safely forwarded")
 	}
 	model := openAIResponseModel(bodyBytes, spec.UpstreamModel)
@@ -465,6 +469,25 @@ complete:
 		UpstreamRequestID: requestID,
 		Error:             evidence,
 	}
+}
+
+// PCM sample bytes can start with a compression signature. Preserve the old
+// Mistral protocol and the Soniox route while distinguishing actual compression.
+func nativeSpeechAudio(spec execution.AttemptSpec, headers http.Header) bool {
+	if spec.Operation != execution.OperationMistralAudioSpeech && !(spec.ClientProtocol == protocol.NativeServices && spec.Path == "/native/soniox/tts") {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(headers.Get("Content-Type"))
+	return err == nil && strings.HasPrefix(mediaType, "audio/")
+}
+
+func encodedAudio(body []byte, limit int64) bool {
+	encoding := contentcoding.Gzip
+	if body[0] == 0x28 {
+		encoding = contentcoding.Zstd
+	}
+	_, err := contentcoding.DecodeLimited(encoding, body, limit)
+	return err == nil || errors.Is(err, contentcoding.ErrDecodedBodyTooLarge)
 }
 
 func (r *Runtime) executeNativeHead(
@@ -739,7 +762,7 @@ func usageEvidenceFromPassthroughForSpec(
 ) (*execution.UsageEvidence, error) {
 	// 转换路由由转换器提供用量证据；原生 OpenAI Embeddings 不经过透传。
 	if spec.ClientProtocol == protocol.OpenAIImages || spec.ClientProtocol == protocol.OpenAIEmbeddings ||
-		spec.ClientProtocol == protocol.Rerank || spec.ClientProtocol == protocol.Decisions {
+		spec.ClientProtocol == protocol.Rerank || spec.ClientProtocol == protocol.CohereEmbeddings || spec.ClientProtocol == protocol.Decisions {
 		return nil, nil
 	}
 	return usageEvidenceFromPassthrough(source)

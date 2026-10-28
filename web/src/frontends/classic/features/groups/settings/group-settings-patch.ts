@@ -78,6 +78,10 @@ function cloneParameterOverrides(value: ParameterOverrideRuleDto[]): ParameterOv
 
 function cloneOverrides(value: GroupRuntimeConfigDto): GroupRuntimeConfigDto {
   const next: GroupRuntimeConfigDto = {}
+  if (value.transparent_proxy) next.transparent_proxy = { ...value.transparent_proxy }
+  for (const key of ['account_pool', 'account_concurrency_limit', 'account_rpm_limit'] as const) {
+    if (value[key] !== undefined) Object.assign(next, { [key]: value[key] })
+  }
   if (value.error_rules !== undefined) next.error_rules = cloneErrorRules(value.error_rules)
   for (const key of groupTimeoutKeys) if (value[key] !== undefined) next[key] = value[key]
   for (const key of groupPolicyCountKeys) if (value[key] !== undefined) next[key] = value[key]

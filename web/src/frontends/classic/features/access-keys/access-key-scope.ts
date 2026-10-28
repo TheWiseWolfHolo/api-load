@@ -1,3 +1,4 @@
+import { canonicalTransparentPolicy, cloneTransparentPolicy } from '@shared/transparent'
 import { enabledDataProtocols } from '@/api/control/protocols'
 import type { AccessKeyFiltersDto } from '@/api/control/types'
 
@@ -30,6 +31,8 @@ export function materializeAccessKeyFilters(
 ): AccessKeyFiltersDto {
   return {
     groups: modes.groups === 'all' ? [] : [...new Set(filters.groups)],
+    ...(filters.transparent ? { transparent: cloneTransparentPolicy(filters.transparent) } : {}),
+    ...(filters.allow_model_less_resources ? { allow_model_less_resources: true } : {}),
     ...(modes.groups !== 'all' && !filters.groups.length ? { groups_restricted: true } : {}),
     protocols: modes.protocols === 'all' ? [] : [...new Set(filters.protocols)],
     models:
@@ -49,6 +52,9 @@ function sameSet<T>(left: readonly T[], right: readonly T[]): boolean {
 function filtersEqual(left: AccessKeyFiltersDto, right: AccessKeyFiltersDto): boolean {
   if (Boolean(left.groups_restricted) !== Boolean(right.groups_restricted)) return false
   return (
+    JSON.stringify(canonicalTransparentPolicy(left.transparent)) ===
+      JSON.stringify(canonicalTransparentPolicy(right.transparent)) &&
+    Boolean(left.allow_model_less_resources) === Boolean(right.allow_model_less_resources) &&
     sameSet(left.groups, right.groups) &&
     sameSet(left.protocols, right.protocols) &&
     sameSet(left.models, right.models)

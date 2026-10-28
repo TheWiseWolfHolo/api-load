@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"gpt-load/internal/automodel"
 	"gpt-load/internal/channel"
@@ -21,6 +22,9 @@ func (handler *Handler) responseBindingObserver(
 	request *dialect.ParsedRequest,
 	autoSelections ...*automodel.Selection,
 ) func([]byte) error {
+	if request != nil && strings.HasPrefix(request.Path, "/native/") {
+		return handler.nativeResourceObserver(accessKeyID, selection, ref, request)
+	}
 	if request == nil || request.Method != http.MethodPost || request.Path != "/v1/responses" ||
 		selection.RouteMode != execution.RouteNative || selection.ResponsesStoreDowngraded ||
 		selection.ResolvedTarget.ResponsesStoreHandling(

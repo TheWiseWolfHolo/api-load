@@ -2,12 +2,16 @@ package bifrost
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 
 	"gpt-load/internal/channel"
 	"gpt-load/internal/execution"
@@ -89,5 +93,101 @@ func TestMistralNativeRoutesPreserveMethodPathAndCredential(t *testing.T) {
 				t.Fatalf("protocol/request id = %s / %s", result.UpstreamProtocol, result.UpstreamRequestID)
 			}
 		})
+	}
+}
+
+func TestNativeResourcePathAndMultipartPreserved(t *testing.T) {
+	for _, channelID := range []channel.ID{channel.Mistral, channel.Soniox} {
+		original := []byte("--native-boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.txt\"\r\nContent-Type: text/plain\r\n\r\nsynthetic file\r\n--native-boundary--\r\n")
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			if r.URL.Path != "/v1/files" || string(body) != string(original) {
+				t.Errorf("multipart changed: %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"id":"file-synthetic"}`)
+		}))
+		spec := openAIEmbeddingsSpec(channelID, server.URL+"/v1", original)
+		spec.ClientProtocol = protocol.NativeServices
+		spec.Operation = execution.OperationResourceCreate
+		spec.Path = "/native/" + string(channelID) + "/v1/files"
+		spec.Header.Set("Content-Type", "multipart/form-data; boundary=native-boundary")
+		result := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true}).Execute(t.Context(), freezeTestAttempt(spec))
+		server.Close()
+		if result.Error != nil || result.StatusCode != 200 {
+			t.Fatalf("result=%+v error=%+v", result, result.Error)
+		}
+	}
+}
+
+func TestNativeSonioxSpeechUsesSeparateTargetAndReturnsAudio(t *testing.T) {
+	audio := []byte("RIFFsynthetic-audio-binary")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.URL.Path != "/tts" || r.Header.Get("Authorization") != "Bearer "+testAPIKey || !bytes.Contains(body, []byte(`"voice":"Synthetic"`)) {
+			t.Error("speech protocol or credential changed")
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Write(audio)
+	}))
+	defer server.Close()
+	spec := openAIEmbeddingsSpec(channel.Soniox, server.URL+"/v1", []byte(`{"model":"public","language":"en","voice":"Synthetic","audio_format":"wav","text":"synthetic"}`))
+	spec.ClientProtocol = protocol.NativeServices
+	spec.Operation = execution.OperationResourceCreate
+	spec.Path = "/native/soniox/tts"
+	spec.TargetConfig, _ = json.Marshal(map[string]string{"base_url": server.URL + "/v1", "tts_base_url": server.URL})
+	result := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true}).Execute(t.Context(), freezeTestAttempt(spec))
+	if result.Error != nil || !bytes.Equal(result.Body, audio) {
+		t.Fatalf("speech result=%+v error=%+v", result, result.Error)
+	}
+}
+
+func TestNativeSpeechDistinguishesPCMFromActualCompression(t *testing.T) {
+	var zipped bytes.Buffer
+	zw := gzip.NewWriter(&zipped)
+	_, _ = zw.Write([]byte("synthetic audio"))
+	_ = zw.Close()
+	zstdWriter, err := zstd.NewWriter(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zstdBytes := zstdWriter.EncodeAll([]byte("synthetic audio"), nil)
+	zstdWriter.Close()
+	for _, provider := range []channel.ID{channel.Mistral, channel.Soniox} {
+		for _, test := range []struct {
+			name     string
+			body     []byte
+			rejected bool
+		}{
+			{"pcm-gzip-prefix", []byte{0x1f, 0x8b, 0x00, 0x01, 0x02, 0x03}, false},
+			{"pcm-zstd-prefix", []byte{0x28, 0xb5, 0x2f, 0xfd, 0xff, 0x00}, false},
+			{"actual-gzip", zipped.Bytes(), true}, {"actual-zstd", zstdBytes, true},
+		} {
+			t.Run(string(provider)+"/"+test.name, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "audio/pcm")
+					_, _ = w.Write(test.body)
+				}))
+				defer server.Close()
+				spec := openAIEmbeddingsSpec(provider, server.URL+"/v1", []byte(`{"model":"public","text":"synthetic","input":"synthetic","voice":"Synthetic"}`))
+				spec.ClientProtocol = protocol.Mistral
+				spec.Operation = execution.OperationMistralAudioSpeech
+				spec.Path = "/v1/audio/speech"
+				if provider == channel.Soniox {
+					spec.ClientProtocol = protocol.NativeServices
+					spec.Operation = execution.OperationResourceCreate
+					spec.Path = "/native/soniox/tts"
+					spec.TargetConfig, _ = json.Marshal(map[string]string{"base_url": server.URL + "/v1", "tts_base_url": server.URL})
+				}
+				result := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true}).Execute(t.Context(), freezeTestAttempt(spec))
+				if test.rejected {
+					if result.Error == nil {
+						t.Fatal("compressed audio without encoding header was accepted")
+					}
+				} else if result.Error != nil || !bytes.Equal(result.Body, test.body) {
+					t.Fatalf("raw PCM changed or failed: %+v", result.Error)
+				}
+			})
+		}
 	}
 }

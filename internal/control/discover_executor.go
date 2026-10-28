@@ -102,7 +102,11 @@ func (s *Service) discoverLiveModels(
 		return nil, fmt.Errorf("create discovery request identity: %w", app_errors.ErrInternalServer)
 	}
 	var sequence uint32
-	for _, credential := range target.credentials {
+	lastFailure := modelCatalogFailure(0)
+	for credentialIndex, credential := range target.credentials {
+		if credentialIndex >= 3 {
+			break
+		}
 		models := make([]string, 0)
 		rawQuery := modelDiscoveryInitialQuery(clientProtocol)
 		seenCursors := make(map[string]struct{})
@@ -134,11 +138,15 @@ func (s *Service) discoverLiveModels(
 				return nil, parentErr
 			}
 			if errors.Is(discoveryCtx.Err(), context.DeadlineExceeded) {
-				return nil, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
+				return nil, &catalogDiscoveryError{Kind: "timeout"}
 			}
 			if result.Validate() != nil || result.Error != nil ||
 				result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
 				logModelDiscoveryFailure(target.channelID, result)
+				lastFailure = modelCatalogFailure(result.StatusCode)
+				if result.StatusCode == 400 || result.StatusCode == 422 || result.StatusCode == 404 || result.StatusCode == 410 {
+					return nil, lastFailure
+				}
 				break
 			}
 			discoveredPage, parseErr := parseDiscoveredModelsPage(clientProtocol, result.Body)
@@ -146,26 +154,29 @@ func (s *Service) discoverLiveModels(
 				logrus.WithFields(logrus.Fields{
 					"channel": target.channelID, "protocol": clientProtocol, "status": result.StatusCode,
 				}).Warn("[CONTROL] Upstream model list could not be parsed")
-				break
+				return nil, &catalogDiscoveryError{Kind: "invalid_response", Status: result.StatusCode}
 			}
 			models = append(models, discoveredPage.models...)
 			if len(models) > maxModelDiscoveryModels {
-				break
+				return nil, &catalogDiscoveryError{Kind: "invalid_response", Status: result.StatusCode}
 			}
 			if discoveredPage.nextRawQuery == "" {
 				return normalizeDiscoveredModels(models), nil
 			}
 			if _, repeated := seenCursors[discoveredPage.nextRawQuery]; repeated {
-				break
+				return nil, &catalogDiscoveryError{Kind: "invalid_response", Status: result.StatusCode}
 			}
 			seenCursors[discoveredPage.nextRawQuery] = struct{}{}
 			rawQuery = discoveredPage.nextRawQuery
+			if pageNumber == maxModelDiscoveryPages-1 {
+				return nil, &catalogDiscoveryError{Kind: "invalid_response", Status: result.StatusCode}
+			}
 		}
 	}
 	if parentErr := ctx.Err(); parentErr != nil {
 		return nil, parentErr
 	}
-	return nil, fmt.Errorf("discover upstream models: %w", app_errors.ErrBadGateway)
+	return nil, lastFailure
 }
 
 // logModelDiscoveryFailure records why an upstream refused to list its models.
@@ -179,7 +190,6 @@ func logModelDiscoveryFailure(channelID channel.ID, result execution.AttemptResu
 		fields["error_kind"] = result.Error.Kind
 		fields["error_code"] = result.Error.Code
 		fields["error_status"] = result.Error.StatusCode
-		fields["error_summary"] = result.Error.Summary
 	}
 	if validationErr := result.Validate(); validationErr != nil {
 		fields["validation"] = validationErr.Error()

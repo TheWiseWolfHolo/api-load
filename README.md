@@ -12,8 +12,9 @@ API keys, subscription accounts, traffic scheduling, failure handling, request l
 
 English · [中文](README_CN.md) · [日本語](README_JP.md) | [Official Website](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2.0.1-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
+[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
+[![Source version](https://img.shields.io/badge/source-2.1.2-blue)](VERSION)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -143,7 +144,9 @@ docker compose pull && docker compose up -d   # update to the latest 2.x image
 docker compose stop         # stop the service
 ```
 
-The official Compose file uses `ghcr.io/thewisewolfholo/api-load:2`, which follows the latest 2.x release. Pin an exact release such as `ghcr.io/thewisewolfholo/api-load:v2.0.4` when you need a fixed version; `edge` tracks the main branch.
+Compose uses `ghcr.io/thewisewolfholo/api-load:2`, which follows stable 2.x releases only. This source targets `2.1.2`; publishing its release tag produces `:v2.1.2` and `:v2.1.2-sha-<commit>`. Pin a version or digest for production. `edge` tracks main, and prereleases do not update `:2`. A source version does not imply that its image has been published.
+
+2.1 adds optional transparent HTTP sources at `/proxy/{group_id}/*path`, with explicit source, method and path grants. Existing native and compatibility routes remain available. See [configuration and boundaries](docs/transparent-forwarding-proposal.md) and the [release, upgrade and recovery guide](docs/operations.md).
 
 <details>
 <summary>Using a native binary</summary>
@@ -208,3 +211,7 @@ Some of GPT-Load's capabilities build on these projects, with thanks:
 GPT-Load owns credential storage, account selection, scheduling, retry, health, affinity, logging, and usage policy. Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), full license texts in [`LICENSES/`](LICENSES/), and each release ships a CycloneDX SBOM covering the Go dependency graph.
 
 Channel icons identify their respective upstream providers. All trademarks belong to their owners; this project is not affiliated with or endorsed by them.
+
+## Native services development branch
+
+Native service support includes Cohere multimodal embeddings, native file and task routes, shared-account limits, and capability evidence. See the [implementation and validation report](docs/native-services-20261027.md) and [provider research](docs/provider-research-20261027.md) for exact endpoints, compatibility changes and remaining validation. Validate your own deployment and data before switching versions.

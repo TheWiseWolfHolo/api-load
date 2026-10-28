@@ -57,6 +57,124 @@ func TestCompileIndexesExternalModelsAndPreservesUpstreamIDs(t *testing.T) {
 	}
 }
 
+func TestTransparentProxyIsOptInWithoutModelsAndPreservesNativeRoutes(t *testing.T) {
+	proxy := TransparentProxyConfig{Enabled: true, BaseURL: "https://service.example/prefix", AuthHeader: "Authorization", AuthPrefix: "Bearer ", Strategy: "rotate"}
+	input := CompileInput{ChannelRegistry: channel.NewRegistry(), Groups: []GroupConfig{{ID: 1, Name: "opaque", ChannelID: channel.TransparentHTTP, ConnectionType: "api_key", Params: json.RawMessage(`{}`), Enabled: true, Settings: config.Settings{SettingTransparentProxy: proxy}}}}
+	snapshot, err := Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := snapshot.ExecutionCandidates[protocol.TransparentHTTP][execution.OperationTransparentRequest][NoModelRouteKey]
+	if len(routes) != 1 || !snapshot.GroupCatalog[1].TransparentHTTPEnabled || snapshot.Groups[1].TransparentProxy.BaseURL != proxy.BaseURL {
+		t.Fatalf("transparent route unavailable without models: %+v", snapshot.Groups[1])
+	}
+	if mode, ok := routes[0].ResolvedTarget.Mode(protocol.TransparentHTTP, execution.OperationTransparentRequest); !ok || mode != channel.RouteNative {
+		t.Fatal("resolved transparent route missing")
+	}
+	input.Groups[0].ChannelID = channel.OpenAI
+	input.Groups[0].Models = []ModelConfig{{ID: "native-model"}}
+	snapshot, err = Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.ExecutionCandidates[protocol.OpenAICompletions][execution.OperationChatCompletion]["native-model"]) != 1 {
+		t.Fatal("native route was replaced")
+	}
+	proxy.Enabled = false
+	input.Groups[0].Settings[SettingTransparentProxy] = proxy
+	snapshot, err = Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.ExecutionCandidates[protocol.TransparentHTTP][execution.OperationTransparentRequest][NoModelRouteKey]) != 0 {
+		t.Fatal("disabled option exposed a route")
+	}
+	proxy.Enabled = true
+	proxy.Strategy = "fixed"
+	proxy.FixedCredentialID = 99
+	input.Groups[0].Settings[SettingTransparentProxy] = proxy
+	if _, err = Compile(input); err == nil {
+		t.Fatal("fixed credential outside this group was accepted")
+	}
+	input.Credentials = []CredentialConfig{{ID: 99, GroupID: 1, Status: CredentialStatusActive, Version: 1, IdentityGeneration: 1, Fingerprint: "synthetic"}}
+	if _, err = Compile(input); err != nil {
+		t.Fatalf("existing fixed credential: %v", err)
+	}
+	input.Groups[0].ChannelID = channel.GoogleVertex
+	if err = validateTransparentGroup(input, input.Groups[0], proxy); err == nil {
+		t.Fatal("service account was treated as static API key")
+	}
+}
+
+func TestTransparentScopeRequiresExplicitMethodPathAndGroup(t *testing.T) {
+	scope, err := NormalizeTransparentScope(&TransparentScope{GroupIDs: []uint{4, 4}, Methods: []string{"POST", "GET"}, Paths: []TransparentPathRule{{Path: "/v1/files", Match: "subtree"}, {Path: "/health", Match: "exact"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filters := FilterSet{Transparent: scope, Protocols: map[protocol.Protocol]struct{}{protocol.TransparentHTTP: {}}}
+	for _, test := range []struct {
+		id           uint
+		method, path string
+		want         bool
+	}{
+		{4, "POST", "/v1/files", true}, {4, "GET", "/v1/files/a", true}, {4, "GET", "/v1/files/", true},
+		{4, "GET", "/v1/files-extra", false}, {4, "GET", "/health/more", false}, {4, "DELETE", "/v1/files", false}, {5, "GET", "/health", false},
+		{4, "GET", "/v1/files/../admin", false}, {4, "GET", "/v1/files/%2e%2e/admin", false}, {4, "GET", "//v1/files", false},
+	} {
+		if got := filters.AllowsTransparent(test.id, test.method, test.path); got != test.want {
+			t.Errorf("scope %d %s %s=%t", test.id, test.method, test.path, got)
+		}
+	}
+	cloned := cloneFilterSet(filters)
+	cloned.Transparent.GroupIDs[0] = 8
+	if !filters.AllowsTransparent(4, "GET", "/health") {
+		t.Fatal("scope backing storage was shared")
+	}
+	filters.Models = map[string]struct{}{"restricted": {}}
+	if filters.AllowsTransparent(4, "GET", "/health") {
+		t.Fatal("model restrictions were bypassed")
+	}
+	filters.Models = nil
+	filters.Protocols = nil
+	if filters.AllowsTransparent(4, "GET", "/health") {
+		t.Fatal("old unrestricted protocol defaults authorized transparent access")
+	}
+}
+
+func TestCompileResolvesSharedLimitsFromEnabledGroups(t *testing.T) {
+	input := CompileInput{ChannelRegistry: channel.NewRegistry()}
+	for _, item := range []struct {
+		id               uint
+		pool             string
+		concurrency, rpm int
+		enabled          bool
+	}{
+		{1, "same", 3, 0, true}, {2, "same", 0, 7, true}, {3, "same", 2, 9, true}, {4, "same", 1, 1, false}, {5, "other", 8, 20, true},
+	} {
+		input.Groups = append(input.Groups, GroupConfig{ID: item.id, ChannelID: channel.OpenAI, ConnectionType: "api_key", Params: json.RawMessage(`{}`), Enabled: item.enabled, Settings: config.Settings{"account_pool": item.pool, "account_concurrency_limit": item.concurrency, "account_rpm_limit": item.rpm}})
+	}
+	compiled, err := Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []uint{1, 2, 3} {
+		if got := compiled.Groups[id]; got.AccountConcurrencyLimit != 2 || got.AccountRPMLimit != 7 {
+			t.Fatalf("group %d limits=%d/%d", id, got.AccountConcurrencyLimit, got.AccountRPMLimit)
+		}
+	}
+	if got := compiled.Groups[5]; got.AccountConcurrencyLimit != 8 || got.AccountRPMLimit != 20 {
+		t.Fatal("independent account limits changed")
+	}
+	input.Groups[2].Enabled = false
+	updated, err := Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Groups[1].AccountConcurrencyLimit != 3 || compiled.Groups[1].AccountConcurrencyLimit != 2 {
+		t.Fatal("configuration refresh did not isolate effective limits")
+	}
+}
+
 func TestCompileIndexesOpenAIImagesOperationsForAllConfiguredModels(t *testing.T) {
 	t.Parallel()
 

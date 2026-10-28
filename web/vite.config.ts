@@ -34,7 +34,7 @@ export default defineConfig({
       allow: devServerFileSystemAllow,
     },
     proxy: Object.fromEntries(
-      ['/api', '/health', '/v1', '/v1beta'].map((path) => [
+      ['/api', '/health', '/v1', '/v1beta', '/v2', '/native', '/proxy'].map((path) => [
         path,
         { target: proxyTarget, changeOrigin: true },
       ]),

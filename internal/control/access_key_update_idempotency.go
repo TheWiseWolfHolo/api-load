@@ -57,7 +57,9 @@ func (s *Service) UpdateAccessKeyIdempotent(ctx context.Context, idempotencyKey 
 		}
 		canonicalFilters := canonicalAccessKeyFilterSet(filters)
 		digestRequest.Filters = &AccessKeyFilters{
-			Groups: canonicalFilters.Groups, GroupsRestricted: canonicalFilters.GroupsRestricted, Protocols: canonicalFilters.Protocols,
+			Transparent:             canonicalFilters.Transparent.Clone(),
+			AllowModelLessResources: canonicalFilters.AllowModelLessResources,
+			Groups:                  canonicalFilters.Groups, GroupsRestricted: canonicalFilters.GroupsRestricted, Protocols: canonicalFilters.Protocols,
 			Models: canonicalFilters.Models, AllowedCIDRs: canonicalFilters.AllowedCIDRs,
 		}
 	}

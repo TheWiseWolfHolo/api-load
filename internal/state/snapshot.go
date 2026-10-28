@@ -109,10 +109,12 @@ const (
 )
 
 type FilterSet struct {
-	GroupsRestricted bool
-	Groups           map[uint]struct{}
-	Protocols        map[protocol.Protocol]struct{}
-	Models           map[string]struct{}
+	Transparent             *TransparentScope
+	AllowModelLessResources bool
+	GroupsRestricted        bool
+	Groups                  map[uint]struct{}
+	Protocols               map[protocol.Protocol]struct{}
+	Models                  map[string]struct{}
 }
 
 // AllowsGroup preserves an explicitly empty scope after its last group is deleted.
@@ -163,6 +165,10 @@ func (rules HeaderRules) ConfiguredNames() []string {
 }
 
 type GroupView struct {
+	TransparentProxy          TransparentProxyConfig
+	AccountPool               string
+	AccountConcurrencyLimit   int64
+	AccountRPMLimit           int64
 	ErrorRules                health.ErrorRules
 	TransparentModels         bool
 	Priority                  int32
@@ -191,13 +197,15 @@ type GroupView struct {
 }
 
 type GroupCatalogView struct {
-	Priority       int32
-	ID             uint
-	Name           string
-	ChannelID      channel.ID
-	ConnectionType string
-	Enabled        bool
-	WeightManual   *int
+	TransparentHTTPEnabled bool
+	TransparentHTTPBaseURL string
+	Priority               int32
+	ID                     uint
+	Name                   string
+	ChannelID              channel.ID
+	ConnectionType         string
+	Enabled                bool
+	WeightManual           *int
 }
 
 type AccessKeyView struct {
@@ -352,13 +360,18 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 			ConnectionType: connection.Normalize(group.ConnectionType),
 			WeightManual:   cloneWeight(group.WeightManual),
 		}
-		snapshot.GroupCatalog[group.ID] = catalogView
-		if err := appendExecutionTargets(snapshot.ExecutionRouteCatalog, input.ChannelRegistry, group); err != nil {
-			return nil, err
-		}
 		resolved, err := ResolveGroupRuntimeSettings(runtimeSettings, group.Settings)
 		if err != nil {
 			return nil, fmt.Errorf("compile group %d settings: %w", group.ID, err)
+		}
+		if err := validateTransparentGroup(input, group, resolved.TransparentProxy); err != nil {
+			return nil, err
+		}
+		catalogView.TransparentHTTPEnabled = resolved.TransparentProxy.Enabled
+		catalogView.TransparentHTTPBaseURL = resolved.TransparentProxy.BaseURL
+		snapshot.GroupCatalog[group.ID] = catalogView
+		if err := appendExecutionTargets(snapshot.ExecutionRouteCatalog, input.ChannelRegistry, group, resolved.TransparentProxy); err != nil {
+			return nil, err
 		}
 		groupProxy, err := outboundproxy.Resolve(nil, group.Proxy, input.GlobalProxy, input.EnvironmentProxy)
 		if err != nil {
@@ -369,6 +382,7 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 		}
 
 		view := GroupView{
+			TransparentProxy:          resolved.TransparentProxy,
 			ErrorRules:                resolved.ErrorRules,
 			Priority:                  group.Priority,
 			PriceMultiplier:           resolvePriceMultiplier(group.PriceMultiplier),
@@ -386,10 +400,11 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 			ResponsesWebsocketEnabled: resolved.ResponsesWebsocketEnabled,
 			EmptyResponseRetry:        resolved.EmptyResponseRetry,
 			ConcurrencyLimit:          resolved.ConcurrencyLimit,
-			WeightManual:              cloneWeight(group.WeightManual),
-			ConnectionType:            connection.Normalize(group.ConnectionType),
-			Proxy:                     groupProxy,
-			ParameterOverrides:        resolved.ParameterOverrides,
+			AccountPool:               resolved.AccountPool, AccountConcurrencyLimit: resolved.AccountConcurrencyLimit, AccountRPMLimit: resolved.AccountRPMLimit,
+			WeightManual:       cloneWeight(group.WeightManual),
+			ConnectionType:     connection.Normalize(group.ConnectionType),
+			Proxy:              groupProxy,
+			ParameterOverrides: resolved.ParameterOverrides,
 		}
 		params, err := input.ChannelRegistry.ValidateParams(group.ChannelID, group.Params)
 		if err != nil {
@@ -404,7 +419,10 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 		view.Params = params.CanonicalJSON()
 		view.ResolvedTarget = cloneResolvedTarget(target)
 		view.ClientProtocols = append([]protocol.Protocol(nil), descriptor.ClientProtocols...)
-		if err := appendExecutionTargets(snapshot.ExecutionCandidates, input.ChannelRegistry, group); err != nil {
+		if resolved.TransparentProxy.Enabled && group.ChannelID != channel.TransparentHTTP {
+			view.ClientProtocols = append(view.ClientProtocols, protocol.TransparentHTTP)
+		}
+		if err := appendExecutionTargets(snapshot.ExecutionCandidates, input.ChannelRegistry, group, resolved.TransparentProxy); err != nil {
 			return nil, err
 		}
 		if view.TransparentModels && connection.Normalize(group.ConnectionType) == connection.APIKey {
@@ -420,9 +438,37 @@ func Compile(input CompileInput) (*ConfigSnapshot, error) {
 		}
 	}
 
+	resolveSharedAccountLimits(snapshot.Groups)
 	sortExecutionRouteIndex(snapshot.ExecutionCandidates)
 	sortExecutionRouteIndex(snapshot.ExecutionRouteCatalog)
 	return snapshot, nil
+}
+
+// Resolve shared limits once per immutable configuration, not once per attempt.
+func resolveSharedAccountLimits(groups map[uint]GroupView) {
+	type limits struct{ concurrency, rpm int64 }
+	accounts := make(map[string]limits)
+	for _, group := range groups {
+		if group.AccountPool == "" {
+			continue
+		}
+		value := accounts[group.AccountPool]
+		if group.AccountConcurrencyLimit > 0 && (value.concurrency == 0 || group.AccountConcurrencyLimit < value.concurrency) {
+			value.concurrency = group.AccountConcurrencyLimit
+		}
+		if group.AccountRPMLimit > 0 && (value.rpm == 0 || group.AccountRPMLimit < value.rpm) {
+			value.rpm = group.AccountRPMLimit
+		}
+		accounts[group.AccountPool] = value
+	}
+	for id, group := range groups {
+		if group.AccountPool == "" {
+			continue
+		}
+		value := accounts[group.AccountPool]
+		group.AccountConcurrencyLimit, group.AccountRPMLimit = value.concurrency, value.rpm
+		groups[id] = group
+	}
 }
 
 func newAccessKeyView(input AccessKeyConfig) AccessKeyView {
@@ -469,6 +515,7 @@ func appendExecutionTargets(
 	index ExecutionCandidateIndex,
 	registry *channel.Registry,
 	group GroupConfig,
+	transparent TransparentProxyConfig,
 ) error {
 	target, err := registry.Resolve(group.ChannelID, group.Params)
 	if err != nil {
@@ -477,6 +524,9 @@ func appendExecutionTargets(
 	descriptor, ok := registry.Get(group.ChannelID)
 	if !ok {
 		return fmt.Errorf("compile group %d channel: unknown channel %q", group.ID, group.ChannelID)
+	}
+	if transparent.Enabled {
+		appendExecutionTarget(index, protocol.TransparentHTTP, execution.OperationTransparentRequest, NoModelRouteKey, RouteTarget{GroupID: group.ID, Mode: channel.RouteNative, ResolvedTarget: target.WithTransparentHTTP()})
 	}
 	// Codex Live 由客户端提供模型，不依赖分组的模型映射。
 	if group.ChannelID == channel.Codex {
@@ -495,7 +545,7 @@ func appendExecutionTargets(
 	for _, clientProtocol := range descriptor.ClientProtocols {
 		for _, operation := range target.Operations(clientProtocol) {
 			if operation == execution.OperationListModels || operation == execution.OperationProbe ||
-				operation == execution.OperationLiveCall {
+				operation == execution.OperationLiveCall || operation == execution.OperationTransparentRequest {
 				continue
 			}
 			mode, ok := target.Mode(clientProtocol, operation)
@@ -510,7 +560,7 @@ func appendExecutionTargets(
 				appendExecutionTarget(index, clientProtocol, operation, NoModelRouteKey, RouteTarget{
 					GroupID: group.ID, Mode: mode, ResolvedTarget: cloneResolvedTarget(target),
 				})
-			case execution.OperationResponsesPassthrough,
+			case execution.OperationResourceCreate, execution.OperationResourceRead, execution.OperationResourceDelete, execution.OperationResourceCancel, execution.OperationResponsesPassthrough,
 				execution.OperationMistralVoices:
 				appendExecutionTarget(index, clientProtocol, operation, NoModelRouteKey, RouteTarget{
 					GroupID: group.ID, Mode: mode, ResolvedTarget: cloneResolvedTarget(target),
@@ -785,6 +835,9 @@ func validateCompileInput(input CompileInput) error {
 		if err := validateFilterSet(accessKey.ID, accessKey.Filters); err != nil {
 			return err
 		}
+		if accessKey.Filters.Transparent != nil && len(accessKey.CostLimitRules) > 0 {
+			return fmt.Errorf("transparent access cannot use cost limits without parsed usage")
+		}
 		if len(accessKey.CostLimitRules) > 0 {
 			quotaDefinitions[accessKey.ID] = accessKey.CostLimitRules
 		}
@@ -796,6 +849,17 @@ func validateCompileInput(input CompileInput) error {
 }
 
 func validateFilterSet(accessKeyID uint, filters FilterSet) error {
+	if filters.Transparent != nil {
+		if _, ok := filters.Protocols[protocol.TransparentHTTP]; !ok {
+			return fmt.Errorf("transparent access requires explicit protocol permission")
+		}
+		if len(filters.Models) > 0 {
+			return fmt.Errorf("transparent access cannot include model restrictions")
+		}
+		if _, err := NormalizeTransparentScope(filters.Transparent); err != nil {
+			return err
+		}
+	}
 	for p := range filters.Protocols {
 		if !p.Valid() {
 			return fmt.Errorf("access key %d filter has invalid protocol %q", accessKeyID, p)
@@ -810,7 +874,7 @@ func validateFilterSet(accessKeyID uint, filters FilterSet) error {
 }
 
 func cloneFilterSet(source FilterSet) FilterSet {
-	cloned := FilterSet{GroupsRestricted: source.GroupsRestricted}
+	cloned := FilterSet{GroupsRestricted: source.GroupsRestricted, AllowModelLessResources: source.AllowModelLessResources, Transparent: source.Transparent.Clone()}
 	if source.Groups != nil {
 		cloned.Groups = make(map[uint]struct{}, len(source.Groups))
 		for id := range source.Groups {

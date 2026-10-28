@@ -54,6 +54,7 @@ type frozenAttemptPricing struct {
 }
 
 type requestRecorder struct {
+	serviceEvidence      *telemetry.ServiceEvidence
 	audit                *requestaudit.Result
 	auditCache           map[[32]byte]bool
 	auditCalled          bool
@@ -145,7 +146,14 @@ func (recorder *requestRecorder) emit() {
 		duration = 0
 	}
 	reportedModel, modelConsistency := requestOutcomeModelConsistency(recorder.outcome)
+	if recorder.serviceEvidence != nil {
+		recorder.serviceEvidence.ResultCheck = "not_checked"
+		if recorder.outcome.status == telemetry.RequestStatusSuccess && recorder.protocol == protocol.CohereEmbeddings {
+			recorder.serviceEvidence.ResultCheck = "vector_count_and_shape"
+		}
+	}
 	recorder.sink.Emit(telemetry.RequestEvent{
+		ServiceEvidence:       recorder.serviceEvidence,
 		AutoDecision:          recorder.autoLogDecision(),
 		RequestAudit:          recorder.audit,
 		RequestID:             recorder.requestID,
@@ -179,7 +187,7 @@ func (recorder *requestRecorder) freezeSensitiveInputErrorSummaries() {
 			recorder.protocol != protocol.OpenAIEmbeddings && recorder.protocol != protocol.GeminiEmbeddings &&
 			recorder.protocol != protocol.Rerank &&
 			recorder.protocol != protocol.Decisions &&
-			recorder.protocol != protocol.Mistral) {
+			recorder.protocol != protocol.Mistral && recorder.protocol != protocol.CohereEmbeddings && recorder.protocol != protocol.NativeServices) {
 		return
 	}
 	if recorder.outcome.errorCode != "" {

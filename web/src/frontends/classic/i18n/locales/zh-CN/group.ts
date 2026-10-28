@@ -20,6 +20,7 @@ export default {
       statusReason: {
         no_available_credentials: '当前没有可用凭据',
         no_models: '未配置模型',
+        transparent_proxy_disabled: '未启用透明转发',
       },
       filters: {
         region: '筛选分组',

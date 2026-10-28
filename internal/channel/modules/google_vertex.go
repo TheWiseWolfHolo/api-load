@@ -37,6 +37,7 @@ func GoogleVertex() spec.Module {
 				EndpointPolicy:    spec.EndpointCloudParams,
 			},
 			Routes: []spec.Route{
+				spec.NewRoute(protocol.GeminiEmbeddings, execution.OperationEmbeddingsCreate, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationChatCompletion, execution.RouteConverted),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationListModels, execution.RouteConverted),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationProbe, execution.RouteConverted),

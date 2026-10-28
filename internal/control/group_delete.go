@@ -53,11 +53,31 @@ func detachGroupReferences(
 				remaining = append(remaining, referencedID)
 			}
 		}
-		if !found {
+		transparentFound := false
+		if filters.Transparent != nil {
+			remainingTransparent := make([]uint, 0, len(filters.Transparent.GroupIDs))
+			for _, referencedID := range filters.Transparent.GroupIDs {
+				if referencedID == groupID {
+					transparentFound = true
+				} else {
+					remainingTransparent = append(remainingTransparent, referencedID)
+				}
+			}
+			if transparentFound {
+				if len(remainingTransparent) == 0 {
+					filters.Transparent = nil
+				} else {
+					filters.Transparent.GroupIDs = remainingTransparent
+				}
+			}
+		}
+		if !found && !transparentFound {
 			continue
 		}
-		filters.Groups = remaining
-		if len(remaining) == 0 {
+		if found {
+			filters.Groups = remaining
+		}
+		if found && len(remaining) == 0 {
 			// Empty explicit scope must never become unrestricted access.
 			filters.GroupsRestricted = true
 		}
@@ -66,7 +86,7 @@ func detachGroupReferences(
 			return fmt.Errorf("encode access key %d filters for group delete: %w", row.ID, err)
 		}
 		updates := map[string]any{"filters": models.JSON(encoded)}
-		if len(remaining) == 0 {
+		if found && len(remaining) == 0 {
 			updates["status"] = "disabled"
 		}
 		if err := tx.Model(&models.AccessKey{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {

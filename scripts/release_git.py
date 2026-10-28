@@ -10,9 +10,9 @@ from typing import Iterator
 
 from scripts.release_tags import (
     ReleaseTagError,
+    declared_version,
     parse_remote_tags,
     select_latest_tag,
-    suggest_next_tag,
     validate_new_tag,
     verify_local_remote_tags,
 )
@@ -102,7 +102,7 @@ def prepare_source(repository: Path, *, local_head: bool = False) -> Iterator[Pr
     candidate = _git(repository, "rev-parse", "HEAD") if local_head else remote_main
     _git(repository, "merge-base", "--is-ancestor", latest, candidate)
 
-    with tempfile.TemporaryDirectory(prefix="gpt-load-release-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="api-load-release-") as temporary:
         worktree = Path(temporary) / "source"
         _git(repository, "worktree", "add", "--detach", str(worktree), candidate)
         try:
@@ -122,21 +122,19 @@ def prompt_for_tag(prepared: PreparedSource, input_fn=input) -> str:
     if input_fn is input and not sys.stdin.isatty():
         raise ReleaseCancelled("没有交互式终端，不能确认发版 tag")
     try:
-        suggested = suggest_next_tag(prepared.latest_tag)
-    except ReleaseTagError:
-        suggested = None
+        suggested = "v" + declared_version(prepared.worktree)
+        validate_new_tag(suggested, prepared.latest_tag, prepared.remote_tags)
+    except (ReleaseTagError, OSError) as error:
+        raise ReleaseSourceError(str(error)) from error
     print(f"验收 SHA：{prepared.candidate_sha}")
     print(f"远端最新 tag：{prepared.latest_tag}")
-    if suggested:
-        print(f"建议 tag：{suggested}")
-    else:
-        print("该预发布类型没有安全的自动建议，请手动输入完整 tag。")
+    print(f"VERSION 对应 tag 为 {suggested}")
     choice = input_fn("输入完整 tag，回车采用建议值，或输入 q 取消：").strip()
     if choice.lower() in {"q", "quit"}:
         raise ReleaseCancelled("用户取消创建 tag")
     tag = choice or suggested
-    if tag is None:
-        raise ReleaseSourceError("必须输入完整 tag")
+    if tag != suggested:
+        raise ReleaseSourceError(f"tag 必须与 VERSION 一致，应为 {suggested}")
     try:
         validate_new_tag(tag, prepared.latest_tag, prepared.remote_tags)
     except ReleaseTagError as error:
@@ -149,6 +147,8 @@ def prompt_for_tag(prepared: PreparedSource, input_fn=input) -> str:
 
 def publish_tag(prepared: PreparedSource, tag: str) -> None:
     verify_source_unchanged(prepared)
+    if tag != "v" + declared_version(prepared.worktree):
+        raise ReleaseSourceError("tag 与已验收源码中的 VERSION 不一致")
     try:
         validate_new_tag(tag, prepared.latest_tag, prepared.remote_tags)
     except ReleaseTagError as error:

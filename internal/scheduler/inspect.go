@@ -108,12 +108,15 @@ func evaluateTargets(
 	if query.accessKey.Status == state.AccessKeyStatusDisabled {
 		return []targetDecision{}, ReasonAccessKeyDisabled, nil
 	}
+	if query.clientProtocol == protocol.TransparentHTTP && query.accessKey.Filters.Transparent == nil {
+		return []targetDecision{}, ReasonProtocolFiltered, nil
+	}
 	if len(query.accessKey.Filters.Protocols) > 0 {
 		if _, allowed := query.accessKey.Filters.Protocols[query.clientProtocol]; !allowed {
 			return []targetDecision{}, ReasonProtocolFiltered, nil
 		}
 	}
-	if len(query.accessKey.Filters.Models) > 0 {
+	if len(query.accessKey.Filters.Models) > 0 && !allowsModelLessResources(query) {
 		if query.externalModel == nil {
 			return []targetDecision{}, ReasonModelRequiredByFilter, nil
 		}
@@ -190,6 +193,16 @@ func evaluateTargets(
 			_, allowed := query.accessKey.Filters.Groups[route.GroupID]
 			groupFiltered = !allowed
 		}
+		if query.clientProtocol == protocol.TransparentHTTP {
+			allowed := false
+			for _, id := range query.accessKey.Filters.Transparent.GroupIDs {
+				if id == route.GroupID {
+					allowed = true
+					break
+				}
+			}
+			groupFiltered = groupFiltered || !allowed
+		}
 		switch {
 		case !requirementOK:
 			decision.included = false
@@ -222,6 +235,20 @@ func evaluateTargets(
 		}
 	}
 	return decisions, reason, nil
+}
+
+// This opt-in grants management of resources owned by this access key. A model
+// on a generation request must still satisfy the normal model filter.
+func allowsModelLessResources(query normalizedQuery) bool {
+	if !query.accessKey.Filters.AllowModelLessResources || query.externalModel != nil || query.clientProtocol != protocol.NativeServices {
+		return false
+	}
+	switch query.operation {
+	case execution.OperationResourceCreate, execution.OperationResourceRead, execution.OperationResourceDelete, execution.OperationResourceCancel:
+		return true
+	default:
+		return false
+	}
 }
 
 func routeRequirementSatisfied(

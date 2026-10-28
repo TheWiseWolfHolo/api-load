@@ -2,6 +2,7 @@ package dialect
 
 import (
 	"bytes"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -82,6 +83,51 @@ func TestMistralRejectsIncompleteOrUnsafePaths(t *testing.T) {
 		if _, err := dialect.InspectRequest(request); err == nil {
 			t.Fatalf("InspectRequest(%s %s) accepted invalid request", request.Method, request.Path)
 		}
+	}
+}
+
+func TestMistralOCRFileReferenceShape(t *testing.T) {
+	for _, test := range []struct {
+		name, document, want, invalidField string
+	}{
+		{"file", `{"type":"file","file_id":"file-synthetic"}`, "native/mistral/files/file-synthetic", ""},
+		{"default-file-type", `{"file_id":"file-synthetic"}`, "native/mistral/files/file-synthetic", ""},
+		{"nullable-default-type", `{"type":null,"file_id":"file-synthetic"}`, "native/mistral/files/file-synthetic", ""},
+		{"document-url", `{"type":"document_url","document_url":"data:application/pdf;base64,synthetic"}`, "", ""},
+		{"image-url", `{"type":"image_url","image_url":"data:image/png;base64,synthetic"}`, "", ""},
+		{"missing-id", `{"type":"file"}`, "", "document.file_id"},
+		{"null-id", `{"type":"file","file_id":null}`, "", "document.file_id"},
+		{"empty-id", `{"type":"file","file_id":""}`, "", "document.file_id"},
+		{"numeric-id", `{"type":"file","file_id":123}`, "", "document.file_id"},
+		{"object-id", `{"type":"file","file_id":{"id":"file-synthetic"}}`, "", "document.file_id"},
+		{"space-id", `{"type":"file","file_id":" file-synthetic "}`, "", "document.file_id"},
+		{"path-id", `{"type":"file","file_id":"folder/file-synthetic"}`, "", "document.file_id"},
+		{"encoded-id", `{"type":"file","file_id":"%66ile-synthetic"}`, "", "document.file_id"},
+		{"conflicting-type", `{"type":"document_url","file_id":"file-synthetic","document_url":"https://synthetic.example/file.pdf"}`, "", "document.file_id"},
+		{"numeric-type", `{"type":123,"file_id":"file-synthetic"}`, "", "document.type"},
+		{"array-document", `[{"type":"file","file_id":"file-synthetic"}]`, "", "document"},
+		{"null-document", `null`, "", "document"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			metadata, err := NewMistral().InspectRequest(&ParsedRequest{Method: http.MethodPost, Path: "/v1/ocr", Header: http.Header{"Content-Type": {"application/json"}}, Body: []byte(`{"model":"mistral-ocr-4-1","document":` + test.document + `}`)})
+			if test.invalidField != "" {
+				var validation *RequestValidationError
+				if !errors.As(err, &validation) || validation.Field != test.invalidField {
+					t.Fatalf("expected fixed field validation for %s, got %v", test.invalidField, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.want == "" {
+				if len(metadata.ResourceReferences) != 0 {
+					t.Fatal("URL input incorrectly requires a stored-file owner")
+				}
+			} else if len(metadata.ResourceReferences) != 1 || metadata.ResourceReferences[0] != test.want {
+				t.Fatalf("references=%v", metadata.ResourceReferences)
+			}
+		})
 	}
 }
 

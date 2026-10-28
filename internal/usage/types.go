@@ -121,9 +121,10 @@ func (d *Diagnostics) Merge(other Diagnostics) {
 
 // Result is a finalized provider-neutral usage result.
 type Result struct {
-	Tokens      Tokens
-	State       State
-	Diagnostics Diagnostics
+	MeasuredUnits Units
+	Tokens        Tokens
+	State         State
+	Diagnostics   Diagnostics
 }
 
 // Patch updates one or more token fields in an accumulator.

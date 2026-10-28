@@ -26,6 +26,7 @@ func TestDataPlaneEndpointCatalogDeclaresCompleteHTTPRoutes(t *testing.T) {
 		methods []string
 		path    string
 	}{
+		{name: "data.transparent", methods: []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions, http.MethodConnect, http.MethodTrace}, path: "/proxy/:group_id/*path"},
 		{name: "data.usage", methods: []string{http.MethodGet}, path: "/v1/user/balance"},
 		{name: "data.usage.unversioned", methods: []string{http.MethodGet}, path: "/user/balance"},
 		{
@@ -83,6 +84,8 @@ func TestDataPlaneEndpointCatalogDeclaresCompleteHTTPRoutes(t *testing.T) {
 			methods: []string{http.MethodPost},
 			path:    "/v1/embeddings",
 		},
+		{name: "data.native.services", methods: []string{http.MethodPost, http.MethodGet, http.MethodDelete}, path: "/native/:service/*resource_path"},
+		{name: "data.cohere.embed", methods: []string{http.MethodPost}, path: "/v2/embed"},
 		{name: "data.rerank", methods: []string{http.MethodPost}, path: "/v1/rerank"},
 		{name: "data.decisions", methods: []string{http.MethodPost}, path: "/v1/systemone"},
 		{name: "data.mistral.ocr", methods: []string{http.MethodPost}, path: "/v1/ocr"},

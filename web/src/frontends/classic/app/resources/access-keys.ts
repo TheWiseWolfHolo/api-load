@@ -1,3 +1,4 @@
+import { readTransparentPolicy } from '@shared/transparent'
 import { readConcurrency } from '@shared/concurrency'
 import { keepPreviousData, queryOptions } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -135,6 +136,8 @@ function projectFilters(value: unknown): AccessKeyFiltersDto {
   assertNoSecretLikeFields(record, [
     'groups',
     'groups_restricted',
+    'allow_model_less_resources',
+    'transparent',
     'protocols',
     'models',
     'allowed_cidrs',
@@ -159,6 +162,12 @@ function projectFilters(value: unknown): AccessKeyFiltersDto {
     protocols,
     models,
     allowed_cidrs: allowedCIDRs,
+    ...(record.transparent === undefined
+      ? {}
+      : { transparent: readTransparentPolicy(record.transparent) }),
+    ...(record.allow_model_less_resources === undefined
+      ? {}
+      : { allow_model_less_resources: projectBoolean(record.allow_model_less_resources) }),
     ...(record.groups_restricted === undefined
       ? {}
       : { groups_restricted: projectBoolean(record.groups_restricted) }),

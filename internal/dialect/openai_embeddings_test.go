@@ -3,6 +3,7 @@ package dialect
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -62,7 +63,7 @@ func TestOpenAIEmbeddingsInspectRequestRejectsInvalidContract(t *testing.T) {
 		{name: "missing input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m"}`)},
 		{name: "null input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":null}`)},
 		{name: "mixed input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":["x",1]}`)},
-		{name: "object input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":{"text":"x"}}`)},
+		{name: "invalid object input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":{"text":5}}`)},
 		{name: "duplicate input", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":"x","input":"y"}`)},
 		{name: "input case alias", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","Input":"x"}`)},
 		{name: "stream true", method: http.MethodPost, path: "/v1/embeddings", body: []byte(`{"model":"m","input":"x","stream":true}`)},
@@ -172,5 +173,35 @@ func TestOpenAIEmbeddingsStandardRequestUsesCreate(t *testing.T) {
 		*metadata.Model != "text-embedding-3-small" || metadata.Stream ||
 		metadata.RouteRequirement != execution.RouteRequirementAny || !metadata.ObserveUsage {
 		t.Fatalf("metadata = %#v", metadata)
+	}
+}
+
+func TestCohereOutputDimensionValidatesOnlyPositiveIntegerShape(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		valid bool
+	}{
+		{"", true}, {"1", true}, {"37", true}, {"768", true}, {"9007199254740991", true},
+		{"-1", false}, {"0", false}, {"1.5", false}, {`"768"`, false}, {"null", false}, {"true", false}, {"[]", false}, {"{}", false},
+		{"9007199254740992", false}, {"9223372036854775808", false},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			body := `{"model":"embed-model","input_type":"search_document","texts":["synthetic"]`
+			if test.value != "" {
+				body += `,"output_dimension":` + test.value
+			}
+			body += "}"
+			_, err := NewCohereEmbeddings().InspectRequest(&ParsedRequest{Method: http.MethodPost, Path: "/v2/embed", Body: []byte(body)})
+			if test.valid {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var validation *RequestValidationError
+			if !errors.As(err, &validation) || validation.Field != "output_dimension" || validation.Rule != "positive_safe_integer_required" {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
 	}
 }

@@ -45,7 +45,11 @@ export function healthIssues(
   const issues: HealthIssue[] = []
   const unavailable = new Set(
     groups
-      .filter((row) => ['no_credentials', 'no_models', 'unavailable'].includes(row.availability))
+      .filter((row) =>
+        ['no_credentials', 'no_models', 'transparent_proxy_disabled', 'unavailable'].includes(
+          row.availability,
+        ),
+      )
       .map((row) => row.id),
   )
   for (const group of groups.filter((row) => unavailable.has(row.id))) {

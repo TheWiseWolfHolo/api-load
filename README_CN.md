@@ -10,8 +10,9 @@
 
 [English](README.md) · 中文 · [日本語](README_JP.md) | [官方网站](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2.0.1-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
+[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
+[![Source version](https://img.shields.io/badge/source-2.1.2-blue)](VERSION)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -141,7 +142,9 @@ docker compose pull && docker compose up -d   # 更新到最新 2.x 镜像
 docker compose stop         # 停止服务
 ```
 
-官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:2`，跟随最新的 2.x 正式版。需要固定版本时改成具体版本号，例如 `ghcr.io/thewisewolfholo/api-load:v2.0.4`；`edge` 跟随 main 分支。
+官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:2`，只跟随 2.x 正式版。当前源码版本为 `2.1.2`，发布标签后生成 `:v2.1.2` 和 `:v2.1.2-sha-<commit>`。生产部署应固定版本或摘要。`edge` 跟随 main，候选版不会覆盖 `:2`。源码中的版本号不表示该镜像已经发布。
+
+2.1 支持独立的透明 HTTP 来源和 `/proxy/{group_id}/*path` 入口，可显式限制访问令牌的来源、方法和路径；现有原生与兼容接口保留。配置和限制见[透明转发说明](docs/transparent-forwarding-proposal.md)，升级与恢复见[通用运维指南](docs/operations.md)。
 
 <details>
 <summary>使用原生二进制</summary>
@@ -206,3 +209,7 @@ GPT-Load 的部分能力构建在这些开源项目之上，在此致谢：
 GPT-Load 自身负责凭据存储、账号选择、调度、重试、健康、亲和、日志与用量策略。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，许可证全文位于 [`LICENSES/`](LICENSES/)，每个 Release 另附覆盖 Go 依赖的 CycloneDX SBOM。
 
 各渠道图标用于标识对应的上游服务商，其商标权归各自所有者；本项目与这些服务商没有从属或背书关系。
+
+## 原生服务开发分支
+
+原生服务支持包括 Cohere 多模态 Embedding、原生文件与任务接口、共享账号限制及能力证据。具体接口、兼容变化、验证结果和未完成范围见[实施与验收记录](docs/native-services-20261027.md)及[供应商研究](docs/provider-research-20261027.md)。部署前应验证自己的环境与数据。

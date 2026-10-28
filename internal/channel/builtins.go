@@ -38,6 +38,7 @@ func builtInModules() []spec.Module {
 		modules.Wafer(),
 		modules.HuggingFace(),
 		modules.Cohere(),
+		modules.Soniox(),
 		modules.OpenCodeGo(),
 		modules.OpenCodeZen(),
 		modules.GPTLoad(),
@@ -45,5 +46,7 @@ func builtInModules() []spec.Module {
 		modules.CLIProxyAPI(),
 		modules.Sub2API(),
 		modules.OpenAICompatible(),
+		modules.NativeAPI(),
+		modules.TransparentHTTP(),
 	}
 }

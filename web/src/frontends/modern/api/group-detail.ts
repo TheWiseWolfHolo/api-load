@@ -1,4 +1,5 @@
 import { credentialDisplayText } from '@shared/credential-display'
+import { readTransparentProxy, type TransparentProxy } from '@shared/transparent'
 import { readErrorRules, type ErrorRule } from '@shared/error-rules'
 import { codexLiveModes, type CodexLiveMode } from '@shared/codex-live'
 import type { ApiClient } from '@shared/http/client'
@@ -37,6 +38,8 @@ export interface CredentialFilters {
 }
 export const runtimeNumbers = [
   'concurrency_limit',
+  'account_concurrency_limit',
+  'account_rpm_limit',
   'first_byte_timeout',
   'request_timeout',
   'stream_idle_timeout',
@@ -61,6 +64,8 @@ export interface ParameterRule {
 export type RuntimeSettings = Partial<
   Record<RuntimeNumber, number> & Record<RuntimeSwitch, boolean>
 > & {
+  account_pool?: string
+  transparent_proxy?: TransparentProxy
   codex_live_mode?: CodexLiveMode
   header_rules?: HeaderRules
   parameter_overrides?: ParameterRule[]
@@ -97,6 +102,9 @@ function stringMap(value: unknown): Record<string, string> {
 function readRuntime(value: unknown): RuntimeSettings {
   const raw = record(value)
   const result: RuntimeSettings = {}
+  if (raw.transparent_proxy !== undefined)
+    result.transparent_proxy = readTransparentProxy(raw.transparent_proxy)
+  if (raw.account_pool !== undefined) result.account_pool = text(raw.account_pool)
   if (raw.error_rules !== undefined) result.error_rules = readErrorRules(raw.error_rules)
   for (const key of runtimeNumbers) if (raw[key] !== undefined) result[key] = integer(raw[key])
   for (const key of runtimeSwitches) if (raw[key] !== undefined) result[key] = boolean(raw[key])
@@ -291,6 +299,7 @@ export interface CredentialRow {
   lastRefresh?: number
   authError?: string
   failureCategory: string
+  lastFailureSummary?: string
   lastStatusCode: number | null
   modelCooldowns: { model: string; until: number }[]
   recovery: {
@@ -365,6 +374,8 @@ export function readCredential(value: unknown): CredentialRow {
       account?.last_refresh_at_ms === undefined ? undefined : integer(account.last_refresh_at_ms),
     authError: row.auth_error_code === undefined ? undefined : text(row.auth_error_code),
     failureCategory: text(row.last_failure_category),
+    lastFailureSummary:
+      row.last_failure_summary === undefined ? undefined : text(row.last_failure_summary),
     lastStatusCode: row.last_status_code === null ? null : integer(row.last_status_code),
     modelCooldowns: list(row.model_cooldowns).map((value) => {
       const cooldown = record(value)
@@ -467,4 +478,31 @@ export async function batchAllGroupCredentials(
     }),
   )
   return list(data.affected_credential_ids).map((id) => integer(id, 1))
+}
+
+export function discoveryFailureKey(cause: unknown): string {
+  if (
+    cause instanceof ApiError &&
+    cause.data &&
+    typeof cause.data === 'object' &&
+    'failure_kind' in cause.data
+  ) {
+    const kind = cause.data.failure_kind
+    if (
+      typeof kind === 'string' &&
+      [
+        'network',
+        'timeout',
+        'authentication',
+        'permission',
+        'catalog_missing',
+        'rate_limit',
+        'invalid_request',
+        'invalid_response',
+        'upstream_error',
+      ].includes(kind)
+    )
+      return 'groupCreate.discoveryErrors.' + kind
+  }
+  return 'groupCreate.discoveryFailed'
 }

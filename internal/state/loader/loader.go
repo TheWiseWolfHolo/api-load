@@ -91,15 +91,17 @@ type modelDTO struct {
 }
 
 type filterDTO struct {
-	GroupsRestricted bool                `json:"groups_restricted"`
-	Groups           []uint              `json:"groups"`
-	Protocols        []protocol.Protocol `json:"protocols"`
-	Models           []string            `json:"models"`
-	AllowedCIDRs     []string            `json:"allowed_cidrs"`
+	Transparent             *state.TransparentScope `json:"transparent"`
+	AllowModelLessResources bool                    `json:"allow_model_less_resources"`
+	GroupsRestricted        bool                    `json:"groups_restricted"`
+	Groups                  []uint                  `json:"groups"`
+	Protocols               []protocol.Protocol     `json:"protocols"`
+	Models                  []string                `json:"models"`
+	AllowedCIDRs            []string                `json:"allowed_cidrs"`
 }
 
 func (f filterDTO) toState() state.FilterSet {
-	filters := state.FilterSet{GroupsRestricted: f.GroupsRestricted}
+	filters := state.FilterSet{GroupsRestricted: f.GroupsRestricted, AllowModelLessResources: f.AllowModelLessResources, Transparent: f.Transparent.Clone()}
 	if len(f.Groups) > 0 {
 		filters.Groups = make(map[uint]struct{}, len(f.Groups))
 		for _, id := range f.Groups {

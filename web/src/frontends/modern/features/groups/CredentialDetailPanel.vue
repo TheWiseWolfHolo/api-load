@@ -99,6 +99,7 @@ const proxyOptions = computed(() => [
   { value: 'custom', label: t('proxies.select') },
 ])
 function failure(): string {
+  if (item.value.lastFailureSummary) return item.value.lastFailureSummary
   if (!item.value.failures) return '—'
   const key = 'credentialCards.failures.' + item.value.failureCategory
   return [te(key) ? t(key) : item.value.failureCategory, item.value.lastStatusCode]

@@ -34,6 +34,14 @@ func SiliconFlow() spec.Module {
 				FixedBaseURL:      "https://api.siliconflow.cn/v1",
 			},
 			Routes: []spec.Route{
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceCreate, execution.RouteNative),
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceRead, execution.RouteNative),
+				spec.NewRoute(protocol.OpenAIImages, execution.OperationImagesGenerate, execution.RouteNative),
+				spec.NewRoute(protocol.OpenAIEmbeddings, execution.OperationEmbeddingsCreate, execution.RouteNative),
+				spec.NewRoute(protocol.OpenAIEmbeddings, execution.OperationProbe, execution.RouteNative),
+				spec.NewRoute(protocol.Rerank, execution.OperationRerank, execution.RouteNative),
+				spec.NewRoute(protocol.Rerank, execution.OperationProbe, execution.RouteNative),
+
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationChatCompletion, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationListModels, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationProbe, execution.RouteNative),

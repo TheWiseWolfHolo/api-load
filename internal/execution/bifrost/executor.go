@@ -75,6 +75,7 @@ func (r *Runtime) Execute(parent context.Context, spec execution.AttemptSpec) (r
 		normalizeImagesAttemptResult(spec, &result)
 		normalizeEmbeddingsAttemptResult(spec, &result)
 		normalizeRerankAttemptResult(spec, &result)
+		normalizeCohereEmbeddingsAttemptResult(spec, &result)
 		normalizeDecisionsAttemptResult(spec, &result)
 		if r.providerKind(spec) == channel.ProviderMultiProtocolGateway || spec.ClientProtocol == protocol.GeminiEmbeddings {
 			normalizeGatewayProtocolProbeResult(spec, &result)
@@ -525,6 +526,19 @@ func (r *Runtime) prepare(spec execution.AttemptSpec, stream bool) (preparedAtte
 	}
 	if providerKind == channel.ProviderCline {
 		return r.prepareCline(spec, provider, directKey, secrets, stream, safeQuery)
+	}
+	if spec.ClientProtocol == protocol.OpenAIEmbeddings && dialect.StructuredRetrievalInput(spec.Body) {
+		if mode != channel.RouteNative {
+			failure := notSentConversionFailure(execution.ErrorCodeCriticalSemanticLoss, "structured embeddings require a native route")
+			return preparedAttempt{}, &failure
+		}
+		return prepareStructuredEmbedding(spec, resolved, provider, directKey, secrets)
+	}
+	if spec.ClientProtocol == protocol.NativeServices {
+		return prepareNativeServices(spec, resolved, provider, directKey, secrets)
+	}
+	if spec.ClientProtocol == protocol.CohereEmbeddings {
+		return prepareCohereEmbeddings(spec, resolved, provider, directKey, secrets)
 	}
 	if spec.ClientProtocol == protocol.Rerank {
 		return prepareRerank(spec, resolved, provider, directKey, secrets)
@@ -998,7 +1012,7 @@ func providerKindNativeForClient(providerKind channel.ProviderKind, clientProtoc
 	case channel.ProviderGemini:
 		return clientProtocol == protocol.Gemini || clientProtocol == protocol.GeminiEmbeddings
 	case channel.ProviderGoogleVertex:
-		return clientProtocol == protocol.Gemini
+		return clientProtocol == protocol.Gemini || clientProtocol == protocol.GeminiEmbeddings
 	case channel.ProviderOpenRouter:
 		return clientProtocol == protocol.OpenAICompletions || clientProtocol == protocol.OpenAIResponses ||
 			clientProtocol == protocol.OpenAIEmbeddings || clientProtocol == protocol.Decisions
@@ -1033,7 +1047,7 @@ func supportedRequestShape(spec execution.AttemptSpec, stream bool) bool {
 			return false
 		}
 		switch spec.ClientProtocol {
-		case protocol.OpenAICompletions, protocol.OpenAIResponses, protocol.OpenAIEmbeddings, protocol.Rerank, protocol.Decisions,
+		case protocol.OpenAICompletions, protocol.OpenAIResponses, protocol.OpenAIEmbeddings, protocol.CohereEmbeddings, protocol.Rerank, protocol.Decisions,
 			protocol.Anthropic, protocol.Gemini, protocol.GeminiEmbeddings:
 			return true
 		default:
@@ -1076,6 +1090,11 @@ func supportedRequestShape(spec execution.AttemptSpec, stream bool) bool {
 		default:
 			return false
 		}
+	case protocol.NativeServices:
+		endpoint, err := dialect.ClassifyNativeService(spec.Method, spec.Path)
+		return err == nil && !stream && spec.RouteMode == execution.RouteNative && spec.Operation == endpoint.Operation
+	case protocol.CohereEmbeddings:
+		return !stream && spec.RouteMode == execution.RouteNative && spec.Operation == execution.OperationEmbeddingsCreate && spec.Method == http.MethodPost && spec.Path == "/v2/embed"
 	case protocol.Rerank:
 		return !stream && spec.RouteMode == execution.RouteNative && spec.Operation == execution.OperationRerank && spec.Method == http.MethodPost && spec.Path == "/v1/rerank"
 	case protocol.Decisions:
@@ -1228,7 +1247,7 @@ func nativePassthroughPath(spec execution.AttemptSpec, providerKind channel.Prov
 
 func vertexNativeGeminiPath(model, action string) (string, error) {
 	model, ok := channel.NormalizeVertexGeminiModel(model)
-	if !ok || (action != "generateContent" && action != "streamGenerateContent") {
+	if !ok || (action != "generateContent" && action != "streamGenerateContent" && action != "embedContent") {
 		return "", fmt.Errorf("invalid Vertex Gemini target")
 	}
 	if allDigitsASCII(model) {

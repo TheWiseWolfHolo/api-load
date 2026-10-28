@@ -11,7 +11,7 @@ func TestGeminiEmbeddingsNativeRouteIsLimitedToSupportedChannels(t *testing.T) {
 	t.Parallel()
 
 	registry := NewRegistry()
-	supported := map[ID]struct{}{Gemini: {}, GPTLoad: {}, NewAPI: {}}
+	supported := map[ID]struct{}{Gemini: {}, GPTLoad: {}, NewAPI: {}, NativeAPI: {}}
 	for _, descriptor := range registry.List() {
 		definition, ok := registry.lookup(descriptor.ID)
 		if !ok {
@@ -23,7 +23,7 @@ func TestGeminiEmbeddingsNativeRouteIsLimitedToSupportedChannels(t *testing.T) {
 			execution.OperationProbe,
 		} {
 			mode, ok := definition.modes[protocol.GeminiEmbeddings][operation]
-			if want {
+			if want || descriptor.ID == GoogleVertex && operation == execution.OperationEmbeddingsCreate {
 				if !ok || mode != RouteNative {
 					t.Errorf("%q gemini-embeddings %q route = %q, %t; want native", descriptor.ID, operation, mode, ok)
 				}

@@ -68,6 +68,10 @@ func (*Rerank) ExtractUsage(body []byte) (usage.Result, error) {
 		return usage.Result{}, fmt.Errorf("normalize rerank usage response")
 	}
 	result, _ := accumulator.Finalize(true)
+	result.MeasuredUnits.SearchUnits, _ = usageInteger(billed, "search_units", false)
+	if result.MeasuredUnits.HasPositive() {
+		result.State = usage.StatePartial
+	}
 	return result, nil
 }
 

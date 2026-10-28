@@ -28,6 +28,7 @@ import (
 	"gpt-load/internal/platform/encryption"
 	"gpt-load/internal/platform/httpclient"
 	"gpt-load/internal/platform/httproute"
+	"gpt-load/internal/platform/memlimit"
 	"gpt-load/internal/platform/redact"
 	"gpt-load/internal/pricing"
 	"gpt-load/internal/provideradapter"
@@ -51,6 +52,7 @@ func BuildContainer() (*dig.Container, error) {
 
 	providers := []any{
 		config.Load,
+		memlimit.Detect,
 		func(cfg *config.Config) (encryption.Service, error) {
 			return encryption.NewServiceWithKeyFile(cfg.EncryptionKey, cfg.DataDir)
 		},
@@ -167,6 +169,8 @@ func BuildContainer() (*dig.Container, error) {
 		dialect.NewOpenAIImages,
 		dialect.NewOpenAIEmbeddings,
 		dialect.NewRerank,
+		dialect.NewCohereEmbeddings,
+		dialect.NewNativeServices,
 		dialect.NewDecisions,
 		dialect.NewAnthropic,
 		dialect.NewGemini,
@@ -178,13 +182,15 @@ func BuildContainer() (*dig.Container, error) {
 			openAIImages *dialect.OpenAIImages,
 			openAIEmbeddings *dialect.OpenAIEmbeddings,
 			rerank *dialect.Rerank,
+			cohereEmbeddings *dialect.CohereEmbeddings,
+			nativeServices *dialect.NativeServices,
 			decisions *dialect.Decisions,
 			anthropic *dialect.Anthropic,
 			gemini *dialect.Gemini,
 			geminiEmbeddings *dialect.GeminiEmbeddings,
 			mistral *dialect.Mistral,
 		) dialect.Set {
-			return dialect.NewSet(
+			return dialect.NewSet(nativeServices, cohereEmbeddings,
 				openAI, openAIResponses, openAIImages, openAIEmbeddings, rerank, decisions, anthropic, gemini, geminiEmbeddings, mistral,
 			)
 		},
@@ -256,8 +262,10 @@ func BuildContainer() (*dig.Container, error) {
 		adapter *cpaexecutor.Adapter,
 		cfg *config.Config,
 		service *control.Service,
+		memory memlimit.Memory,
 	) *gateway.Handler {
 		handler.ConfigureCodexLive(adapter, cfg.CodexLive)
+		handler.ConfigureRequestBodyLimit(memory)
 		handler.SetLiveModelLister(service)
 		return handler
 	}); err != nil {

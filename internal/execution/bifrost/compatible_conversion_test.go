@@ -90,8 +90,8 @@ func compatibleReasoningServer(t *testing.T, stream bool) *httptest.Server {
 		if !found {
 			t.Error("tool history missing")
 		}
-		if gjson.GetBytes(body, "reasoning_effort").Exists() {
-			t.Error("#730 reasoning effort filter regressed")
+		if effort := gjson.GetBytes(body, "reasoning_effort"); effort.Exists() && effort.String() != "high" {
+			t.Error("reasoning effort changed")
 		}
 		if stream {
 			w.Header().Set("Content-Type", "text/event-stream")
@@ -154,6 +154,12 @@ func TestCompatibleRequestKeepsSDKToolPreparation(t *testing.T) {
 			spec.UpstreamModel = tc.model
 			before := spec.Clone()
 			result := runtime.Execute(t.Context(), spec)
+			if tc.name == "default namespace" {
+				if result.Error == nil || result.Error.Code != execution.ErrorCodeCriticalSemanticLoss {
+					t.Fatal("namespace semantics must be preserved or rejected")
+				}
+				return
+			}
 			if result.Error != nil {
 				t.Fatal(result.Error)
 			}

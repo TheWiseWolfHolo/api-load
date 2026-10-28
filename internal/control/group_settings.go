@@ -91,6 +91,7 @@ func (s *Service) GetGroupSettings(ctx context.Context, groupID uint) (GroupSett
 	if err != nil {
 		return GroupSettingsResponse{}, err
 	}
+	applySharedAccountLimits(&response, groupID, snapshot)
 	response.Proxy, err = s.groupProxyView(ctx, s.db, group)
 	return response, err
 }
@@ -160,6 +161,13 @@ func groupSettingsResponse(
 		Overrides:       overrides,
 		Effective:       effective,
 	}, nil
+}
+
+func applySharedAccountLimits(response *GroupSettingsResponse, groupID uint, snapshot *state.ConfigSnapshot) {
+	if group, exists := snapshot.Groups[groupID]; exists {
+		response.Effective.AccountConcurrencyLimit = group.AccountConcurrencyLimit
+		response.Effective.AccountRPMLimit = group.AccountRPMLimit
+	}
 }
 
 func cloneString(value *string) *string {
@@ -394,6 +402,7 @@ func (s *Service) UpdateGroupSettings(
 	if err != nil {
 		return GroupSettingsResponse{}, err
 	}
+	applySharedAccountLimits(&response, groupID, snapshot)
 	response.Proxy, err = s.groupProxyView(ctx, s.db, committed)
 	return response, err
 }

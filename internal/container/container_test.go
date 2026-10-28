@@ -543,7 +543,7 @@ func TestBuildContainerResolvesAllDialects(t *testing.T) {
 			values[protocol.Anthropic] != anthropic ||
 			values[protocol.Gemini] != gemini ||
 			values[protocol.GeminiEmbeddings] != geminiEmbeddings ||
-			values[protocol.Mistral] != mistral || len(values) != 10 {
+			values[protocol.Mistral] != mistral || len(values) != 12 {
 			t.Fatalf("dialect Set = %#v", values)
 		}
 	})

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"mime"
 	"net/http"
 	"strings"
 
@@ -25,21 +24,26 @@ func (d *Decisions) InspectRequest(request *ParsedRequest) (RequestMetadata, err
 	if request == nil || request.Method != http.MethodPost || request.Path != decisionsPath {
 		return RequestMetadata{}, fmt.Errorf("decisions requires POST %s", decisionsPath)
 	}
-	if value := request.Header.Get("Content-Type"); strings.TrimSpace(value) != "" {
-		mediaType, _, err := mime.ParseMediaType(value)
-		if err != nil || !strings.EqualFold(mediaType, "application/json") {
-			return RequestMetadata{}, fmt.Errorf("decisions requires application/json")
-		}
+	payload, _, err := decisionsPayload(request)
+	if err != nil {
+		return RequestMetadata{}, err
 	}
-	metadata, err := inspectJSONRequestFields(request.Body, true, false)
+	metadata, err := inspectJSONRequestFields(payload, true, false)
 	if err != nil {
 		return RequestMetadata{}, err
 	}
 	if metadata.Stream {
 		return RequestMetadata{}, fmt.Errorf("decisions does not support streaming")
 	}
-	if err := validateDecisionsInput(request.Body); err != nil {
+	if err := validateDecisionsInput(payload); err != nil {
 		return RequestMetadata{}, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &object); err != nil {
+		return RequestMetadata{}, err
+	}
+	if _, images := object["assets"]; images && request.Header.Get("TypeSafe-Danger-Zone-Images") != "true" {
+		return RequestMetadata{}, &RequestValidationError{Field: "TypeSafe-Danger-Zone-Images", Rule: "explicit_image_opt_in_required"}
 	}
 	metadata.Operation = execution.OperationDecisionsCreate
 	metadata.RouteRequirement = execution.RouteRequirementNative
@@ -110,6 +114,10 @@ func validateDecisionQuestion(raw json.RawMessage) error {
 	}
 	criteria, hasCriteria := question["criteria"]
 	switch questionType {
+	case "box":
+		if hasCriteria {
+			return fmt.Errorf("box questions do not accept criteria")
+		}
 	case "choice":
 		if !hasCriteria {
 			return fmt.Errorf("criteria are required")
@@ -185,7 +193,11 @@ func (d *Decisions) RewriteRequestModel(request *ParsedRequest, model string) (*
 	if _, err := d.InspectRequest(request); err != nil {
 		return nil, err
 	}
-	object, err := decodeJSONObject(request.Body)
+	payload, boundary, err := decisionsPayload(request)
+	if err != nil {
+		return nil, err
+	}
+	object, err := decodeJSONObject(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +218,12 @@ func (d *Decisions) RewriteRequestModel(request *ParsedRequest, model string) (*
 	clone, err := cloneParsedRequest(request)
 	if err != nil {
 		return nil, err
+	}
+	if boundary != "" {
+		body, err = rewriteDecisionsMultipart(request.Body, body, boundary)
+		if err != nil {
+			return nil, err
+		}
 	}
 	clone.Body = body
 	if clone.Header == nil {

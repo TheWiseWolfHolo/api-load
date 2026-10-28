@@ -41,6 +41,7 @@ func TestFinalRegistryContainsOnlyApprovedChannels(t *testing.T) {
 		Wafer,
 		HuggingFace,
 		Cohere,
+		Soniox,
 		OpenCodeGo,
 		OpenCodeZen,
 		GPTLoad,
@@ -48,6 +49,8 @@ func TestFinalRegistryContainsOnlyApprovedChannels(t *testing.T) {
 		CLIProxyAPI,
 		Sub2API,
 		OpenAICompatible,
+		NativeAPI,
+		TransparentHTTP,
 	}
 	if got := descriptorIDs(registry.List()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("List() IDs = %v, want %v", got, want)

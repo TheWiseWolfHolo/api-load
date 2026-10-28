@@ -133,6 +133,7 @@ func (s *Service) UpdateGroupChannel(
 	if err != nil {
 		return GroupSettingsResponse{}, err
 	}
+	applySharedAccountLimits(&response, groupID, snapshot)
 	response.Proxy, err = s.groupProxyView(ctx, s.db, committed)
 	return response, err
 }

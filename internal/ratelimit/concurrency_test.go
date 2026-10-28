@@ -83,3 +83,28 @@ func TestConcurrencyAtomicAdmission(t *testing.T) {
 		t.Fatal("requests not released")
 	}
 }
+
+func TestSharedAccountLimitsAcrossGroups(t *testing.T) {
+	c := NewConcurrency()
+	release, reason := c.TryAcquireGroupAccount(1, 4, "provider-account", 1, 2)
+	if reason != "" {
+		t.Fatal(reason)
+	}
+	if _, reason = c.TryAcquireGroupAccount(2, 4, "provider-account", 1, 2); reason != "account_concurrency" {
+		t.Fatal("shared concurrency not enforced", reason)
+	}
+	release()
+	release, reason = c.TryAcquireGroupAccount(2, 4, "provider-account", 1, 2)
+	if reason != "" {
+		t.Fatal(reason)
+	}
+	release()
+	if _, reason = c.TryAcquireGroupAccount(1, 4, "provider-account", 1, 2); reason != "account_rpm" {
+		t.Fatal("shared rate not enforced", reason)
+	}
+	release, reason = c.TryAcquireGroupAccount(3, 4, "other-account", 1, 2)
+	if reason != "" {
+		t.Fatal(reason)
+	}
+	release()
+}

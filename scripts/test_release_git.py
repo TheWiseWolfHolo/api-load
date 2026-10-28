@@ -36,7 +36,8 @@ class ReleaseSourceTest(unittest.TestCase):
         git(self.source, "config", "user.email", "release@example.test")
         git(self.source, "remote", "add", "origin", str(self.remote))
         (self.source / "tracked").write_text("first\n")
-        git(self.source, "add", "tracked")
+        (self.source / "VERSION").write_text("2.0.0\n")
+        git(self.source, "add", "tracked", "VERSION")
         git(self.source, "commit", "-qm", "first")
         git(self.source, "tag", "v2.0.0-rc.1")
         git(self.source, "push", "-q", "-u", "origin", "main", "--tags")
@@ -89,7 +90,7 @@ class ReleaseSourceTest(unittest.TestCase):
             answers = iter(["", "yes"])
             with redirect_stdout(io.StringIO()):
                 tag = prompt_for_tag(prepared, input_fn=lambda _: next(answers))
-            self.assertEqual(tag, "v2.0.0-rc.2")
+            self.assertEqual(tag, "v2.0.0")
             self.assertEqual(git(self.source, "tag", "--list", tag), "")
             publish_tag(prepared, tag)
             self.assertEqual(
@@ -103,7 +104,16 @@ class ReleaseSourceTest(unittest.TestCase):
             answers = iter(["", "no"])
             with self.assertRaises(ReleaseCancelled), redirect_stdout(io.StringIO()):
                 prompt_for_tag(prepared, input_fn=lambda _: next(answers))
-            self.assertEqual(git(self.source, "tag", "--list", "v2.0.0-rc.2"), "")
+            self.assertEqual(git(self.source, "tag", "--list", "v2.0.0"), "")
+
+    def test_mismatched_tag_is_rejected_before_confirmation_or_creation(self):
+        self._push_second_commit()
+        with prepare_source(self.source) as prepared:
+            with self.assertRaisesRegex(ReleaseSourceError, "VERSION"), redirect_stdout(io.StringIO()):
+                prompt_for_tag(prepared, input_fn=lambda _: "v2.1.0")
+            with self.assertRaisesRegex(ReleaseSourceError, "VERSION"):
+                publish_tag(prepared, "v2.1.0")
+            self.assertEqual(git(self.source, "tag", "--list", "v2.1.0"), "")
 
     def test_unknown_prerelease_requires_manual_version_instead_of_guessing(self):
         self._push_second_commit()

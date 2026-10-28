@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import TransparentAccessEditor from './TransparentAccessEditor.vue'
+import { resourcePermissionMessages } from '@modern/i18n/locales/resource-permission'
 import { protocolLabel } from '@modern/i18n/protocols'
 import { Eye, EyeOff, RefreshCw, Trash2 } from '@lucide/vue'
 import { useQuery } from '@tanstack/vue-query'
@@ -65,6 +67,11 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; saved: [row: AccessKey, created: boolean]; deleted: [] }>()
 const { t, n, locale } = useI18n()
+const resourceLabels = computed(
+  () =>
+    resourcePermissionMessages[locale.value as keyof typeof resourcePermissionMessages] ??
+    resourcePermissionMessages['en-US'],
+)
 const client = useApiClient()
 const controller = new AbortController()
 const query = useQuery({
@@ -79,6 +86,12 @@ const groups = useQuery({
 const base = ref<AccessKey>()
 const usageRow = computed(() => (props.mode === 'detail' ? query.data.value : undefined))
 const draft = ref<AccessDraft>(draftFor())
+const resourceAllowed = computed({
+  get: () => Boolean(draft.value.scope.allow_model_less_resources),
+  set: (value: boolean) => {
+    draft.value.scope.allow_model_less_resources = value
+  },
+})
 const initial = ref('')
 const initialized = ref(false)
 const attempted = ref(false)
@@ -136,7 +149,9 @@ const groupOptions = computed(() => [
     label: group.name,
     keywords: [group.channelName, group.channelID],
   })),
-  ...draft.value.scope.groups
+  ...[
+    ...new Set([...draft.value.scope.groups, ...(draft.value.scope.transparent?.group_ids ?? [])]),
+  ]
     .filter((id) => !groupMap.value.has(String(id)))
     .map((id) => ({ value: String(id), label: t('accessKeys.missingGroup') })),
 ])
@@ -638,11 +653,34 @@ onScopeDispose(() => {
               :disabled="scopeLocked"
               :error="fieldError('models')"
             />
+            <template
+              v-if="
+                draft.modes.models !== 'all' &&
+                (draft.modes.protocols === 'all' ||
+                  draft.scope.protocols.includes('native-services'))
+              "
+            >
+              <div class="modern-access-setting">
+                <span>{{ resourceLabels.title }}</span
+                ><AppSwitch
+                  v-model="resourceAllowed"
+                  :label="resourceLabels.title"
+                  :disabled="scopeLocked"
+                />
+              </div>
+              <p class="modern-access-note">{{ resourceLabels.help }}</p>
+            </template>
             <p v-if="modelMismatch" class="modern-access-note">{{ t('accessKeys.mismatch') }}</p>
             <p v-if="groups.data.value?.autoModels?.length" class="modern-access-note">
               {{ t('autoModel.permissionsHint') }}
             </p>
           </AppFormSection>
+          <TransparentAccessEditor
+            v-model="draft.scope.transparent"
+            :groups="groupOptions"
+            :disabled="scopeLocked"
+            :error="attempted ? errors.transparent : undefined"
+          />
           <AccessKeyQuotaEditor
             v-model="draft.rules"
             :runtime="base?.cost_limit_status"

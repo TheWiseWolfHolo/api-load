@@ -13,6 +13,7 @@ export const availabilityStates = [
   'paused',
   'no_credentials',
   'no_models',
+  'transparent_proxy_disabled',
   'unavailable',
 ] as const
 export type GroupAvailability = (typeof availabilityStates)[number]

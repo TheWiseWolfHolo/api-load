@@ -10,8 +10,9 @@ API キー、サブスクリプションアカウント、トラフィック制�
 
 [English](README.md) · [中文](README_CN.md) · 日本語 | [公式サイト](https://www.gpt-load.com)
 
-[![Release](https://img.shields.io/badge/API--Load-v2.0.1-blue)](https://github.com/TheWiseWolfHolo/api-load/releases/tag/v2.0.1)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3Av2--candidate-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
+[![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
+[![Source version](https://img.shields.io/badge/source-2.1.2-blue)](VERSION)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -141,7 +142,9 @@ docker compose pull && docker compose up -d   # 最新の 2.x イメージへ更
 docker compose stop         # サービスを停止
 ```
 
-公式 Compose は最新の 2.x 正式版に追従する `ghcr.io/thewisewolfholo/api-load:2` を使用します。バージョンを固定するには `ghcr.io/thewisewolfholo/api-load:v2.0.4` のように指定してください。`edge` は main ブランチに追従します。
+Compose の `ghcr.io/thewisewolfholo/api-load:2` は 2.x 正式版だけを追跡します。現在のソースは `2.1.2` で、リリースタグの公開後に `:v2.1.2` と `:v2.1.2-sha-<commit>` を生成します。本番ではバージョンかダイジェストを固定してください。`edge` は main を追跡し、候補版で `:2` を更新しません。ソースのバージョン表示は、対応するイメージの公開済みを意味しません。
+
+2.1 では `/proxy/{group_id}/*path` に任意選択の透過 HTTP 転送を追加し、アクセスキーごとに転送元、メソッド、パスを明示的に制限できます。既存のネイティブ API と互換 API は維持します。[設定と制限](docs/transparent-forwarding-proposal.md)、[リリース・更新・復旧ガイド](docs/operations.md)を参照してください。
 
 <details>
 <summary>ネイティブバイナリを使う</summary>
@@ -206,3 +209,7 @@ GPT-Load の一部機能は以下のプロジェクトを基盤としていま�
 認証情報の保存、アカウント選択、スケジューリング、リトライ、健全性、アフィニティ、ログ、使用量ポリシーは GPT-Load が担います。サードパーティ表記は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、ライセンス全文は [`LICENSES/`](LICENSES/) にあり、各リリースには Go 依存関係を対象とした CycloneDX SBOM が付属します。
 
 チャネルアイコンは対応するアップストリームプロバイダーを識別するために使用しています。商標権は各所有者に帰属し、本プロジェクトはこれらのプロバイダーと提携関係や推奨関係にはありません。
+
+## ネイティブサービス開発ブランチ
+
+ネイティブ API では Cohere のマルチモーダル埋め込み、ファイルとタスク、共有アカウント制限、機能の検証情報に対応しています。詳細なエンドポイント、互換性の変更、検証結果と未検証の範囲は[実装と検証記録](docs/native-services-20261027.md)および[プロバイダー調査](docs/provider-research-20261027.md)を参照してください。本番環境へ適用する前に、使用する環境とデータを検証してください。

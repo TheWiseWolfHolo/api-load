@@ -30,6 +30,14 @@ func (e *ValidationError) Error() string {
 type Operation string
 
 const (
+	OperationTransparentRequest Operation = "transparent_request"
+	OperationResourceCreate     Operation = "resource_create"
+	OperationResourceRead       Operation = "resource_read"
+	OperationResourceDelete     Operation = "resource_delete"
+	OperationResourceCancel     Operation = "resource_cancel"
+)
+
+const (
 	OperationChatCompletion               Operation = "chat_completion"
 	OperationResponsesCreate              Operation = "responses_create"
 	OperationResponsesRetrieve            Operation = "responses_retrieve"
@@ -63,7 +71,7 @@ const (
 // Valid reports whether the operation is supported by the execution contract.
 func (o Operation) Valid() bool {
 	switch o {
-	case OperationChatCompletion,
+	case OperationTransparentRequest, OperationResourceCreate, OperationResourceRead, OperationResourceDelete, OperationResourceCancel, OperationChatCompletion,
 		OperationResponsesCreate,
 		OperationResponsesRetrieve,
 		OperationResponsesDelete,
@@ -114,7 +122,7 @@ const (
 // ReplayPolicy returns the operation-level replay contract.
 func (o Operation) ReplayPolicy() ReplayPolicy {
 	switch o {
-	case OperationImagesGenerate, OperationImagesEdit, OperationEmbeddingsCreate, OperationRerank, OperationDecisionsCreate, OperationLiveCall,
+	case OperationTransparentRequest, OperationResourceCreate, OperationResourceDelete, OperationResourceCancel, OperationImagesGenerate, OperationImagesEdit, OperationEmbeddingsCreate, OperationRerank, OperationDecisionsCreate, OperationLiveCall,
 		OperationMistralOCR, OperationMistralFIM, OperationMistralAudioTranscription, OperationMistralAudioSpeech,
 		OperationMistralModeration, OperationMistralChatModeration, OperationMistralClassification,
 		OperationMistralRealtimeTranscription:

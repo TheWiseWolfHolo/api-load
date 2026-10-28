@@ -1351,6 +1351,32 @@ func TestHandlerUsesParameterOverrideAttemptObservations(t *testing.T) {
 	}
 }
 
+func TestServiceEvidenceDescribesEffectiveEmbeddingInput(t *testing.T) {
+	forwarder := &scriptedForwarder{results: []UpstreamResult{{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: []byte(`{"data":[{"embedding":[1,2,3],"index":0}]}`), RequestWritten: true}}}
+	sink := &recordingRequestLogSink{}
+	engine, handler, manager, _ := newRequestLogHandlerTestRuntime(t, forwarder, &recordingAccessKeyRPMLimiter{}, sink, "synthetic-provider-key")
+	handler.dialects = dialect.NewSet(dialect.NewOpenAIEmbeddings())
+	_, err := manager.Publish(state.CompileInput{ChannelRegistry: channel.NewRegistry(), Groups: []state.GroupConfig{{ID: 1, Name: "retrieval", ChannelID: channel.OpenAICompatible, ConnectionType: "api_key", Params: json.RawMessage(`{"base_url":"https://synthetic.example/v1"}`), Models: []state.ModelConfig{{ID: "embed"}}, Enabled: true, Settings: config.Settings{state.SettingParameterOverrides: []any{map[string]any{"set": map[string]any{"input": map[string]any{"image": "data:image/png;base64,c3ludGhldGlj"}, "dimensions": 3}}}}}}, Credentials: []state.CredentialConfig{{ID: 1, GroupID: 1, Status: state.CredentialStatusActive, Version: 1, IdentityGeneration: 1, Fingerprint: "credential-1"}}, AccessKeys: []state.AccessKeyConfig{{ID: 1, KeyHash: handler.encryption.Hash("gl-client"), Status: state.AccessKeyStatusActive}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/v1/embeddings", strings.NewReader(`{"model":"embed","input":"original text","dimensions":768}`))
+	request.Header.Set("Authorization", "Bearer gl-client")
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	if response.Code != 200 {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	events := sink.snapshot()
+	if len(events) != 1 || events[0].ServiceEvidence == nil {
+		t.Fatal("missing service evidence")
+	}
+	evidence := events[0].ServiceEvidence
+	if !reflect.DeepEqual(evidence.Input, []string{"image"}) || evidence.RequestedDimensions != 3 {
+		t.Fatalf("logged client values rather than effective request: %+v", evidence)
+	}
+}
+
 func TestHandlerUsesClientRequestPricingMode(t *testing.T) {
 	for _, test := range []struct {
 		name        string
@@ -3869,5 +3895,48 @@ func TestRerankRequestLogFreezesProviderInputEcho(t *testing.T) {
 		if bytes.Contains(encoded, []byte(forbidden)) {
 			t.Fatalf("Embeddings request log retained %q: %s", forbidden, encoded)
 		}
+	}
+}
+
+func TestServiceEvidenceNeverStoresInputValuesOrClaimsQuality(t *testing.T) {
+	for _, test := range []struct {
+		p    protocol.Protocol
+		body string
+	}{
+		{protocol.CohereEmbeddings, `{"images":["data:image/png;base64,PRIVATE"],"input_type":"image","output_dimension":768}`},
+		{protocol.CohereEmbeddings, `{"inputs":[{"content":[{"type":"text","text":"PRIVATE"},{"type":"image_url","image_url":{"url":"PRIVATE"}}]}]}`},
+		{protocol.Rerank, `{"query":{"image":"PRIVATE"},"documents":[{"text":"PRIVATE"}]}`},
+	} {
+		sink := &recordingRequestLogSink{}
+		recorder := newRequestRecorder(sink, "request-evidence", time.Unix(100, 0), 1, test.p, func() time.Time { return time.Unix(101, 0) })
+		recorder.serviceEvidence = requestServiceEvidence(test.p, &dialect.ParsedRequest{Body: []byte(test.body)})
+		recorder.outcome.status = telemetry.RequestStatusSuccess
+		recorder.emit()
+		value, _ := json.Marshal(sink.events[0].ServiceEvidence)
+		if bytes.Contains(value, []byte("PRIVATE")) || !bytes.Contains(value, []byte(`"quality":"not_evaluated"`)) {
+			t.Fatalf("unsafe evidence: %s", value)
+		}
+		if test.p == protocol.CohereEmbeddings && !bytes.Contains(value, []byte(`"result_check":"vector_count_and_shape"`)) {
+			t.Fatalf("missing result check: %s", value)
+		}
+		if test.p == protocol.Rerank && !bytes.Contains(value, []byte(`"result_check":"not_checked"`)) {
+			t.Fatalf("unverified result claim: %s", value)
+		}
+	}
+}
+
+func TestCohereInvalidOutputDimensionNeverDispatchesOrRecordsEvidence(t *testing.T) {
+	forwarder := &scriptedForwarder{}
+	handler, engine, sink := newContinuationFixture(t, forwarder)
+	handler.dialects = dialect.NewSet(dialect.NewCohereEmbeddings())
+	setContinuationChannel(t, handler, channel.Cohere, "https://api.cohere.ai/v2")
+	request := httptest.NewRequest(http.MethodPost, "/v2/embed", strings.NewReader(`{"model":"gpt-4o","texts":["synthetic"],"input_type":"search_document","output_dimension":-1}`))
+	request.Header.Set("Authorization", "Bearer gl-client")
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	assertGatewayReasonTest(t, response, http.StatusBadRequest, "invalid_request_positive_safe_integer_required")
+	events := sink.snapshot()
+	if len(forwarder.inputs) != 0 || len(events) != 1 || len(events[0].Attempts) != 0 || events[0].ServiceEvidence != nil {
+		t.Fatal("invalid client dimensions reached dispatch or capability evidence")
 	}
 }

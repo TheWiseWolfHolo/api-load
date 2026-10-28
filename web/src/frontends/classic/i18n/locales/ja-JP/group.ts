@@ -20,6 +20,7 @@ export default {
       statusReason: {
         no_available_credentials: '現在利用可能な認証情報がありません',
         no_models: 'モデルが設定されていません',
+        transparent_proxy_disabled: '透過転送が無効',
       },
       filters: {
         region: 'グループを絞り込む',

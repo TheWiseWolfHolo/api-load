@@ -715,6 +715,10 @@ func projectModelCatalogReference(
 			return nil
 		}
 	}
+	evidence := modelEvidence(identity.ChannelID, identity.ModelID)
+	if len(evidence.OfficialOutput) > 0 {
+		model.Metadata.Modalities.Output = append([]string{}, evidence.OfficialOutput...)
+	}
 	provider := snapshot.Providers[providerID]
 	providerName := strings.TrimSpace(provider.Name)
 	if providerName == "" {

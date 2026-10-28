@@ -415,6 +415,7 @@ func decodeRequestLogRows(rows []models.RequestLog) ([]Record, error) {
 			ChannelID:               channel.ID(row.ChannelID),
 			CredentialID:            row.CredentialID,
 			UsageState:              usage.State(row.UsageState),
+			MeasuredUnits:           json.RawMessage(row.MeasuredUnits),
 			BillingUnit:             pricing.BillingUnit(row.BillingUnit),
 			CostState:               pricing.CostState(row.CostState),
 			PricingCompleteness:     pricing.Completeness(row.PricingCompleteness),

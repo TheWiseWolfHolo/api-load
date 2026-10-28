@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { transparentProxyError, type TransparentProxy } from '@shared/transparent'
+import GroupTransparentEditor from './GroupTransparentEditor.vue'
 import { codexLiveModes, type CodexLiveMode } from '@shared/codex-live'
 import { protocolLabel } from '@modern/i18n/protocols'
 import { Plus, Trash2 } from '@lucide/vue'
@@ -60,6 +62,16 @@ const query = useQuery({
 })
 const saved = ref<GroupSettings>()
 const params = ref<Record<string, string>>({})
+const accountPool = ref('')
+const transparent = ref<TransparentProxy>({
+  enabled: false,
+  base_url: '',
+  auth_header: 'Authorization',
+  auth_prefix: 'Bearer ',
+  strategy: 'rotate',
+  fixed_credential_id: 0,
+})
+const initialTransparent = ref('')
 const validationModel = ref('')
 const validationProtocol = ref('')
 const numbers = ref<Partial<Record<RuntimeNumber, string>>>({})
@@ -106,6 +118,8 @@ function snapshot(): string {
     validationModel.value,
     validationProtocol.value,
     numbers.value,
+    accountPool.value,
+    transparent.value,
     switches.value,
     liveMode.value,
     proxyMode.value,
@@ -126,6 +140,18 @@ watch(
   (data) => {
     if (!data || dirty.value || saving.value) return
     saved.value = data
+    accountPool.value = data.overrides.account_pool ?? ''
+    transparent.value = data.overrides.transparent_proxy
+      ? { ...data.overrides.transparent_proxy }
+      : {
+          enabled: false,
+          base_url: '',
+          auth_header: 'Authorization',
+          auth_prefix: 'Bearer ',
+          strategy: 'rotate',
+          fixed_credential_id: 0,
+        }
+    initialTransparent.value = JSON.stringify(transparent.value)
     params.value = { ...data.params }
     validationModel.value = data.validationModel ?? ''
     validationProtocol.value = data.validationProtocol ?? ''
@@ -209,7 +235,7 @@ function numberInvalid(key: RuntimeNumber): boolean {
     Boolean(value) &&
     (!/^\d+$/u.test(value) ||
       !Number.isSafeInteger(Number(value)) ||
-      Number(value) < (key === 'blacklist_threshold' || key === 'concurrency_limit' ? 0 : 1))
+      Number(value) < (key === 'blacklist_threshold' || key.endsWith('_limit') ? 0 : 1))
   )
 }
 const proxyChanged = computed(
@@ -246,11 +272,16 @@ async function save(): Promise<void> {
     Object.keys(paramErrors.value).length ||
     runtimeNumbers.some(numberInvalid) ||
     proxyInvalid.value ||
-    headerInvalid.value
+    headerInvalid.value ||
+    Boolean(transparentProxyError(transparent.value))
   )
     return
   const base = saved.value
   const overrides: RuntimeSettings = JSON.parse(JSON.stringify(base.overrides))
+  if (JSON.stringify(transparent.value) !== initialTransparent.value)
+    overrides.transparent_proxy = { ...transparent.value }
+  if (accountPool.value.trim()) overrides.account_pool = accountPool.value.trim()
+  else delete overrides.account_pool
   for (const key of runtimeNumbers) {
     if (numbers.value[key]) overrides[key] = Number(numbers.value[key])
     else delete overrides[key]
@@ -483,6 +514,23 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
           </div>
         </template>
       </AppFormSection>
+      <GroupTransparentEditor
+        v-model="transparent"
+        :group-id="group.id"
+        :eligible="
+          group.connectionType === 'api_key' &&
+          channel?.credentialFields.length === 1 &&
+          channel.credentialFields[0]?.key === 'api_key'
+        "
+        :disabled="busy"
+        :attempted="attempted"
+      />
+      <AppTextField
+        v-model="accountPool"
+        :label="t('groupDetail.accountPool')"
+        :description="t('groupDetail.accountPoolHelp')"
+        :disabled="busy"
+      />
       <AppFormSection :title="t('groupDetail.runtime')" :description="t('groupDetail.runtimeHelp')">
         <div class="modern-advanced-columns">
           <AppTextField

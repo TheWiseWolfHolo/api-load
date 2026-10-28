@@ -18,6 +18,7 @@ import (
 
 func TestMapEventPersistsFrozenUsagePricingAndAttribution(t *testing.T) {
 	event := testEvent("00000000-0000-4000-8000-000000000101")
+	event.ServiceEvidence = &telemetry.ServiceEvidence{Format: "cohere-embeddings", Input: []string{"image"}, IdentityGeneration: 42, ResultCheck: "vector_count_and_shape", Quality: "not_evaluated"}
 	event.CompletedAt = time.Date(2026, time.July, 24, 20, 30, 0, 123, time.FixedZone("test", 8*60*60))
 	event.Attempts[0].CompletedAt = event.CompletedAt.Add(-90 * time.Second)
 	event.Protocol = protocol.OpenAICompletions
@@ -60,6 +61,9 @@ func TestMapEventPersistsFrozenUsagePricingAndAttribution(t *testing.T) {
 	}
 
 	row := mustMapEvent(t, redact.New(), event)
+	if !strings.Contains(string(row.ServiceEvidence), `"identity_generation":42`) || !strings.Contains(string(row.ServiceEvidence), `"input":["image"]`) {
+		t.Fatalf("missing persisted service evidence: %s", row.ServiceEvidence)
+	}
 	if row.ID != event.RequestID || row.CompletedAtMS != 1_784_896_200_000 {
 		t.Fatalf("identity/completed_at_ms = %q/%d", row.ID, row.CompletedAtMS)
 	}

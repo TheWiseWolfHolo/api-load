@@ -83,6 +83,9 @@ func (table *Table) QuoteForModeWithReceipt(
 			LineItems: []ReceiptLine{{Code: "request", Quantity: 1, RateNanoUSDPerRequest: &price, Multiplier: directPriceMultiplier, State: ReceiptLinePriced, AmountNanoUSD: &base}},
 		}
 	}
+	if result.MeasuredUnits.HasPositive() {
+		return unavailableQuote(), nil
+	}
 	switch result.State {
 	case usage.StateNotApplicable:
 		return Quote{State: CostStateNotApplicable, Completeness: CompletenessNotApplicable}, nil

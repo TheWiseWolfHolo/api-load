@@ -133,6 +133,36 @@ func TestInspectRequiresModelWhenAccessKeyHasModelFilter(t *testing.T) {
 	}
 }
 
+func TestInspectExplicitResourceManagementGrant(t *testing.T) {
+	snapshot, err := state.Compile(state.CompileInput{ChannelRegistry: channel.NewRegistry(), Groups: []state.GroupConfig{{ID: 1, ChannelID: channel.Soniox, ConnectionType: "api_key", Params: json.RawMessage(`{}`), Models: []state.ModelConfig{{ID: "allowed-model"}}, Enabled: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name      string
+		grant     bool
+		protocol  protocol.Protocol
+		operation execution.Operation
+		model     *string
+		want      ReasonCode
+		routable  bool
+	}{
+		{"default-denies-upload", false, protocol.NativeServices, execution.OperationResourceCreate, nil, ReasonModelRequiredByFilter, false},
+		{"explicit-upload", true, protocol.NativeServices, execution.OperationResourceCreate, nil, "", true},
+		{"explicit-read", true, protocol.NativeServices, execution.OperationResourceRead, nil, "", true},
+		{"allowed-generation", true, protocol.NativeServices, execution.OperationResourceCreate, modelPointer("allowed-model"), "", true},
+		{"denied-generation", true, protocol.NativeServices, execution.OperationResourceCreate, modelPointer("other-model"), ReasonModelFiltered, false},
+		{"other-protocol-still-requires-model", true, protocol.OpenAIResponses, execution.OperationResponsesRetrieve, nil, ReasonModelRequiredByFilter, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := Inspect(snapshot, []CredentialRuntimeView{{ID: 1, GroupID: 1, Status: state.CredentialStatusActive}}, Query{ClientProtocol: test.protocol, Operation: test.operation, ExternalModel: test.model, AccessKey: state.AccessKeyView{Status: state.AccessKeyStatusActive, Filters: state.FilterSet{AllowModelLessResources: test.grant, GroupsRestricted: true, Groups: map[uint]struct{}{1: {}}, Models: map[string]struct{}{"allowed-model": {}}}}}, inspectNow())
+			if err != nil || got.Routable != test.routable || !test.routable && got.Reason != test.want {
+				t.Fatalf("inspection=%+v error=%v", got, err)
+			}
+		})
+	}
+}
+
 func TestInspectExplainsGroupsAndKeysInStableOrder(t *testing.T) {
 	now := inspectNow()
 	snapshot := inspectSnapshot(t)

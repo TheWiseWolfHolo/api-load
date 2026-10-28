@@ -146,3 +146,56 @@ func TestRerankRuntimeEnforcesBodyLimitAndCancellation(t *testing.T) {
 		t.Fatalf("cancellation=%+v", result)
 	}
 }
+
+func TestCohereNativeEmbeddingPreservesImagesAndOptions(t *testing.T) {
+	for _, input := range []string{`"texts":["synthetic text"]`, `"images":["data:image/png;base64,iVBORw0KGgo="]`, `"inputs":[{"content":[{"type":"text","text":"red"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgo="}}]}]`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			if r.URL.Path != "/v2/embed" || r.Header.Get("Authorization") != "Bearer "+testAPIKey || !bytes.Contains(body, []byte(input)) || !bytes.Contains(body, []byte(`"output_dimension":768`)) || bytes.Contains(body, []byte("injected")) {
+				t.Errorf("native request was not preserved: %s %s", r.URL.Path, body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"id":"test","embeddings":{"float":[[`+strings.Repeat("0.1,", 767)+`0.2]]},"meta":{"billed_units":{"input_tokens":8}}}`)
+		}))
+		spec := openAIEmbeddingsSpec(channel.Cohere, server.URL+"/v2", []byte(`{"model":"public",`+input+`,"input_type":"search_document","output_dimension":768,"embedding_types":["float"],"api_key":"injected"}`))
+		spec.ClientProtocol = protocol.CohereEmbeddings
+		spec.Path = "/v2/embed"
+		result := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true}).Execute(t.Context(), freezeTestAttempt(spec))
+		server.Close()
+		if result.Error != nil || result.StatusCode != 200 || !bytes.Contains(result.Body, []byte(`"float":[[0.1,`)) {
+			t.Fatalf("result=%+v error=%+v", result, result.Error)
+		}
+	}
+}
+
+func TestNativeStructuredRetrievalPreservesImageObjects(t *testing.T) {
+	for _, rerank := range []bool{false, true} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			if !bytes.Contains(body, []byte(`{"image":"data:image/png;base64,iVBORw0KGgo="}`)) {
+				t.Errorf("image object lost: %s", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if rerank {
+				io.WriteString(w, `{"results":[{"index":0,"relevance_score":0.9}]}`)
+			} else {
+				io.WriteString(w, `{"data":[{"index":0,"embedding":[0.1,0.2]}],"usage":{"prompt_tokens":8,"total_tokens":8}}`)
+			}
+		}))
+		body := `{"model":"public","input":{"image":"data:image/png;base64,iVBORw0KGgo="}}`
+		if rerank {
+			body = `{"model":"public","query":{"image":"data:image/png;base64,iVBORw0KGgo="},"documents":[{"image":"data:image/png;base64,iVBORw0KGgo="},"red"]}`
+		}
+		spec := openAIEmbeddingsSpec(channel.SiliconFlow, server.URL+"/v1", []byte(body))
+		if rerank {
+			spec.ClientProtocol = protocol.Rerank
+			spec.Operation = execution.OperationRerank
+			spec.Path = "/v1/rerank"
+		}
+		result := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true}).Execute(t.Context(), freezeTestAttempt(spec))
+		server.Close()
+		if result.Error != nil || result.StatusCode != 200 {
+			t.Fatalf("result=%+v error=%+v", result, result.Error)
+		}
+	}
+}

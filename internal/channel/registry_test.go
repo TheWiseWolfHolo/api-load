@@ -44,6 +44,7 @@ func TestRegistryHasStableBuiltInOrderAndSearch(t *testing.T) {
 		Wafer,
 		HuggingFace,
 		Cohere,
+		Soniox,
 		OpenCodeGo,
 		OpenCodeZen,
 		GPTLoad,
@@ -51,6 +52,8 @@ func TestRegistryHasStableBuiltInOrderAndSearch(t *testing.T) {
 		CLIProxyAPI,
 		Sub2API,
 		OpenAICompatible,
+		NativeAPI,
+		TransparentHTTP,
 	}
 	if got := descriptorIDs(registry.List()); !reflect.DeepEqual(got, wantIDs) {
 		t.Fatalf("List() IDs = %v, want %v", got, wantIDs)
@@ -871,6 +874,7 @@ func TestEveryResponsesCreateChannelDeclaresStoreHandling(t *testing.T) {
 		OpenCodeGo:       ResponsesStoreHandlingStateless,
 		OpenCodeZen:      ResponsesStoreHandlingStateless,
 		GPTLoad:          ResponsesStoreHandlingUpstreamManaged,
+		NativeAPI:        ResponsesStoreHandlingUpstreamManaged,
 		NewAPI:           ResponsesStoreHandlingUpstreamManaged,
 		CLIProxyAPI:      ResponsesStoreHandlingUpstreamManaged,
 		Sub2API:          ResponsesStoreHandlingUpstreamManaged,

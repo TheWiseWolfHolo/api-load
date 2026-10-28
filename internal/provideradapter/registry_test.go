@@ -8,22 +8,52 @@ import (
 
 	"gpt-load/internal/channel"
 	"gpt-load/internal/execution"
+	"gpt-load/internal/protocol"
 )
 
 type recordingAdapter struct {
 	unaryCalls   int
 	streamCalls  int
 	rejectRoutes bool
+	reconciled   []RuntimeTarget
 }
 
 func (adapter *recordingAdapter) ValidateRouteCapability(
-	channel.ProviderKind,
-	channel.RouteDescriptor,
+	_ channel.ProviderKind,
+	route channel.RouteDescriptor,
 ) error {
-	if adapter.rejectRoutes {
+	if adapter.rejectRoutes || route.ClientProtocol == protocol.TransparentHTTP {
 		return fmt.Errorf("route is not implemented")
 	}
 	return nil
+}
+
+func (adapter *recordingAdapter) Reconcile(targets []RuntimeTarget) error {
+	adapter.reconciled = targets
+	return nil
+}
+
+func TestRegistryLeavesTransparentHTTPExecutionAndRuntimeToGateway(t *testing.T) {
+	t.Parallel()
+	adapter := &recordingAdapter{}
+	registry, err := NewRegistry(channel.NewRegistry(), completeBindings(adapter, &recordingAdapter{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := execution.AttemptSpec{ChannelID: string(channel.TransparentHTTP), ClientProtocol: protocol.TransparentHTTP,
+		Operation: execution.OperationTransparentRequest, RouteMode: execution.RouteNative}
+	result := registry.Execute(t.Context(), spec)
+	stream := registry.ExecuteStream(t.Context(), spec, func(execution.StreamEvent) error { return nil })
+	if result.Error == nil || result.Error.Code != "gateway_owned_route" || stream.Error == nil || stream.Error.Code != "gateway_owned_route" || adapter.unaryCalls != 0 || adapter.streamCalls != 0 {
+		t.Fatalf("transparent request reached SDK: unary=%+v stream=%+v adapter=%+v", result, stream, adapter)
+	}
+	err = registry.ReconcileTargets([]RuntimeTarget{
+		{Target: channel.ResolvedTarget{ChannelID: channel.TransparentHTTP, ProviderKind: channel.ProviderOpenAICompatible}},
+		{Target: channel.ResolvedTarget{ChannelID: channel.OpenAI, ProviderKind: channel.ProviderOpenAI}},
+	})
+	if err != nil || len(adapter.reconciled) != 1 || adapter.reconciled[0].Target.ChannelID != channel.OpenAI {
+		t.Fatalf("reconciliation = %+v, err = %v", adapter.reconciled, err)
+	}
 }
 
 func (adapter *recordingAdapter) Execute(context.Context, execution.AttemptSpec) execution.AttemptResult {

@@ -77,6 +77,10 @@ func NewRegistry(channels *channel.Registry, bindings []Binding) (*Registry, err
 		}
 		validator := compiled[providerKind].(RouteCapabilityValidator)
 		for _, route := range descriptor.Routes {
+			// Opaque HTTP forwarding belongs to the gateway, not the SDK adapter.
+			if route.ClientProtocol == protocol.TransparentHTTP && route.Operation == execution.OperationTransparentRequest {
+				continue
+			}
 			for _, candidate := range expandRouteModes(route) {
 				if err := validator.ValidateRouteCapability(providerKind, candidate); err != nil {
 					return nil, fmt.Errorf(
@@ -141,6 +145,13 @@ func (registry *Registry) resolve(spec execution.AttemptSpec) (execution.Executo
 			execution.ErrorKindInternal,
 			"provider_adapter_registry_unavailable",
 			"provider adapter registry is unavailable",
+		)
+	}
+	if spec.ClientProtocol == protocol.TransparentHTTP || spec.Operation == execution.OperationTransparentRequest {
+		return nil, localAdapterEvidence(
+			execution.ErrorKindInvalidRequest,
+			"gateway_owned_route",
+			"transparent HTTP requests must use the gateway transport",
 		)
 	}
 	channelID := channel.ID(spec.ChannelID)
@@ -229,6 +240,9 @@ func (registry *Registry) ReconcileTargets(targets []RuntimeTarget) error {
 		}
 		owned := make([]RuntimeTarget, 0, len(targets))
 		for _, target := range targets {
+			if target.Target.ChannelID == channel.TransparentHTTP {
+				continue
+			}
 			if sameAdapter(adapter, registry.bindings[target.Target.ProviderKind]) {
 				owned = append(owned, target)
 			}

@@ -415,3 +415,165 @@ func TestResponsesPromptCacheKeyAffinityAndHardContinuationPriority(t *testing.T
 		}
 	}
 }
+
+func TestNativeResourcesStayOnCreatingCredential(t *testing.T) {
+	var headers []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers = append(headers, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/files":
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"file-synthetic"}`))
+		case "/v1/transcriptions":
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"task-synthetic","status":"queued"}`))
+		case "/v1/transcriptions/task-synthetic":
+			w.Write([]byte(`{"id":"task-synthetic","status":"completed"}`))
+		case "/v1/transcriptions/task-synthetic/transcript":
+			w.Write([]byte(`{"text":"synthetic audio"}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	handler, engine, _ := newContinuationFixture(t, newTestExecutionForwarder(t))
+	handler.dialects = dialect.NewSet(dialect.NewNativeServices())
+	setContinuationChannel(t, handler, channel.Soniox, server.URL+"/v1")
+	client := "gl-client"
+	setFilter := func(enabled bool, model string) {
+		key := handler.manager.Current().AccessKeysByID[1]
+		key.Filters = state.FilterSet{AllowModelLessResources: enabled, Models: map[string]struct{}{model: {}}}
+		handler.manager.Current().AccessKeysByID[1] = key
+		handler.manager.Current().AccessKeysByHash[handler.encryption.Hash("gl-client")] = key
+	}
+	setFilter(false, "gpt-4o")
+	send := func(method, path, contentType, body string, want int) {
+		request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+		request.Header.Set("Authorization", "Bearer "+client)
+		request.Header.Set("Content-Type", contentType)
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, request)
+		if response.Code != want {
+			t.Fatalf("%s %s = %d %s", method, path, response.Code, response.Body.String())
+		}
+	}
+	send("POST", "/native/soniox/v1/files", "multipart/form-data; boundary=test", "--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.wav\"\r\n\r\nsynthetic\r\n--test--\r\n", 400)
+	setFilter(true, "gpt-4o")
+	send("POST", "/native/soniox/v1/files", "multipart/form-data; boundary=test", "--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.wav\"\r\n\r\nsynthetic\r\n--test--\r\n", 201)
+	send("POST", "/native/soniox/v1/transcriptions", "application/json", `{"model":"forbidden","file_id":"file-synthetic"}`, 409)
+	send("POST", "/native/soniox/v1/transcriptions", "application/json", `{"model":"gpt-4o","file_id":"file-synthetic"}`, 201)
+	other := handler.manager.Current().AccessKeysByID[1]
+	other.ID = 2
+	handler.manager.Current().AccessKeysByID[2] = other
+	handler.manager.Current().AccessKeysByHash[handler.encryption.Hash("gl-other")] = other
+	client = "gl-other"
+	send("GET", "/native/soniox/v1/transcriptions/task-synthetic", "", "", 404)
+	client = "gl-client"
+	setFilter(true, "new-model")
+	send("POST", "/native/soniox/v1/transcriptions", "application/json", `{"model":"gpt-4o","file_id":"file-synthetic"}`, 409)
+	send("GET", "/native/soniox/v1/transcriptions/task-synthetic", "", "", 200)
+	send("GET", "/native/soniox/v1/transcriptions/task-synthetic/transcript", "", "", 200)
+	send("GET", "/native/soniox/v1/transcriptions/unknown", "", "", 404)
+	if len(headers) != 4 {
+		t.Fatalf("upstream request count=%d", len(headers))
+	}
+	for _, value := range headers {
+		if value != headers[0] {
+			t.Fatal("resource changed credential")
+		}
+	}
+}
+
+func TestMistralOCRFileReferenceRequiresOwnerAndPinsCredential(t *testing.T) {
+	for _, otherToken := range []bool{false, true} {
+		name := "creating-credential"
+		if otherToken {
+			name = "cross-access-key"
+		}
+		t.Run(name, func(t *testing.T) {
+			var credentials []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				credentials = append(credentials, r.Header.Get("Authorization"))
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/v1/files":
+					_, _ = w.Write([]byte(`{"id":"ocr-owned-synthetic"}`))
+				case "/v1/ocr":
+					_, _ = w.Write([]byte(`{"pages":[{"index":0,"markdown":"synthetic"}],"usage_info":{"pages_processed":1}}`))
+				default:
+					t.Errorf("unexpected upstream path %s", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer server.Close()
+			handler, engine, _ := newContinuationFixture(t, newTestExecutionForwarder(t))
+			handler.dialects = dialect.NewSet(dialect.NewNativeServices(), dialect.NewMistral())
+			setContinuationChannel(t, handler, channel.Mistral, server.URL+"/v1")
+			send := func(token, method, path, contentType, body string) *httptest.ResponseRecorder {
+				request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+				request.Header.Set("Authorization", "Bearer "+token)
+				request.Header.Set("Content-Type", contentType)
+				response := httptest.NewRecorder()
+				engine.ServeHTTP(response, request)
+				return response
+			}
+			if response := send("gl-client", "POST", "/native/mistral/v1/files", "multipart/form-data; boundary=test", "--test\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\nocr\r\n--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"synthetic.pdf\"\r\nContent-Type: application/pdf\r\n\r\nsynthetic PDF fixture\r\n--test--\r\n"); response.Code != 200 {
+				t.Fatalf("upload status=%d body=%s", response.Code, response.Body.String())
+			}
+			token := "gl-client"
+			if otherToken {
+				other := handler.manager.Current().AccessKeysByID[1]
+				other.ID = 2
+				handler.manager.Current().AccessKeysByID[2] = other
+				handler.manager.Current().AccessKeysByHash[handler.encryption.Hash("gl-other")] = other
+				token = "gl-other"
+				if response := send(token, "GET", "/native/mistral/v1/files/ocr-owned-synthetic", "", ""); response.Code != 404 {
+					t.Fatalf("native resource control did not reject the other token: %d", response.Code)
+				}
+			}
+			response := send(token, "POST", "/v1/ocr", "application/json", `{"model":"gpt-4o","document":{"type":"file","file_id":"ocr-owned-synthetic"}}`)
+			if otherToken {
+				if response.Code != 404 || len(credentials) != 1 {
+					t.Fatalf("OCR file reference bypassed access-key ownership: status=%d upstream_calls=%d", response.Code, len(credentials))
+				}
+			} else if response.Code != 200 || len(credentials) != 2 || credentials[0] != credentials[1] {
+				t.Fatalf("OCR did not stay on the creating credential: status=%d upstream_calls=%d credential_changed=%t", response.Code, len(credentials), len(credentials) == 2 && credentials[0] != credentials[1])
+			}
+		})
+	}
+}
+
+func TestNativeVideoPollingPinsSubmitCredential(t *testing.T) {
+	var keys []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keys = append(keys, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/video/submit" {
+			w.Write([]byte(`{"requestId":"video-synthetic"}`))
+		} else if r.URL.Path == "/v1/video/status" {
+			w.Write([]byte(`{"status":"Succeed","results":{"videos":[{"url":"https://synthetic.example/video.mp4"}]}}`))
+		} else {
+			t.Error("unexpected video path")
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	handler, engine, _ := newContinuationFixture(t, newTestExecutionForwarder(t))
+	handler.dialects = dialect.NewSet(dialect.NewNativeServices())
+	setContinuationChannel(t, handler, channel.SiliconFlow, server.URL+"/v1")
+	for _, item := range []struct{ path, body string }{{"submit", `{"model":"gpt-4o","prompt":"synthetic red square","image_size":"1280x720"}`}, {"status", `{"requestId":"video-synthetic"}`}} {
+		req := httptest.NewRequest("POST", "/native/siliconflow/v1/video/"+item.path, bytes.NewBufferString(item.body))
+		req.Header.Set("Authorization", "Bearer gl-client")
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
+		engine.ServeHTTP(res, req)
+		if res.Code != 200 {
+			t.Fatalf("video %s returned %d %s", item.path, res.Code, res.Body.String())
+		}
+	}
+	if len(keys) != 2 || keys[0] != keys[1] {
+		t.Fatalf("video switched credentials: %v", keys)
+	}
+}

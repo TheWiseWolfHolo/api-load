@@ -30,6 +30,8 @@ func TestDeleteGroupDetachesReferencesWithoutExpandingAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, row := range []models.AccessKey{
+		{Name: "Transparent", KeyValue: "cipher-opaque", KeyHash: "hash-opaque", KeySuffix: "0004", Status: "active", Filters: models.JSON(fmt.Sprintf(`{"groups_restricted":true,"groups":[%d],"protocols":["transparent-http"],"models":[],"transparent":{"group_ids":[%d],"methods":["POST"],"paths":[{"path":"/","match":"subtree"}]}}`, groupID, groupID))},
+		{Name: "Mixed", KeyValue: "cipher-mixed", KeyHash: "hash-mixed", KeySuffix: "0005", Status: "active", Filters: models.JSON(fmt.Sprintf(`{"groups":[],"protocols":["openai-completions","transparent-http"],"models":[],"transparent":{"group_ids":[%d],"methods":["POST"],"paths":[{"path":"/","match":"subtree"}]}}`, groupID))},
 		{
 			Name: "Active", KeyValue: "cipher-client-one", KeyHash: "client-hash-one",
 			KeySuffix: "0001",
@@ -67,6 +69,14 @@ func TestDeleteGroupDetachesReferencesWithoutExpandingAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 		switch row.Name {
+		case "Transparent":
+			if row.Status != "disabled" || filters.Transparent != nil || !filters.GroupsRestricted || len(filters.Groups) != 0 {
+				t.Fatalf("deleted transparent scope was not revoked: %+v", filters)
+			}
+		case "Mixed":
+			if row.Status != "active" || filters.Transparent != nil || filters.GroupsRestricted || len(filters.Groups) != 0 {
+				t.Fatalf("mixed native scope changed: %+v", filters)
+			}
 		case "Active":
 			if row.Status != "disabled" || len(filters.Groups) != 0 || !filters.GroupsRestricted {
 				t.Fatalf("orphaned key = %#v", filters)

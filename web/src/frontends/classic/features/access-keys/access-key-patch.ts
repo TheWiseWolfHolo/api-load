@@ -1,3 +1,4 @@
+import { canonicalTransparentPolicy, cloneTransparentPolicy } from '@shared/transparent'
 import type {
   AccessKeyCostLimitRuleInput,
   CreateAccessKeyRequest,
@@ -48,6 +49,8 @@ function unique<T>(values: T[]): T[] {
 export function normalizeAccessKeyFilters(filters: AccessKeyFiltersDto): AccessKeyFiltersDto {
   return {
     groups: unique(filters.groups),
+    ...(filters.transparent ? { transparent: cloneTransparentPolicy(filters.transparent) } : {}),
+    ...(filters.allow_model_less_resources ? { allow_model_less_resources: true } : {}),
     ...(filters.groups_restricted ? { groups_restricted: true } : {}),
     protocols: unique(filters.protocols),
     models: unique(filters.models.map((value) => value.trim()).filter(Boolean)),
@@ -188,6 +191,11 @@ function canonicalFilters(filters: AccessKeyFiltersDto): AccessKeyFiltersDto {
   const normalized = normalizeAccessKeyFilters(filters)
   return {
     groups: [...normalized.groups].sort((left, right) => left - right),
+    ...(normalized.transparent
+      ? { transparent: canonicalTransparentPolicy(normalized.transparent) }
+      : {}),
+    ...(normalized.groups_restricted ? { groups_restricted: true } : {}),
+    ...(normalized.allow_model_less_resources ? { allow_model_less_resources: true } : {}),
     protocols: [...normalized.protocols].sort(compareStrings),
     models: [...normalized.models].sort(compareStrings),
     allowed_cidrs: [...normalized.allowed_cidrs].sort(compareStrings),

@@ -16,7 +16,7 @@ func UnaryResponseBodyLimit(clientProtocol protocol.Protocol) int64 {
 	if clientProtocol == protocol.OpenAIImages {
 		return OpenAIImagesUnaryResponseBodyLimitBytes
 	}
-	if clientProtocol == protocol.OpenAIEmbeddings || clientProtocol == protocol.GeminiEmbeddings {
+	if clientProtocol == protocol.OpenAIEmbeddings || clientProtocol == protocol.GeminiEmbeddings || clientProtocol == protocol.CohereEmbeddings {
 		return OpenAIEmbeddingsUnaryResponseBodyLimitBytes
 	}
 	return DefaultUnaryResponseBodyLimitBytes

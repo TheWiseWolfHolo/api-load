@@ -48,12 +48,14 @@ func (h *Handler) acquireGroupConcurrency(groupID uint) (release func(), failure
 		if !exists {
 			return false
 		}
-		var allowed bool
-		release, allowed = h.manager.Concurrency().TryAcquireGroup(groupID, group.ConcurrencyLimit)
-		if !allowed {
+		var blocked string
+		release, blocked = h.manager.Concurrency().TryAcquireGroupAccount(groupID, group.ConcurrencyLimit, group.AccountPool, group.AccountConcurrencyLimit, group.AccountRPMLimit)
+		if blocked == "" {
+			failure = nil
+		} else if blocked == "group_concurrency" {
 			failure = &reasonConcurrencyLimit
 		} else {
-			failure = nil
+			failure = &reason{Status: http.StatusTooManyRequests, Code: blocked + "_limit_exceeded", Message: "The configured shared account limit has been reached."}
 		}
 		return true
 	})
@@ -61,6 +63,10 @@ func (h *Handler) acquireGroupConcurrency(groupID uint) (release func(), failure
 }
 
 func concurrencyControlRequest(request *http.Request, route route) bool {
+	if route.Protocol == protocol.NativeServices {
+		endpoint, err := dialect.ClassifyNativeService(request.Method, request.URL.Path)
+		return err == nil && endpoint.Operation == execution.OperationResourceCancel
+	}
 	if route.Protocol != protocol.OpenAIResponses {
 		return false
 	}

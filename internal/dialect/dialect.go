@@ -19,6 +19,7 @@ type ParsedRequest struct {
 }
 
 type RequestMetadata struct {
+	ResourceReferences       []string
 	Model                    *string
 	Stream                   bool
 	AffinityPrefix           []byte

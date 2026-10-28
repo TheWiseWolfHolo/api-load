@@ -40,6 +40,12 @@ export const protocolCatalog = [
     supportsProtocolOnlyRouting: false,
   },
   {
+    value: 'cohere-embeddings',
+    supportsProtocolOnlyRouting: false,
+  },
+  { value: 'native-services', supportsProtocolOnlyRouting: true },
+  { value: 'transparent-http', supportsProtocolOnlyRouting: true },
+  {
     value: 'mistral',
     supportsProtocolOnlyRouting: true,
   },

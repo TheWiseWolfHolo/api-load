@@ -430,6 +430,14 @@ func (service *Service) warn(failureType string, failedBatchSize int) {
 
 func cloneEvent(event telemetry.RequestEvent) telemetry.RequestEvent {
 	cloned := event
+	cloned.Usage.Result.MeasuredUnits = event.Usage.Result.MeasuredUnits.Clone()
+	if event.ServiceEvidence != nil {
+		evidence := *event.ServiceEvidence
+		evidence.Input = append([]string(nil), evidence.Input...)
+		evidence.Query = append([]string(nil), evidence.Query...)
+		evidence.Documents = append([]string(nil), evidence.Documents...)
+		cloned.ServiceEvidence = &evidence
+	}
 
 	if event.FirstResponseMs != nil {
 		value := *event.FirstResponseMs

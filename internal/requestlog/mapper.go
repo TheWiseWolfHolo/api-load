@@ -216,11 +216,21 @@ func mapEvent(
 		CacheWriteUnknownTokens:     result.Tokens.CacheWriteUnknown,
 		EstimatedCostNanoUSD:        pricingObservation.EstimatedCostNanoUSD,
 		UsageState:                  string(result.State),
+		MeasuredUnits:               encodeMeasuredUnits(result.MeasuredUnits),
+		ServiceEvidence:             encodeServiceEvidence(event.ServiceEvidence),
 		BillingUnit:                 normalizedBillingUnit(pricingObservation.BillingUnit),
 		CostState:                   pricingObservation.CostState,
 		PricingCompleteness:         pricingObservation.PricingCompleteness,
 		AttemptRows:                 attempts,
 	}, nil
+}
+
+func encodeServiceEvidence(evidence *telemetry.ServiceEvidence) models.JSON {
+	if evidence == nil {
+		return nil
+	}
+	value, _ := json.Marshal(evidence)
+	return models.JSON(value)
 }
 
 func normalizeModelObservation(event telemetry.RequestEvent) telemetry.RequestEvent {
@@ -522,4 +532,12 @@ func sanitizeSummaryLimit(
 		prefixBytes--
 	}
 	return summary[:prefixBytes] + truncatedMarker
+}
+
+func encodeMeasuredUnits(units usage.Units) models.JSON {
+	if units == (usage.Units{}) {
+		return nil
+	}
+	raw, _ := json.Marshal(units)
+	return models.JSON(raw)
 }

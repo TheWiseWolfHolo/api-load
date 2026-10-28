@@ -1,5 +1,6 @@
 import { readConcurrency, type ConcurrencyView } from '@shared/concurrency'
 import type { ApiClient } from '@shared/http/client'
+import { readTransparentPolicy, type TransparentPolicy } from '@shared/transparent'
 import { InvalidResponseError } from '@shared/http/errors'
 import { boolean, integer, list, oneOf, record, text } from './response'
 import { protocolOrder, sortProtocols } from '@modern/i18n/protocols'
@@ -7,6 +8,8 @@ import { protocolOrder, sortProtocols } from '@modern/i18n/protocols'
 export const accessKeySorts = ['updated_desc', 'cost_desc', 'expires_asc', 'rpm_peak_desc'] as const
 export const accessProtocols = protocolOrder
 export interface AccessScope {
+  transparent?: TransparentPolicy
+  allow_model_less_resources?: boolean
   groups_restricted?: boolean
   groups: number[]
   protocols: string[]
@@ -121,6 +124,12 @@ function readAccessKey(value: unknown): AccessKey {
     masked_key: text(row.masked_key),
     status: oneOf(row.status, ['active', 'disabled'] as const),
     filters: {
+      ...(scope.transparent === undefined
+        ? {}
+        : { transparent: readTransparentPolicy(scope.transparent) }),
+      ...(scope.allow_model_less_resources === undefined
+        ? {}
+        : { allow_model_less_resources: boolean(scope.allow_model_less_resources) }),
       ...(scope.groups_restricted === undefined
         ? {}
         : { groups_restricted: boolean(scope.groups_restricted) }),

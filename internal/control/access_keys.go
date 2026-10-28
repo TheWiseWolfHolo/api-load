@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,19 +23,23 @@ import (
 )
 
 type AccessKeyFilters struct {
-	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
-	Groups           []uint              `json:"groups"`
-	Protocols        []protocol.Protocol `json:"protocols"`
-	Models           []string            `json:"models"`
-	AllowedCIDRs     []string            `json:"allowed_cidrs"`
+	Transparent             *state.TransparentScope `json:"transparent,omitempty"`
+	AllowModelLessResources bool                    `json:"allow_model_less_resources,omitempty"`
+	GroupsRestricted        bool                    `json:"groups_restricted,omitempty"`
+	Groups                  []uint                  `json:"groups"`
+	Protocols               []protocol.Protocol     `json:"protocols"`
+	Models                  []string                `json:"models"`
+	AllowedCIDRs            []string                `json:"allowed_cidrs"`
 }
 
 type storedAccessKeyFilters struct {
-	GroupsRestricted bool                `json:"groups_restricted,omitempty"`
-	Groups           []uint              `json:"groups"`
-	Protocols        []protocol.Protocol `json:"protocols"`
-	Models           []string            `json:"models"`
-	AllowedCIDRs     []string            `json:"allowed_cidrs,omitempty"`
+	Transparent             *state.TransparentScope `json:"transparent,omitempty"`
+	AllowModelLessResources bool                    `json:"allow_model_less_resources,omitempty"`
+	GroupsRestricted        bool                    `json:"groups_restricted,omitempty"`
+	Groups                  []uint                  `json:"groups"`
+	Protocols               []protocol.Protocol     `json:"protocols"`
+	Models                  []string                `json:"models"`
+	AllowedCIDRs            []string                `json:"allowed_cidrs,omitempty"`
 }
 
 type OptionalRPMLimit struct {
@@ -317,6 +322,9 @@ func (s *Service) CreateAccessKey(
 	if err != nil {
 		return AccessKeyCreateResult{}, err
 	}
+	if filters.Transparent != nil && len(costLimitRules) > 0 {
+		return AccessKeyCreateResult{}, app_errors.ErrValidation
+	}
 	status := state.AccessKeyStatusActive
 	if request.Status != nil {
 		status = *request.Status
@@ -337,7 +345,7 @@ func (s *Service) CreateAccessKey(
 		if err := validateFutureExpiresAtMS(request.ExpiresAtMS, s.now()); err != nil {
 			return err
 		}
-		if err := validateFilterGroupReferences(tx, filters.Groups); err != nil {
+		if err := validateFilterGroupReferences(tx, accessKeyGroupReferences(filters)); err != nil {
 			return err
 		}
 		row, plaintext, err := s.newAccessKeyRow(name, filters, rpmLimit, request.Key)
@@ -497,8 +505,8 @@ func (s *Service) accessKeyUpdateMutation(
 		if filters != nil {
 			if err := validateAccessKeyGroupUpdate(
 				tx,
-				currentFilters.Groups,
-				filters.Groups,
+				accessKeyGroupReferences(currentFilters),
+				accessKeyGroupReferences(*filters),
 			); err != nil {
 				return result, err
 			}
@@ -534,6 +542,17 @@ func (s *Service) accessKeyUpdateMutation(
 		if filters != nil {
 			currentFilters = *filters
 			updates["filters"] = models.JSON(encodedFilters)
+		}
+		if currentFilters.Transparent != nil {
+			var count int64
+			if request.CostLimitRules.Set {
+				count = int64(len(request.CostLimitRules.Values))
+			} else if err := tx.Model(&models.AccessKeyCostLimitRule{}).Where("access_key_id = ?", id).Count(&count).Error; err != nil {
+				return result, err
+			}
+			if count > 0 {
+				return result, app_errors.ErrValidation
+			}
 		}
 		if status == state.AccessKeyStatusActive && currentFilters.GroupsRestricted && len(currentFilters.Groups) == 0 {
 			return result, app_errors.ErrValidation
@@ -770,6 +789,15 @@ func normalizeAccessKeyFilters(input *AccessKeyFilters) (AccessKeyFilters, error
 		return result, nil
 	}
 	result.GroupsRestricted = input.GroupsRestricted
+	result.AllowModelLessResources = input.AllowModelLessResources
+	transparent, err := state.NormalizeTransparentScope(input.Transparent)
+	if err != nil || transparent != nil && len(input.Models) > 0 {
+		return AccessKeyFilters{}, app_errors.ErrValidation
+	}
+	result.Transparent = transparent
+	if transparent != nil && !slices.Contains(input.Protocols, protocol.TransparentHTTP) {
+		return AccessKeyFilters{}, app_errors.ErrValidation
+	}
 
 	seenGroups := make(map[uint]struct{}, len(input.Groups))
 	for _, groupID := range input.Groups {
@@ -783,6 +811,13 @@ func normalizeAccessKeyFilters(input *AccessKeyFilters) (AccessKeyFilters, error
 		result.Groups = append(result.Groups, groupID)
 	}
 	seenProtocols := make(map[protocol.Protocol]struct{}, len(input.Protocols))
+	if transparent != nil && (result.GroupsRestricted || len(result.Groups) > 0) {
+		for _, id := range transparent.GroupIDs {
+			if _, ok := seenGroups[id]; !ok {
+				return AccessKeyFilters{}, app_errors.ErrValidation
+			}
+		}
+	}
 	for _, value := range input.Protocols {
 		if !value.DataPlaneEnabled() {
 			return AccessKeyFilters{}, app_errors.ErrValidation
@@ -816,11 +851,13 @@ func normalizeAccessKeyFilters(input *AccessKeyFilters) (AccessKeyFilters, error
 
 func encodeStoredAccessKeyFilters(filters AccessKeyFilters) ([]byte, error) {
 	return json.Marshal(storedAccessKeyFilters{
-		GroupsRestricted: filters.GroupsRestricted,
-		Groups:           filters.Groups,
-		Protocols:        filters.Protocols,
-		Models:           filters.Models,
-		AllowedCIDRs:     filters.AllowedCIDRs,
+		Transparent:             filters.Transparent,
+		AllowModelLessResources: filters.AllowModelLessResources,
+		GroupsRestricted:        filters.GroupsRestricted,
+		Groups:                  filters.Groups,
+		Protocols:               filters.Protocols,
+		Models:                  filters.Models,
+		AllowedCIDRs:            filters.AllowedCIDRs,
 	})
 }
 
@@ -921,8 +958,19 @@ func decodeStoredAccessKeyFilters(raw models.JSON) (AccessKeyFilters, error) {
 		return AccessKeyFilters{}, err
 	}
 	return normalizeAccessKeyFilters(&AccessKeyFilters{
-		GroupsRestricted: decoded.GroupsRestricted,
-		Groups:           decoded.Groups, Protocols: decoded.Protocols, Models: decoded.Models,
+		Transparent:             decoded.Transparent,
+		AllowModelLessResources: decoded.AllowModelLessResources,
+		GroupsRestricted:        decoded.GroupsRestricted,
+		Groups:                  decoded.Groups, Protocols: decoded.Protocols, Models: decoded.Models,
 		AllowedCIDRs: decoded.AllowedCIDRs,
 	})
+}
+
+func accessKeyGroupReferences(filters AccessKeyFilters) []uint {
+	ids := append([]uint(nil), filters.Groups...)
+	if filters.Transparent != nil {
+		ids = append(ids, filters.Transparent.GroupIDs...)
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids)
 }

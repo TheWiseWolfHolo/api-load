@@ -123,3 +123,17 @@ func TestDecisionsUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestJevMultipartImageAndBoxRemainNative(t *testing.T) {
+	body := []byte("--jev-boundary\r\nContent-Disposition: form-data; name=\"request\"\r\nContent-Type: application/json\r\n\r\n" + `{"model":"public","state":{"photo":"image-one"},"assets":{"image-one":{"type":"image","part":"photo"}},"questions":{"box":{"type":"box","instructions":"find the square"}}}` + "\r\n--jev-boundary\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"synthetic.png\"\r\nContent-Type: image/png\r\n\r\nsynthetic-image-bytes\r\n--jev-boundary--\r\n")
+	request := &ParsedRequest{Method: http.MethodPost, Path: "/v1/systemone", Header: http.Header{"Content-Type": []string{"multipart/form-data; boundary=jev-boundary"}}, Body: body}
+	request.Header.Set("TypeSafe-Danger-Zone-Images", "true")
+	result, err := NewDecisions().RewriteRequestModel(request, "jev-latest")
+	if err != nil || !bytes.Contains(result.Body, []byte("synthetic-image-bytes")) || !bytes.Contains(result.Body, []byte(`"model":"jev-latest"`)) {
+		t.Fatalf("multipart lost data: %v", err)
+	}
+	request.Header.Del("TypeSafe-Danger-Zone-Images")
+	if _, err := NewDecisions().InspectRequest(request); err == nil {
+		t.Fatal("image opt-in was silently enabled")
+	}
+}

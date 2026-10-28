@@ -354,7 +354,7 @@ def run_database_matrix(
     previous_tag: str,
     browser_check: Callable[[str, str, Seed], None] | None = None,
 ) -> None:
-    previous_image = f"ghcr.io/tbphp/gpt-load:{previous_tag.removeprefix('v')}"
+    previous_image = f"ghcr.io/thewisewolfholo/api-load:{previous_tag}"
     _docker("pull", previous_image, timeout=600)
     for driver in ("sqlite", "mysql", "postgres"):
         print(f"[数据库] {driver} 当前版本全新启动")
@@ -373,7 +373,7 @@ def run_database_matrix(
             database.stop_app()
         print(f"[数据库] {driver} 上一版本升级")
         with DockerDatabase(driver) as database:
-            database.start_app(previous_image, previous_tag)
+            database.start_app(previous_image, previous_tag.removeprefix('v'))
             seed = database.seed()
             database.verify(seed)
             database.stop_app()

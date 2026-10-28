@@ -54,7 +54,7 @@ func TestCompatiblePresetsReuseExistingRoutesAndCredentials(t *testing.T) {
 				}
 			}
 
-			allowed := map[protocol.Protocol]bool{protocol.Rerank: true}
+			allowed := map[protocol.Protocol]bool{protocol.Rerank: true, protocol.CohereEmbeddings: true}
 			if !test.rerank {
 				allowed = map[protocol.Protocol]bool{
 					protocol.OpenAICompletions: true, protocol.OpenAIResponses: true,
@@ -65,6 +65,7 @@ func TestCompatiblePresetsReuseExistingRoutesAndCredentials(t *testing.T) {
 				}
 				if test.id == Mistral {
 					allowed[protocol.Mistral] = true
+					allowed[protocol.NativeServices] = true
 				}
 			}
 			if len(descriptor.ClientProtocols) != len(allowed) {
@@ -74,8 +75,8 @@ func TestCompatiblePresetsReuseExistingRoutesAndCredentials(t *testing.T) {
 				if !allowed[route.ClientProtocol] {
 					t.Errorf("unexpected protocol %s", route.ClientProtocol)
 				}
-				if test.rerank && (route.ClientProtocol != protocol.Rerank ||
-					(route.Operation != execution.OperationRerank && route.Operation != execution.OperationProbe) || route.RouteMode != RouteNative) {
+				if test.rerank && ((route.ClientProtocol != protocol.Rerank && route.ClientProtocol != protocol.CohereEmbeddings) ||
+					(route.Operation != execution.OperationRerank && route.Operation != execution.OperationEmbeddingsCreate && route.Operation != execution.OperationProbe) || route.RouteMode != RouteNative) {
 					t.Errorf("unexpected Cohere route %+v", route)
 				}
 				if route.ClientProtocol == protocol.OpenAIResponses && route.RouteMode != RouteConverted {

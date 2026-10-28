@@ -44,6 +44,7 @@ export const zhCN = {
   groupReasons: {
     no_credentials: '没有可调度的账号',
     no_models: '没有配置模型',
+    transparent_proxy_disabled: '未启用透明转发',
     unavailable: '当前账号均不可用',
   },
   failures: {
@@ -157,6 +158,7 @@ export const enUS = {
   groupReasons: {
     no_credentials: 'No eligible accounts',
     no_models: 'No models configured',
+    transparent_proxy_disabled: 'Transparent proxy disabled',
     unavailable: 'No accounts currently available',
   },
   failures: {
@@ -270,6 +272,7 @@ export const jaJP = {
   groupReasons: {
     no_credentials: '利用可能なアカウントがありません',
     no_models: 'モデル未設定',
+    transparent_proxy_disabled: '透過転送が無効',
     unavailable: '現在すべてのアカウントが利用不可',
   },
   failures: {

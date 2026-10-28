@@ -34,6 +34,10 @@ func Mistral() spec.Module {
 				FixedBaseURL:      "https://api.mistral.ai/v1",
 			},
 			Routes: []spec.Route{
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceCreate, execution.RouteNative),
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceRead, execution.RouteNative),
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceDelete, execution.RouteNative),
+				spec.NewRoute(protocol.NativeServices, execution.OperationResourceCancel, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationChatCompletion, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationListModels, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationProbe, execution.RouteNative),

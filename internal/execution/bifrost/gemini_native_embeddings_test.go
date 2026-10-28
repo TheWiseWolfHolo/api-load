@@ -314,6 +314,12 @@ func TestGeminiNativeEmbeddingsRouteCapability(t *testing.T) {
 		for _, provider := range []channel.ProviderKind{
 			channel.ProviderOpenAI, channel.ProviderOpenAICompatible, channel.ProviderGoogleVertex, channel.ProviderOpenRouter,
 		} {
+			if provider == channel.ProviderGoogleVertex && operation == execution.OperationEmbeddingsCreate {
+				if err := manager.ValidateRouteCapability(provider, route); err != nil {
+					t.Fatal(err)
+				}
+				continue
+			}
 			if err := manager.ValidateRouteCapability(provider, route); err == nil {
 				t.Errorf("unexpected gemini-embeddings %s capability for %s", operation, provider)
 			}

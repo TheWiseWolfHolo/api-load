@@ -22,6 +22,11 @@ export const logOperations = [
   'embeddings_create',
   'rerank',
   'decisions_create',
+  'resource_create',
+  'resource_read',
+  'resource_delete',
+  'resource_cancel',
+  'transparent_request',
   'mistral_ocr',
   'mistral_fim',
   'mistral_audio_transcription',
@@ -134,6 +139,7 @@ export interface LogEntry {
   // 前端内部展示标记，不读取或要求新的响应字段。
   credential_deleted: boolean
   route_mode: string | null
+  measured_units: Record<string, string>
   usage_state: 'complete' | 'partial' | 'missing' | 'not_applicable'
   cost_state: 'priced' | 'unpriced' | 'not_applicable'
   pricing_completeness: 'complete' | 'partial' | 'unavailable' | 'not_applicable'
@@ -336,6 +342,9 @@ function entry(value: unknown): LogEntry {
     ),
     credential_deleted: row.credential_id != null && row.credential_name === '',
     route_mode: optionalText(row.route_mode),
+    measured_units: Object.fromEntries(
+      Object.entries(record(row.measured_units ?? {})).map(([key, value]) => [key, count(value)]),
+    ),
     usage_state: oneOf(row.usage_state, [
       'complete',
       'partial',

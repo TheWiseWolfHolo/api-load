@@ -148,3 +148,14 @@ func TestOpenAIEmbeddingsUsageStreamIsNotApplicable(t *testing.T) {
 		t.Fatalf("second Finalize() = %#v, %t", second, ok)
 	}
 }
+
+func TestCohereImageUnitsStayDistinctFromTextTokens(t *testing.T) {
+	result, err := NewCohereEmbeddings().ExtractUsage([]byte(`{"meta":{"billed_units":{"input_tokens":0,"image_tokens":8}}}`))
+	if err != nil || result.State != usage.StatePartial || result.MeasuredUnits.ImageTokens == nil || *result.MeasuredUnits.ImageTokens != 8 || result.Tokens.UncachedInput != 0 {
+		t.Fatalf("usage=%+v error=%v", result, err)
+	}
+	missing, err := NewCohereEmbeddings().ExtractUsage([]byte(`{"embeddings":{"float":[[1,2]]}}`))
+	if err != nil || missing.State != usage.StateMissing {
+		t.Fatalf("missing usage=%+v %v", missing, err)
+	}
+}

@@ -1,4 +1,4 @@
-"""One local release command for GPT-Load. No AI decisions occur at runtime."""
+"""Local API-Load release acceptance with explicit publishing confirmation."""
 
 from __future__ import annotations
 
@@ -21,9 +21,10 @@ from scripts.release_git import (
 )
 from scripts.release_mini import check_mini_access, run_mini_smoke
 from scripts.release_runtime import Seed, run_compose_smoke, run_database_matrix
+from scripts.release_tags import declared_version, validate_new_tag
 
 
-REPOSITORY = "tbphp/gpt-load"
+REPOSITORY = "TheWiseWolfHolo/api-load"
 
 
 class ReleaseToolError(RuntimeError):
@@ -76,22 +77,18 @@ def _verify_previous_release(prepared: PreparedSource) -> None:
     if commit == prepared.candidate_sha:
         raise ReleaseToolError("远端 main 与上一发布 tag 指向同一 commit，没有新的发布内容")
     successful_release_run(_release_runs(commit), prepared.latest_tag)
-    release = _github_json(
-        "release", "view", prepared.latest_tag, "--repo", REPOSITORY,
-        "--json", "isDraft,targetCommitish",
-    )
-    if release.get("isDraft") is not False or release.get("targetCommitish") != commit:
-        raise ReleaseToolError(f"{prepared.latest_tag} 不是指向预期 commit 的公开 Release")
+    image = f"ghcr.io/thewisewolfholo/api-load:{prepared.latest_tag}"
+    # The fork publishes images without requiring a GitHub Release object.
+    # Its supported runtime target is linux/amd64.
     _command(
-        str(prepared.worktree / ".github/scripts/release-verify-image-revision.sh"),
-        f"ghcr.io/tbphp/gpt-load:{prepared.latest_tag.removeprefix('v')}",
-        commit,
-        cwd=prepared.worktree,
-        timeout=90,
+        "docker", "pull", "--platform", "linux/amd64", image, timeout=600,
     )
+    labels = json.loads(_command("docker", "image", "inspect", image, "--format", "{{json .Config.Labels}}"))
+    if not isinstance(labels, dict) or labels.get("org.opencontainers.image.revision") != commit:
+        raise ReleaseToolError("上一版本镜像不对应预期提交")
 
 
-def _preflight(repository: Path, prepared: PreparedSource) -> None:
+def _preflight(repository: Path, prepared: PreparedSource, *, with_mini: bool = False) -> None:
     for command in ("git", "gh", "docker", "go", "corepack", "python3", "jq"):
         if shutil.which(command) is None:
             raise ReleaseToolError(f"缺少必要命令：{command}")
@@ -101,7 +98,7 @@ def _preflight(repository: Path, prepared: PreparedSource) -> None:
     slug = _command("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner", cwd=prepared.worktree)
     if slug != REPOSITORY:
         raise ReleaseToolError(f"当前仓库不是 {REPOSITORY}")
-    if not (repository / ".env").is_file():
+    if with_mini and not (repository / ".env").is_file():
         raise ReleaseToolError("当前工作区缺少 mini 验收需要的 .env")
     launcher_files = {
         path.name: path.read_bytes()
@@ -114,11 +111,12 @@ def _preflight(repository: Path, prepared: PreparedSource) -> None:
     if not launcher_files or launcher_files != candidate_files:
         raise ReleaseToolError("本地发版工具与远端 main 不一致，请先更新发版工具再运行")
     _verify_previous_release(prepared)
-    check_mini_access(repository)
+    if with_mini:
+        check_mini_access(repository)
 
 
 def _report_directory(sha: str) -> Path:
-    parent = Path.home() / ".cache/gpt-load/release-acceptance"
+    parent = Path.home() / ".cache/api-load/release-acceptance"
     parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(parent, 0o700)
     path = Path(tempfile.mkdtemp(prefix=f"{sha[:12]}-", dir=parent))
@@ -164,7 +162,7 @@ def _stage(path: Path, summary: dict, label: str, action) -> None:
     _save_report(path, summary)
 
 
-def run_release(repository: Path, *, simulate: bool = False) -> int:
+def run_release(repository: Path, *, simulate: bool = False, with_mini: bool = False) -> int:
     with prepare_source(repository, local_head=simulate) as prepared:
         report_dir = _report_directory(prepared.candidate_sha)
         summary: dict = {
@@ -178,12 +176,15 @@ def run_release(repository: Path, *, simulate: bool = False) -> int:
         print(f"候选 commit：{prepared.candidate_sha}")
         print(f"上一发布 tag：{prepared.latest_tag}")
         print(f"本机报告：{report_dir}")
-        image = f"gpt-load-pre-release:{prepared.candidate_sha[:12]}-{os.getpid()}"
-        version = f"v2.0.0-preflight.{prepared.candidate_sha[:12]}"
+        version = declared_version(prepared.worktree)
+        validate_new_tag("v" + version, prepared.latest_tag, prepared.remote_tags)
+        image = f"api-load-pre-release:{version}-sha-{prepared.candidate_sha[:12]}"
+        summary["candidate_version"] = version
+        summary["external_mini"] = "requested" if with_mini else "not_requested"
         binary = prepared.worktree / "tmp/gpt-load-release-candidate"
         image_built = False
         try:
-            _stage(report_dir, summary, "发版环境与上一版本", lambda: _preflight(repository, prepared))
+            _stage(report_dir, summary, "发版环境与上一版本", lambda: _preflight(repository, prepared, with_mini=with_mini))
             binary.parent.mkdir(exist_ok=True)
             _stage(
                 report_dir, summary, "构建候选原生程序",
@@ -216,10 +217,11 @@ def run_release(repository: Path, *, simulate: bool = False) -> int:
                 report_dir, summary, "Docker Compose 实际启动",
                 lambda: run_compose_smoke(prepared.worktree, image, version),
             )
-            _stage(
-                report_dir, summary, "mini 真实数据与 Responses 上游",
-                lambda: run_mini_smoke(repository, binary, version, report_dir / "mini"),
-            )
+            if with_mini:
+                _stage(
+                    report_dir, summary, "mini 真实数据与 Responses 上游",
+                    lambda: run_mini_smoke(repository, binary, version, report_dir / "mini"),
+                )
         finally:
             if image_built:
                 subprocess.run(["docker", "image", "rm", image], capture_output=True, check=False)
@@ -249,11 +251,12 @@ def run_release(repository: Path, *, simulate: bool = False) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="GPT-Load 本地发版验收")
+    parser = argparse.ArgumentParser(description="API-Load 本地发版验收")
     parser.add_argument("--simulate", action="store_true", help="验收当前已提交的 HEAD，不创建或推送 tag")
+    parser.add_argument("--with-mini", action="store_true", help="额外运行已配置的 DBX mini 副本及一次真实上游请求，可能产生费用")
     options = parser.parse_args()
     try:
-        return run_release(Path.cwd(), simulate=options.simulate)
+        return run_release(Path.cwd(), simulate=options.simulate, with_mini=options.with_mini)
     except ReleaseCancelled as error:
         print(f"已取消：{error}", file=sys.stderr)
         return 2

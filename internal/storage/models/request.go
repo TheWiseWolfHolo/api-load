@@ -2,6 +2,8 @@ package models
 
 // RequestLog is the durable request-level audit and usage record.
 type RequestLog struct {
+	ServiceEvidence             JSON                `gorm:"column:service_evidence;type:json"`
+	MeasuredUnits               JSON                `gorm:"column:measured_units;type:json"`
 	BillingUnit                 string              `gorm:"type:varchar(16);not null;default:token;check:chk_request_log_billing_unit,billing_unit IN ('token','request')"`
 	RequestAudit                JSON                `gorm:"type:json"`
 	AuditCostNanoUSD            int64               `gorm:"column:audit_cost_nano_usd;not null;default:0"`

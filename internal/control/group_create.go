@@ -383,6 +383,11 @@ func findGroupsByTarget(
 	connectionType models.ConnectionType,
 	params models.JSON,
 ) ([]ExistingGroupSummary, error) {
+	// Transparent sources choose their target in the explicit group option after creation.
+	// Empty native params do not identify a shared upstream.
+	if channelID == channel.TransparentHTTP {
+		return []ExistingGroupSummary{}, nil
+	}
 	type targetRow struct {
 		ID     uint
 		Name   string

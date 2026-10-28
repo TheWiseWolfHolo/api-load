@@ -3,6 +3,7 @@ package catalog
 // automaticPriceProviderPriority is the fixed provider order for automatic
 // model price matching. Providers outside this list are checked by ID after it.
 var automaticPriceProviderPriority = []string{
+	"openrouter",
 	"openai",
 	"anthropic",
 	"google",
@@ -34,7 +35,6 @@ var automaticPriceProviderPriority = []string{
 	"siliconflow-cn",
 	"nebius",
 	"baseten",
-	"openrouter",
 }
 
 // AutomaticPriceProviderPriority returns the fixed provider order used for

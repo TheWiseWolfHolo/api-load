@@ -28,6 +28,8 @@ const (
 	CLIProxyAPI      ID = "cliproxyapi"
 	Sub2API          ID = "sub2api"
 	OpenAICompatible ID = "openai_compatible"
+	NativeAPI        ID = "native_api"
+	TransparentHTTP  ID = "transparent_http"
 	DeepSeek         ID = "deepseek"
 	MoonshotAI       ID = "moonshotai"
 	SiliconFlow      ID = "siliconflow"
@@ -47,6 +49,7 @@ const (
 	Wafer            ID = "wafer"
 	HuggingFace      ID = "huggingface"
 	Cohere           ID = "cohere"
+	Soniox           ID = "soniox"
 	OpenCodeGo       ID = "opencode_go"
 	OpenCodeZen      ID = "opencode_zen"
 )

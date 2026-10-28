@@ -272,6 +272,9 @@ func (s *Server) HTTPModule() httproute.Module {
 				controlRouteNotFound,
 			),
 			controlRoute(
+				"control.groups.services.get", http.MethodGet, "/groups/:group_id/services", s.handleServiceCapabilities,
+			),
+			controlRoute(
 				"control.groups.models.get",
 				http.MethodGet,
 				"/groups/:group_id/models",

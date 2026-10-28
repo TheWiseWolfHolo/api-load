@@ -4,7 +4,7 @@ import { DialogRoot } from 'reka-ui'
 import { computed, onScopeDispose, ref } from 'vue'
 import { useLoadingActivity } from '@modern/components/ui/loading'
 import { useI18n } from 'vue-i18n'
-import { discoverGroupModels } from '@modern/api/group-detail'
+import { discoverGroupModels, discoveryFailureKey } from '@modern/api/group-detail'
 import {
   AppButton,
   AppCheckbox,
@@ -39,6 +39,7 @@ const upstream = ref<string[]>([])
 const loading = ref(false)
 const loaded = ref(false)
 const failed = ref(false)
+const failureKey = ref('groupCreate.discoveryFailed')
 const search = ref('')
 useLoadingActivity(loading)
 let controller: AbortController | undefined
@@ -121,8 +122,11 @@ async function load(): Promise<void> {
         replacement: '',
       }))
     loaded.value = true
-  } catch {
-    if (!request.signal.aborted) failed.value = true
+  } catch (cause) {
+    if (!request.signal.aborted) {
+      failed.value = true
+      failureKey.value = discoveryFailureKey(cause)
+    }
   } finally {
     if (!request.signal.aborted) loading.value = false
   }
@@ -159,7 +163,7 @@ onScopeDispose(() => controller?.abort())
         <p>{{ t('groupWorkflows.syncDescription') }}</p>
         <AppNotice v-if="loading">{{ t('collection.loading') }}</AppNotice>
         <AppNotice v-else-if="failed" tone="danger">
-          {{ t('groupCreate.discoveryFailed') }}
+          {{ t(failureKey) }}
           <template #actions
             ><AppButton size="sm" @click="load">{{ t('ui.retry') }}</AppButton></template
           >

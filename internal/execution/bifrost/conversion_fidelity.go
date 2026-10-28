@@ -32,20 +32,19 @@ func finishConvertedPreparation(spec execution.AttemptSpec, providerKind channel
 	chatFallback := providerKind == channel.ProviderOpenAICompatible || providerKind == channel.ProviderCline || providerKind == channel.ProviderGroq ||
 		providerKind == channel.ProviderDeepSeek || vertexChat
 	if chatFallback {
+		if prepared.responsesRequest != nil && prepared.responsesRequest.Params != nil && prepared.responsesRequest.Params.Reasoning != nil && prepared.responsesRequest.Params.Reasoning.MaxTokens != nil && *prepared.responsesRequest.Params.Reasoning.MaxTokens != 0 {
+			failure := notSentConversionFailure(execution.ErrorCodeCriticalSemanticLoss, "Chat conversion cannot preserve an exact reasoning token budget; use a native protocol route")
+			return preparedAttempt{}, &failure
+		}
 		dropsTools, newlyAllowed := chatFallbackToolCompatibility(prepared.responsesRequest)
 		needsToolHistoryCheck = needsToolHistoryCheck || newlyAllowed
-		// Compatible 保持 SDK 的尽力转换行为：不支持的工具及选择可被过滤，
-		// 不因此拒绝整个请求；普通函数白名单仍由前面的准备阶段适配。
-		if dropsTools && providerKind != channel.ProviderOpenAICompatible {
+		if dropsTools {
 			failure := notSentConversionFailure(execution.ErrorCodeCriticalSemanticLoss, "Chat conversion cannot preserve requested tools or tool choice")
 			return preparedAttempt{}, &failure
 		}
-		// Responses 的 reasoning.effort 会被 Chat Completions 序列化成
-		// reasoning_effort。OpenAI Compatible 上游常把它当成大额 reasoning budget，
-		// 小输出上限模型会直接 400。兼容目标不转发这个字段。
-		if providerKind == channel.ProviderOpenAICompatible {
-			dropCompatibleResponsesReasoning(prepared.responsesRequest)
-			flattenCompatibleToolOutputs(prepared.responsesRequest)
+		if providerKind == channel.ProviderOpenAICompatible && !flattenCompatibleToolOutputs(prepared.responsesRequest) {
+			failure := notSentConversionFailure(execution.ErrorCodeCriticalSemanticLoss, "Chat conversion cannot preserve images, files or audio in tool results; use a native protocol route")
+			return preparedAttempt{}, &failure
 		}
 		if providerKind == channel.ProviderDeepSeek && deepSeekConversionDisablesThinking(prepared.responsesRequest) {
 			failure := notSentConversionFailure(execution.ErrorCodeCriticalSemanticLoss, "DeepSeek conversion cannot preserve explicit thinking with this tool choice or history")
@@ -117,75 +116,44 @@ func preserveResponsesGlobalInstructions(request *schemas.BifrostResponsesReques
 	request.Params.Instructions = nil
 }
 
-func dropCompatibleResponsesReasoning(request *schemas.BifrostResponsesRequest) {
-	if request == nil || request.Params == nil {
-		return
-	}
-	request.Params.Reasoning = nil
-}
+// flattenCompatibleToolOutputs 只把纯文字结果转为字符串，拒绝非文字内容。
 
-// Markers for tool-output parts a string-only Chat Completions upstream cannot
-// carry. They match the wording CPA (CLIProxyAPI) uses for the same case so a
-// gateway migration keeps the same model-visible text.
-const (
-	compatibleToolOutputImageMarker = "[image omitted: unsupported by upstream]"
-	compatibleToolOutputFileMarker  = "[file omitted: unsupported by upstream]"
-	compatibleToolOutputAudioMarker = "[audio omitted: unsupported by upstream]"
-	compatibleToolOutputPartMarker  = "[content omitted: unsupported by upstream]"
-)
-
-// flattenCompatibleToolOutputs rewrites array-shaped function_call_output
-// content into a single string.
-//
-// The Responses surface allows a tool result to be a list of content blocks,
-// and Bifrost's Responses→Chat conversion carries that list into the chat tool
-// message's `content`. Chat Completions types tool content as a string, and
-// strict upstreams (OpenCode Go, for one) reject the array with
-// "Input should be a valid string". Text-only arrays happen to be coerced by
-// some upstreams, but any image/file/audio part in a tool result fails, so the
-// whole list is folded into a string here: text is kept, unsupported parts are
-// replaced by a marker.
-func flattenCompatibleToolOutputs(request *schemas.BifrostResponsesRequest) {
+func flattenCompatibleToolOutputs(request *schemas.BifrostResponsesRequest) bool {
 	if request == nil {
-		return
+		return true
 	}
-	for i := range request.Input {
-		item := &request.Input[i]
-		if item.Type == nil || *item.Type != schemas.ResponsesMessageTypeFunctionCallOutput {
+	for _, item := range request.Input {
+		if item.Type == nil || *item.Type != schemas.ResponsesMessageTypeFunctionCallOutput || item.ResponsesToolMessage == nil || item.ResponsesToolMessage.Output == nil {
 			continue
 		}
-		toolMessage := item.ResponsesToolMessage
-		if toolMessage == nil || toolMessage.Output == nil {
-			continue
-		}
-		blocks := toolMessage.Output.ResponsesFunctionToolCallOutputBlocks
-		if len(blocks) == 0 {
-			continue
-		}
-		flattened := flattenToolOutputBlocks(blocks)
-		toolMessage.Output.ResponsesToolCallOutputStr = &flattened
-		toolMessage.Output.ResponsesFunctionToolCallOutputBlocks = nil
-		// The SDK mirrors `output` into Content when it converts, so keep the
-		// already-populated mirror from resurrecting the block array.
-		if item.Content != nil && len(item.Content.ContentBlocks) > 0 {
-			item.Content.ContentBlocks = nil
-			if item.Content.ContentStr == nil {
-				item.Content.ContentStr = &flattened
+		for _, block := range item.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
+			if block.Text == nil || !isTextContentBlockType(block.Type) {
+				return false
 			}
 		}
 	}
-}
-
-func flattenToolOutputBlocks(blocks []schemas.ResponsesMessageContentBlock) string {
-	parts := make([]string, 0, len(blocks))
-	for _, block := range blocks {
-		if block.Text != nil && isTextContentBlockType(block.Type) {
-			parts = append(parts, *block.Text)
+	for i := range request.Input {
+		item := &request.Input[i]
+		if item.Type == nil || *item.Type != schemas.ResponsesMessageTypeFunctionCallOutput || item.ResponsesToolMessage == nil || item.ResponsesToolMessage.Output == nil {
 			continue
 		}
-		parts = append(parts, toolOutputOmittedMarker(block.Type))
+		output := item.ResponsesToolMessage.Output
+		if len(output.ResponsesFunctionToolCallOutputBlocks) == 0 {
+			continue
+		}
+		parts := make([]string, 0, len(output.ResponsesFunctionToolCallOutputBlocks))
+		for _, block := range output.ResponsesFunctionToolCallOutputBlocks {
+			parts = append(parts, *block.Text)
+		}
+		flattened := strings.Join(parts, "\n\n")
+		output.ResponsesToolCallOutputStr = &flattened
+		output.ResponsesFunctionToolCallOutputBlocks = nil
+		if item.Content != nil && len(item.Content.ContentBlocks) > 0 {
+			item.Content.ContentBlocks = nil
+			item.Content.ContentStr = &flattened
+		}
 	}
-	return strings.Join(parts, "\n\n")
+	return true
 }
 
 func isTextContentBlockType(blockType schemas.ResponsesMessageContentBlockType) bool {
@@ -197,18 +165,6 @@ func isTextContentBlockType(blockType schemas.ResponsesMessageContentBlockType) 
 		return true
 	}
 	return false
-}
-
-func toolOutputOmittedMarker(blockType schemas.ResponsesMessageContentBlockType) string {
-	switch blockType {
-	case schemas.ResponsesInputMessageContentBlockTypeImage:
-		return compatibleToolOutputImageMarker
-	case schemas.ResponsesInputMessageContentBlockTypeFile:
-		return compatibleToolOutputFileMarker
-	case schemas.ResponsesInputMessageContentBlockTypeAudio:
-		return compatibleToolOutputAudioMarker
-	}
-	return compatibleToolOutputPartMarker
 }
 
 func deepSeekConversionDisablesThinking(request *schemas.BifrostResponsesRequest) bool {

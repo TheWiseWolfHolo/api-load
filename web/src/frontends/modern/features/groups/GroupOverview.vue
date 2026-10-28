@@ -101,7 +101,13 @@ useLoadingActivity(() => props.loading)
       </div>
       <div>
         <dt>{{ t('groups.row.estimatedCost') }}</dt>
-        <dd>{{ missing ? '—' : formatNanoUSD(usage!.costNanoUSD, locale) }}</dd>
+        <dd>
+          {{
+            missing || (partial && usage!.costNanoUSD === '0')
+              ? t('logs.values.unavailable')
+              : formatNanoUSD(usage!.costNanoUSD, locale)
+          }}
+        </dd>
       </div>
     </dl>
     <div class="modern-group-overview-trend">

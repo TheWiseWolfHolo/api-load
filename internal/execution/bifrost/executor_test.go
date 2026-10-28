@@ -1518,3 +1518,21 @@ func assertNoDone(t *testing.T, events []execution.StreamEvent) {
 		}
 	}
 }
+
+func TestVertexNativeEmbeddingPreservesInlineData(t *testing.T) {
+	credential := []byte(`{"service_account_json":"{\"type\":\"service_account\",\"project_id\":\"test-project\",\"client_email\":\"synthetic@example.test\",\"private_key\":\"synthetic\"}"}`)
+	spec := freezeTestAttempt(execution.NewAttemptSpec(execution.AttemptSpec{
+		RequestID: "vertex-embed", AttemptID: "vertex-embed-1", Sequence: 1, ChannelID: string(channel.GoogleVertex), ClientProtocol: protocol.GeminiEmbeddings,
+		Operation: execution.OperationEmbeddingsCreate, ClientModel: "public", UpstreamModel: "gemini-embedding-2", Method: http.MethodPost, Path: "/v1beta/models/public:embedContent",
+		Header: http.Header{"Content-Type": []string{"application/json"}}, Body: []byte(`{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]},"outputDimensionality":768}`),
+		TargetConfig: json.RawMessage(`{"location":"us-central1"}`), Credential: execution.NewCredentialSnapshot(1, 1, 1, credential),
+		Timeouts: execution.AttemptTimeouts{FirstByte: time.Second, Request: 2 * time.Second, StreamIdle: time.Second},
+	}))
+	prepared, failure := newTestRuntime(t).prepare(spec, false)
+	if failure != nil {
+		t.Fatalf("prepare failed: %+v", failure.Error)
+	}
+	if prepared.passthrough.Path != "/publishers/google/models/gemini-embedding-2:embedContent" || !bytes.Contains(prepared.passthrough.Body, []byte(`"inlineData"`)) {
+		t.Fatal("embedding path or image was lost")
+	}
+}

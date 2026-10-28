@@ -63,6 +63,9 @@ func (d *OpenAIEmbeddings) InspectRequest(request *ParsedRequest) (RequestMetada
 	}
 	metadata.Operation = execution.OperationEmbeddingsCreate
 	metadata.RouteRequirement = execution.RouteRequirementAny
+	if StructuredRetrievalInput(request.Body) {
+		metadata.RouteRequirement = execution.RouteRequirementNative
+	}
 	metadata.ObserveUsage = true
 	return metadata, nil
 }
@@ -155,8 +158,8 @@ func validateOpenAIEmbeddingsInput(body []byte) error {
 			if err := decoder.Decode(&input); err != nil {
 				return fmt.Errorf("decode input: %w", err)
 			}
-			if !validOpenAIEmbeddingsInput(input) {
-				return fmt.Errorf("input must be a string, string array, token array, or token array list")
+			if !validOpenAIEmbeddingsInput(input) && !validStructuredRetrievalInput(input) {
+				return &RequestValidationError{Field: "input", Rule: "unsupported_embedding_shape"}
 			}
 			continue
 		}

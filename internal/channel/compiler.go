@@ -438,6 +438,12 @@ func containsRouteMode(modes []execution.RouteMode, want execution.RouteMode) bo
 }
 
 func validProtocolOperation(clientProtocol protocol.Protocol, operation execution.Operation) bool {
+	if clientProtocol == protocol.TransparentHTTP {
+		return operation == execution.OperationTransparentRequest
+	}
+	if clientProtocol == protocol.NativeServices {
+		return operation == execution.OperationResourceCreate || operation == execution.OperationResourceRead || operation == execution.OperationResourceDelete || operation == execution.OperationResourceCancel
+	}
 	if clientProtocol == protocol.CodexLive {
 		return operation == execution.OperationLiveCall
 	}
@@ -447,7 +453,7 @@ func validProtocolOperation(clientProtocol protocol.Protocol, operation executio
 	case execution.OperationChatCompletion:
 		return clientProtocol != protocol.OpenAIResponses && clientProtocol != protocol.OpenAIImages &&
 			clientProtocol != protocol.OpenAIEmbeddings && clientProtocol != protocol.Rerank && clientProtocol != protocol.Decisions &&
-			clientProtocol != protocol.GeminiEmbeddings && clientProtocol != protocol.Mistral
+			clientProtocol != protocol.GeminiEmbeddings && clientProtocol != protocol.CohereEmbeddings && clientProtocol != protocol.Mistral
 	case execution.OperationCountTokens:
 		return clientProtocol == protocol.Anthropic || clientProtocol == protocol.Gemini
 	case execution.OperationResponsesCreate,
@@ -478,11 +484,11 @@ func validProtocolOperation(clientProtocol protocol.Protocol, operation executio
 		execution.OperationMistralRealtimeTranscription:
 		return clientProtocol == protocol.Mistral
 	case execution.OperationEmbeddingsCreate:
-		return clientProtocol == protocol.OpenAIEmbeddings || clientProtocol == protocol.GeminiEmbeddings
+		return clientProtocol == protocol.OpenAIEmbeddings || clientProtocol == protocol.GeminiEmbeddings || clientProtocol == protocol.CohereEmbeddings
 	case execution.OperationListModels:
 		return clientProtocol != protocol.OpenAIResponses && clientProtocol != protocol.OpenAIImages &&
 			clientProtocol != protocol.OpenAIEmbeddings && clientProtocol != protocol.Rerank &&
-			clientProtocol != protocol.GeminiEmbeddings && clientProtocol != protocol.Mistral
+			clientProtocol != protocol.GeminiEmbeddings && clientProtocol != protocol.CohereEmbeddings && clientProtocol != protocol.Mistral
 	case execution.OperationProbe:
 		return clientProtocol != protocol.OpenAIImages && clientProtocol != protocol.Mistral
 	default:

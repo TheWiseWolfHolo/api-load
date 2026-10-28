@@ -354,3 +354,13 @@ func TestQuoteWithReceiptPreservesUnpricedPositiveComponents(t *testing.T) {
 		t.Fatalf("unpriced output receipt line = %#v", output)
 	}
 }
+
+func TestImageUnitsCannotBePricedAsZeroTextTokens(t *testing.T) {
+	id := Identity{ChannelID: "cohere", ModelID: "embed-v5.0-fast"}
+	table := mustTable(t, Rule{Identity: id, Prices: Prices{Input: fixedPrice(1)}})
+	images := int64(8)
+	quote := table.Quote(id, usage.Result{State: usage.StatePartial, MeasuredUnits: usage.Units{ImageTokens: &images}})
+	if quote.State != CostStateUnpriced || quote.Completeness != CompletenessUnavailable {
+		t.Fatalf("image use reported as free: %+v", quote)
+	}
+}

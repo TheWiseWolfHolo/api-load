@@ -65,6 +65,10 @@ func modelRewriter(clientProtocol protocol.Protocol) (dialect.ModelRewriter, err
 		return dialect.NewOpenAIResponses(), nil
 	case protocol.OpenAIImages:
 		return dialect.NewOpenAIImages(), nil
+	case protocol.NativeServices:
+		return dialect.NewNativeServices(), nil
+	case protocol.CohereEmbeddings:
+		return dialect.NewCohereEmbeddings(), nil
 	case protocol.Rerank:
 		return dialect.NewRerank(), nil
 	case protocol.Decisions:

@@ -19,7 +19,7 @@ import (
 	"gpt-load/internal/protocol"
 )
 
-func TestCompatibleBestEffortToolConversion(t *testing.T) {
+func TestCompatibleRejectsLossyToolConversion(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
 		name      string
@@ -73,8 +73,8 @@ func TestCompatibleBestEffortToolConversion(t *testing.T) {
 				} else {
 					failure = runtime.Execute(t.Context(), spec).Error
 				}
-				if failure != nil || calls.Load() != 1 {
-					t.Fatalf("best effort request blocked: calls=%d error=%+v", calls.Load(), failure)
+				if failure == nil || failure.Code != execution.ErrorCodeCriticalSemanticLoss || calls.Load() != 0 {
+					t.Fatalf("lossy conversion dispatched: calls=%d error=%+v", calls.Load(), failure)
 				}
 			})
 		}

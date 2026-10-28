@@ -16,17 +16,21 @@ import (
 )
 
 type GroupEffectiveConfigResponse struct {
-	ErrorRules                []health.ErrorRule  `json:"error_rules"`
-	ConcurrencyLimit          int64               `json:"concurrency_limit"`
-	FirstByteTimeout          int64               `json:"first_byte_timeout"`
-	RequestTimeout            int64               `json:"request_timeout"`
-	StreamIdleTimeout         int64               `json:"stream_idle_timeout"`
-	HeaderRules               HeaderRulesResponse `json:"header_rules"`
-	BlacklistThreshold        int                 `json:"blacklist_threshold"`
-	AffinityEnabled           bool                `json:"affinity_enabled"`
-	CodexLiveMode             state.CodexLiveMode `json:"codex_live_mode"`
-	ResponsesWebsocketEnabled bool                `json:"responses_websocket_enabled"`
-	EmptyResponseRetry        bool                `json:"empty_response_retry"`
+	TransparentProxy          state.TransparentProxyConfig `json:"transparent_proxy"`
+	AccountPool               string                       `json:"account_pool"`
+	AccountConcurrencyLimit   int64                        `json:"account_concurrency_limit"`
+	AccountRPMLimit           int64                        `json:"account_rpm_limit"`
+	ErrorRules                []health.ErrorRule           `json:"error_rules"`
+	ConcurrencyLimit          int64                        `json:"concurrency_limit"`
+	FirstByteTimeout          int64                        `json:"first_byte_timeout"`
+	RequestTimeout            int64                        `json:"request_timeout"`
+	StreamIdleTimeout         int64                        `json:"stream_idle_timeout"`
+	HeaderRules               HeaderRulesResponse          `json:"header_rules"`
+	BlacklistThreshold        int                          `json:"blacklist_threshold"`
+	AffinityEnabled           bool                         `json:"affinity_enabled"`
+	CodexLiveMode             state.CodexLiveMode          `json:"codex_live_mode"`
+	ResponsesWebsocketEnabled bool                         `json:"responses_websocket_enabled"`
+	EmptyResponseRetry        bool                         `json:"empty_response_retry"`
 }
 
 // GroupSummaryResponse contains the group fields required by the detail page header.
@@ -84,6 +88,7 @@ func effectiveGroupConfig(
 		set[name] = value
 	}
 	return GroupEffectiveConfigResponse{
+		TransparentProxy:  resolved.TransparentProxy,
 		ErrorRules:        resolved.ErrorRules.Rules(),
 		FirstByteTimeout:  durationSeconds(resolved.Timeouts.FirstByte),
 		RequestTimeout:    durationSeconds(resolved.Timeouts.Request),
@@ -98,6 +103,7 @@ func effectiveGroupConfig(
 		ResponsesWebsocketEnabled: resolved.ResponsesWebsocketEnabled,
 		EmptyResponseRetry:        resolved.EmptyResponseRetry,
 		ConcurrencyLimit:          resolved.ConcurrencyLimit,
+		AccountPool:               resolved.AccountPool, AccountConcurrencyLimit: resolved.AccountConcurrencyLimit, AccountRPMLimit: resolved.AccountRPMLimit,
 	}, nil
 }
 

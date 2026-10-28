@@ -1,9 +1,11 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -11,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"gpt-load/internal/channel"
 	"gpt-load/internal/execution"
@@ -378,6 +382,38 @@ func TestExecuteModelDiscoveryRejectsRepeatedPaginationCursor(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("model list calls = %d, want 2", calls)
+	}
+}
+
+func TestModelDiscoveryPaginationLimitDoesNotRetryWholeCatalogWithAnotherKey(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	executor := scriptedDiscoveryExecutor{execute: func(_ context.Context, _ execution.AttemptSpec) execution.AttemptResult {
+		calls++
+		return execution.AttemptResult{DispatchState: execution.DispatchMaybeSent, ResponseStarted: true, StatusCode: 200, Header: http.Header{}, Body: []byte(fmt.Sprintf(`{"data":[{"id":"model-%d"}],"has_more":true,"last_id":"cursor-%d"}`, calls, calls))}
+	}}
+	service := &Service{executor: executor, modelDiscoveryTimeout: time.Second}
+	target := discoveryTargetForTest(t, channel.Anthropic, "https://provider.example", []string{"one", "two"}, state.HeaderRules{})
+	_, err := service.discoverLiveModels(t.Context(), target)
+	var failure *catalogDiscoveryError
+	if !errors.As(err, &failure) || failure.Kind != "invalid_response" || calls != maxModelDiscoveryPages {
+		t.Fatalf("pagination exhaustion = %v after %d calls", err, calls)
+	}
+}
+
+func TestModelDiscoveryLogsDoNotRetainProviderMessages(t *testing.T) {
+	var output bytes.Buffer
+	logger := logrus.StandardLogger()
+	previousOutput, previousFormatter := logger.Out, logger.Formatter
+	logger.SetOutput(&output)
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	t.Cleanup(func() { logger.SetOutput(previousOutput); logger.SetFormatter(previousFormatter) })
+	logModelDiscoveryFailure(channel.Cohere, execution.AttemptResult{StatusCode: 401, DispatchState: execution.DispatchMaybeSent, ResponseStarted: true, Error: &execution.ErrorEvidence{Kind: execution.ErrorKindProvider, StatusCode: 401, Code: "unauthorized", Summary: "PRIVATE-UPSTREAM-KEY-ECHO"}})
+	if bytes.Contains(output.Bytes(), []byte("PRIVATE-UPSTREAM-KEY-ECHO")) || bytes.Contains(output.Bytes(), []byte("error_summary")) {
+		t.Fatalf("unsafe model discovery log: %s", output.Bytes())
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"status":401`)) {
+		t.Fatal("fixed failure status was lost")
 	}
 }
 

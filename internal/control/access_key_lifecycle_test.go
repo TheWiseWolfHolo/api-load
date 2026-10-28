@@ -106,6 +106,43 @@ func TestAccessKeyLifecycleCreatePersistsCanonicalPolicyAndKeepsWireArrays(t *te
 	}
 }
 
+func TestAccessKeyLifecycleCreateTransparentWithOverlappingGroupRestrictions(t *testing.T) {
+	t.Parallel()
+	initControlI18n(t)
+	fixture := newServiceFixture(t)
+	group := validControlGroup("cohere-transparent-validation")
+	group.ID = 50
+	if err := fixture.db.Create(group).Error; err != nil {
+		t.Fatal(err)
+	}
+	engine := newAccessKeyLifecycleEngine(t, fixture)
+	expiresAtMS := fixture.service.now().Add(15 * time.Minute).UnixMilli()
+	body := fmt.Sprintf(`{"name":"Temporary 2.1 transparent validation","filters":{"groups_restricted":true,"groups":[50],"protocols":["transparent-http"],"transparent":{"group_ids":[50],"methods":["POST"],"paths":[{"path":"/v2/embed","match":"exact"}]}},"rpm_limit":6,"concurrency_limit":1,"expires_at_ms":%d}`, expiresAtMS)
+	created := serveAccessKeyLifecycleRequest(t, engine, http.MethodPost, "/api/access-keys", body, "00000000-0000-4000-8000-000000007050")
+	if created.Code != http.StatusOK {
+		t.Fatalf("create transparent token = %d %s", created.Code, created.Body.String())
+	}
+	data := decodeAccessKeyLifecycleData(t, created)
+	var filters AccessKeyFilters
+	if err := json.Unmarshal(data["filters"], &filters); err != nil {
+		t.Fatal(err)
+	}
+	if !filters.GroupsRestricted || len(filters.Groups) != 1 || filters.Groups[0] != 50 || filters.Transparent == nil || len(filters.Transparent.GroupIDs) != 1 || filters.Transparent.GroupIDs[0] != 50 {
+		t.Fatalf("group restrictions changed: %#v", filters)
+	}
+	assertJSONRawEqual(t, data["expires_at_ms"], strconv.FormatInt(expiresAtMS, 10))
+
+	replayed := serveAccessKeyLifecycleRequest(t, engine, http.MethodPost, "/api/access-keys", body, "00000000-0000-4000-8000-000000007050")
+	if replayed.Code != http.StatusOK {
+		t.Fatalf("replay transparent token = %d %s", replayed.Code, replayed.Body.String())
+	}
+	replayedData := decodeAccessKeyLifecycleData(t, replayed)
+	assertJSONRawEqual(t, replayedData["id"], string(data["id"]))
+	if key := replayedData["key"]; len(key) > 0 && string(key) != `""` {
+		t.Fatal("idempotent replay exposed credential")
+	}
+}
+
 func TestAccessKeyLifecycleCreateValidatesSafeFutureTimeWithoutBreakingReplay(t *testing.T) {
 	t.Parallel()
 	initControlI18n(t)

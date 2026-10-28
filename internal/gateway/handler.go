@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,7 @@ import (
 	"gpt-load/internal/platform/config"
 	"gpt-load/internal/platform/contentcoding"
 	"gpt-load/internal/platform/encryption"
+	"gpt-load/internal/platform/httpclient"
 	platformheader "gpt-load/internal/platform/httpheader"
 	"gpt-load/internal/platform/utils"
 	"gpt-load/internal/pricing"
@@ -42,7 +44,6 @@ import (
 )
 
 const (
-	maxRequestBodyBytes    = int64(128 << 20)
 	maxDataPlaneModelBytes = 255
 	fixedCooldown          = time.Minute
 	debugHeaderGroup       = "X-GPTLoad-Group"
@@ -92,41 +93,45 @@ type runtimeCredentialRegistry interface {
 }
 
 type Handler struct {
-	guardrails          requestaudit.Cache
-	autoTasks           autoTaskCache
-	decisionClient      autoDecisionRunner
-	manager             *state.Manager
-	catalog             *catalog.Runtime
-	channels            *channel.Registry
-	subscriptions       *subscriptionruntime.Runtime
-	registry            runtimeCredentialRegistry
-	encryption          encryption.Service
-	forwarder           AttemptForwarder
-	dialects            dialect.Set
-	stats               *health.StatsStore
-	mutations           credentialMutationCoordinator
-	limiter             AccessKeyRPMLimiter
-	requestLogSink      telemetry.RequestLogSink
-	priceTables         PriceTableProvider
-	accessQuota         *accessquota.Runtime
-	usageReader         AccessKeyUsageReader
-	newRequestID        func() (string, error)
-	requestNow          func() time.Time
-	now                 func() time.Time
-	writeTimeout        time.Duration
-	modelListLimit      int64
-	liveModels          LiveModelLister
-	logger              *logrus.Logger
-	authFailureEvents   *utils.RateLimitedEventCounter
-	routeNotFoundEvents *utils.RateLimitedEventCounter
-	lifecycle           *httplifecycle.Coordinator
-	affinityCache       *affinity.Cache
-	responseBindings    *state.ResponseBindings
-	websocketLimits     websocketLimits
-	websocketBudget     websocketBudget
-	liveOpener          execution.LiveOpener
-	liveSessions        *liveSessions
-	liveConfig          config.CodexLiveConfig
+	transparentClientsMu sync.Mutex
+	transparentClients   *httpclient.HTTPClientManager
+	transparentRevision  uint64
+	guardrails           requestaudit.Cache
+	autoTasks            autoTaskCache
+	decisionClient       autoDecisionRunner
+	manager              *state.Manager
+	catalog              *catalog.Runtime
+	channels             *channel.Registry
+	subscriptions        *subscriptionruntime.Runtime
+	registry             runtimeCredentialRegistry
+	encryption           encryption.Service
+	forwarder            AttemptForwarder
+	dialects             dialect.Set
+	stats                *health.StatsStore
+	mutations            credentialMutationCoordinator
+	limiter              AccessKeyRPMLimiter
+	requestLogSink       telemetry.RequestLogSink
+	priceTables          PriceTableProvider
+	accessQuota          *accessquota.Runtime
+	usageReader          AccessKeyUsageReader
+	newRequestID         func() (string, error)
+	requestNow           func() time.Time
+	now                  func() time.Time
+	writeTimeout         time.Duration
+	modelListLimit       int64
+	requestBodyLimit     int64
+	liveModels           LiveModelLister
+	logger               *logrus.Logger
+	authFailureEvents    *utils.RateLimitedEventCounter
+	routeNotFoundEvents  *utils.RateLimitedEventCounter
+	lifecycle            *httplifecycle.Coordinator
+	affinityCache        *affinity.Cache
+	responseBindings     *state.ResponseBindings
+	websocketLimits      websocketLimits
+	websocketBudget      websocketBudget
+	liveOpener           execution.LiveOpener
+	liveSessions         *liveSessions
+	liveConfig           config.CodexLiveConfig
 }
 
 func (handler *Handler) freezeAttemptPricing(
@@ -447,7 +452,7 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 		handler.handleMistralRealtime(ginContext, requestContext)
 		return
 	}
-	if websocketIntent(ginContext.Request) {
+	if websocketIntent(ginContext.Request) && requestContext.selectedRoute.Protocol != protocol.TransparentHTTP {
 		handler.handleWebsocket(ginContext, requestContext)
 		return
 	}
@@ -550,6 +555,10 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 		handler.completeReason(ginContext, recorder, reasonAccessKeyRateLimited)
 		return
 	}
+	if selectedRoute.Protocol == protocol.TransparentHTTP {
+		handler.handleTransparent(ginContext, snapshot, accessKey, recorder)
+		return
+	}
 	if selectedRoute.Kind == endpointModels {
 		if !contentcoding.IdentityAcceptable(
 			headerFieldValues(ginContext.Request.Header, "Accept-Encoding"),
@@ -595,8 +604,8 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 	body, err := readDecodedRequestBody(
 		ginContext.Request,
 		encoding,
-		maxRequestBodyBytes,
-		maxRequestBodyBytes,
+		handler.RequestBodyLimit(),
+		handler.RequestBodyLimit(),
 	)
 	if err != nil {
 		if ginContext.Request.Context().Err() != nil {
@@ -629,7 +638,13 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 			recorder.completeCanceled(ginContext.Request.Context(), 0, -1)
 			return
 		}
-		handler.completeReason(ginContext, recorder, reasonInvalidProtocolRequest)
+		failure := reasonInvalidProtocolRequest
+		var validation *dialect.RequestValidationError
+		if errors.As(err, &validation) {
+			failure.Code = "invalid_request_" + validation.Rule
+			failure.Message = "Request field " + validation.Field + " failed validation (" + validation.Rule + ")."
+		}
+		handler.completeReason(ginContext, recorder, failure)
 		return
 	}
 	model := ""
@@ -646,6 +661,7 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 	}
 	recorder.setClientModel(model)
 	recorder.setOperation(metadata.Operation)
+	recorder.serviceEvidence = requestServiceEvidence(selectedRoute.Protocol, parsed)
 	recorder.setStream(metadata.Stream)
 	var boundAuto *automodel.Selection
 	autoQuery := scheduler.Query{}
@@ -687,6 +703,12 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 	capturedRefs := handler.registry.CaptureActiveCredentialRefs(candidateGroupIDs)
 	allowedCredentialRefs := make(map[uint]state.CredentialRef, len(capturedRefs))
 	for _, ref := range capturedRefs {
+		if selectedRoute.Protocol == protocol.NativeServices {
+			endpoint, _ := dialect.ClassifyNativeService(parsed.Method, parsed.Path)
+			if string(snapshot.GroupCatalog[ref.GroupID].ChannelID) != endpoint.Service {
+				continue
+			}
+		}
 		allowedCredentialRefs[ref.ID] = ref
 	}
 	recorder.setOperation(metadata.Operation)
@@ -702,6 +724,28 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 	}
 	query.AllowedCredentialIDs = allowedCredentialIDs
 	query.AllowedCredentialRefs = allowedCredentialRefs
+	if len(metadata.ResourceReferences) > 0 {
+		var owner state.ResponseBinding
+		for i, key := range metadata.ResourceReferences {
+			binding, found := handler.responseBindings.Lookup(accessKey.ID, key)
+			if !found {
+				handler.completeReason(ginContext, recorder, reason{Status: 404, Code: "resource_binding_not_found", Message: "Resource ownership is unavailable for this access key."})
+				return
+			}
+			if i > 0 && (binding.CredentialID != owner.CredentialID || binding.GroupID != owner.GroupID || binding.IdentityGeneration != owner.IdentityGeneration) {
+				handler.completeReason(ginContext, recorder, reason{Status: 400, Code: "resource_owner_conflict", Message: "Input resources belong to different credentials."})
+				return
+			}
+			owner = binding
+		}
+		ref, allowed := allowedCredentialRefs[owner.CredentialID]
+		if !allowed || ref.GroupID != owner.GroupID || ref.IdentityGeneration != owner.IdentityGeneration {
+			handler.completeReason(ginContext, recorder, reason{Status: 409, Code: "resource_owner_unavailable", Message: "The resource credential is unavailable under the current access policy."})
+			return
+		}
+		query.AllowedCredentialIDs = map[uint]struct{}{owner.CredentialID: {}}
+		query.AllowedCredentialRefs = map[uint]state.CredentialRef{owner.CredentialID: ref}
+	}
 	var requestAffinity requestAffinity
 	if metadata.PreviousResponseID != "" {
 		binding, found := handler.responseBindings.Lookup(accessKey.ID, metadata.PreviousResponseID)
@@ -965,7 +1009,7 @@ func (handler *Handler) executeAttempts(
 		}
 		defer func() {
 			if prepared.err == nil {
-				prepared.request, prepared.err = redactOutboundRequest(snapshot.RequestRedaction, selectedDialect.Protocol(), prepared.request, redactionCipher)
+				prepared.request, prepared.err = redactOutboundRequest(snapshot.RequestRedaction, selectedDialect.Protocol(), prepared.request, handler.RequestBodyLimit(), redactionCipher)
 			}
 			cachedPrepared = &prepared
 		}()
@@ -992,7 +1036,7 @@ func (handler *Handler) executeAttempts(
 			return prepared
 		}
 		prepared.configuredParameters = selection.Group.ParameterOverrides.ConfiguredFields(selectedDialect.Protocol(), originalMetadata.Operation, routeModel)
-		if int64(len(body)) > maxRequestBodyBytes {
+		if int64(len(body)) > handler.RequestBodyLimit() {
 			prepared.err = errRequestTooLarge
 			cachedPrepared = &prepared
 			return prepared
@@ -1047,11 +1091,14 @@ func (handler *Handler) executeAttempts(
 		scope execution.ErrorScope,
 	) bool {
 		attemptSequence++
-		if attemptSequence == 1 && (originalMetadata.PreviousResponseID != "" ||
+		if attemptSequence == 1 && (len(originalMetadata.ResourceReferences) > 0 || originalMetadata.PreviousResponseID != "" ||
 			(requestAffinity.preferredCredentialID != 0 && selection.CredentialID == requestAffinity.preferredCredentialID)) {
 			kind := requestAffinity.kind
 			if originalMetadata.PreviousResponseID != "" {
 				kind = telemetry.AffinityResponseContinuity
+			}
+			if len(originalMetadata.ResourceReferences) > 0 {
+				kind = telemetry.AffinityResourceOwnership
 			}
 			recorder.setAffinityHit(true, kind)
 		}
@@ -1266,7 +1313,7 @@ func (handler *Handler) executeAttempts(
 		}
 
 		// 取消已有响应不创建内容，不能启动新的审查调用或被审查组满额阻止。
-		if operation != execution.OperationResponsesCancel {
+		if operation != execution.OperationResponsesCancel && operation != execution.OperationResourceCancel {
 			if failure := handler.checkRequestAudit(ginContext.Request.Context(), snapshot, snapshot.AccessKeysByID[recorder.accessKeyID], prepared.request.Body, recorder, func() *reason { return handler.admitAutoQuota(snapshot, quotaAdmission) }); failure != nil {
 				handler.completeReason(ginContext, recorder, *failure)
 				return
@@ -1277,7 +1324,7 @@ func (handler *Handler) executeAttempts(
 			return
 		}
 		releaseGroup := func() {}
-		if operation != execution.OperationResponsesCancel {
+		if operation != execution.OperationResponsesCancel && operation != execution.OperationResourceCancel {
 			var failure *reason
 			releaseGroup, failure = handler.acquireGroupConcurrency(selection.GroupID)
 			if failure != nil {
@@ -1289,11 +1336,14 @@ func (handler *Handler) executeAttempts(
 		defer releaseGroup()
 		attemptSequence++
 		forwardAttempts++
-		if attemptSequence == 1 && (originalMetadata.PreviousResponseID != "" ||
+		if attemptSequence == 1 && (len(originalMetadata.ResourceReferences) > 0 || originalMetadata.PreviousResponseID != "" ||
 			(requestAffinity.preferredCredentialID != 0 && selection.CredentialID == requestAffinity.preferredCredentialID)) {
 			kind := requestAffinity.kind
 			if originalMetadata.PreviousResponseID != "" {
 				kind = telemetry.AffinityResponseContinuity
+			}
+			if len(originalMetadata.ResourceReferences) > 0 {
+				kind = telemetry.AffinityResourceOwnership
 			}
 			recorder.setAffinityHit(true, kind)
 		}
@@ -1305,6 +1355,10 @@ func (handler *Handler) executeAttempts(
 		restoreCipher := redactionCipher
 		if !redactionMayRestore(prepared.request, snapshot.RequestRedaction.Reversible()) {
 			restoreCipher = nil
+		}
+		recorder.serviceEvidence = requestServiceEvidence(selectedDialect.Protocol(), prepared.request)
+		if recorder.serviceEvidence != nil {
+			recorder.serviceEvidence.IdentityGeneration = ref.IdentityGeneration
 		}
 		input := ForwardInput{
 			ConfiguredParameters: prepared.configuredParameters,

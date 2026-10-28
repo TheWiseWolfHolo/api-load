@@ -134,6 +134,7 @@ type requestLogPricingReceiptResponse struct {
 }
 
 type requestLogItemResponse struct {
+	MeasuredUnits json.RawMessage `json:"measured_units,omitempty"`
 	credentialDisplayResponse
 	RequestAudit              *requestAuditResponse        `json:"request_audit,omitempty"`
 	AutoDecision              *autoDecisionResponse        `json:"auto_decision,omitempty"`
@@ -1199,6 +1200,7 @@ func mapRequestLogItemResponse(
 		CredentialName:          credentialLabelFor(credentialLabels, usageCost.credentialID),
 		RouteMode:               routeMode,
 		UsageState:              record.UsageState,
+		MeasuredUnits:           record.MeasuredUnits,
 		CostState:               record.CostState,
 		PricingCompleteness:     record.PricingCompleteness,
 		PricingMode:             pricingMode,

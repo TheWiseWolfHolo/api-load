@@ -3,6 +3,9 @@ package protocol
 
 type Protocol string
 
+const NativeServices Protocol = "native-services"
+const TransparentHTTP Protocol = "transparent-http"
+
 const (
 	OpenAICompletions Protocol = "openai-completions"
 	OpenAIResponses   Protocol = "openai-responses"
@@ -14,6 +17,7 @@ const (
 	Anthropic         Protocol = "anthropic"
 	Gemini            Protocol = "gemini"
 	GeminiEmbeddings  Protocol = "gemini-embeddings"
+	CohereEmbeddings  Protocol = "cohere-embeddings"
 	// Mistral is the native surface for Mistral-only HTTP APIs. Chat and
 	// embeddings stay on the OpenAI-compatible protocols.
 	Mistral Protocol = "mistral"
@@ -22,7 +26,7 @@ const (
 func (p Protocol) Valid() bool {
 	switch p {
 	case OpenAICompletions, OpenAIResponses, OpenAIImages, OpenAIEmbeddings, CodexLive, Rerank, Decisions,
-		Anthropic, Gemini, GeminiEmbeddings, Mistral:
+		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, Mistral, NativeServices, TransparentHTTP:
 		return true
 	default:
 		return false
@@ -32,7 +36,7 @@ func (p Protocol) Valid() bool {
 func (p Protocol) DataPlaneEnabled() bool {
 	switch p {
 	case OpenAICompletions, OpenAIResponses, OpenAIImages, OpenAIEmbeddings, CodexLive, Rerank, Decisions,
-		Anthropic, Gemini, GeminiEmbeddings, Mistral:
+		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, Mistral, NativeServices, TransparentHTTP:
 		return true
 	default:
 		return false
@@ -40,7 +44,7 @@ func (p Protocol) DataPlaneEnabled() bool {
 }
 
 func (p Protocol) SupportsModelOptionalRequests() bool {
-	return p == OpenAIResponses
+	return p == OpenAIResponses || p == NativeServices || p == TransparentHTTP
 }
 
 func DataPlaneProtocols() []Protocol {
@@ -55,6 +59,9 @@ func DataPlaneProtocols() []Protocol {
 		Anthropic,
 		Gemini,
 		GeminiEmbeddings,
+		CohereEmbeddings,
 		Mistral,
+		NativeServices,
+		TransparentHTTP,
 	}
 }

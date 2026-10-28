@@ -25,6 +25,7 @@ import {
   AppIcon,
   AppIconButton,
   AppProtocolTag,
+  AppSegmentedControl,
 } from '@modern/components/ui'
 import type { SemanticTone } from '@modern/components/ui'
 import { useApiClient } from '@shared/http/client-context'
@@ -34,10 +35,27 @@ import GroupCredentialAddPanel from './GroupCredentialAddPanel.vue'
 import GroupCredentials from './GroupCredentials.vue'
 import GroupModelsPanel from './GroupModelsPanel.vue'
 import GroupOverview from './GroupOverview.vue'
+import GroupServiceCapabilities from './GroupServiceCapabilities.vue'
+import GroupTransparentConnection from './GroupTransparentConnection.vue'
+import { serviceCapabilitiesKey } from '@modern/api/service-capabilities'
+import { serviceMessages } from '@modern/i18n/locales/service-capabilities'
 
 const route = useRoute()
 const router = useRouter()
-const { t, n } = useI18n()
+const { t, n, locale } = useI18n()
+const serviceLabels = computed(
+  () => serviceMessages[locale.value as keyof typeof serviceMessages] ?? serviceMessages['en-US'],
+)
+const section = computed({
+  get: () => (route.query.view === 'services' ? 'services' : 'credentials'),
+  set: (value: string) => {
+    const query = { ...route.query }
+    if (value === 'services') query.view = value
+    else delete query.view
+    void router.replace({ query })
+  },
+})
+const services = ref<InstanceType<typeof GroupServiceCapabilities>>()
 const client = useApiClient()
 const cache = useQueryClient()
 const id = computed(() => Number(route.params.id))
@@ -138,6 +156,7 @@ async function refreshUsage(): Promise<void> {
 }
 async function refresh(): Promise<void> {
   await Promise.all([
+    services.value?.refresh(),
     groups.refetch(),
     channels.refetch(),
     models.refetch(),
@@ -167,11 +186,13 @@ usePageRefresh({
     ) || undefined,
 })
 function settingsSaved(): void {
+  void cache.invalidateQueries({ queryKey: serviceCapabilitiesKey(id.value) })
   void cache.invalidateQueries({ queryKey: groupQueryKey })
   void cache.invalidateQueries({ queryKey: groupCredentialsKey(id.value) })
   void cache.invalidateQueries({ queryKey: groupSettingsKey(id.value) })
 }
 function modelsSaved(): void {
+  void cache.invalidateQueries({ queryKey: serviceCapabilitiesKey(id.value) })
   void cache.invalidateQueries({ queryKey: groupQueryKey })
   void cache.invalidateQueries({ queryKey: groupCredentialsKey(id.value) })
 }
@@ -299,16 +320,37 @@ useMessageSource(() =>
             </div>
           </div>
         </header>
-        <GroupCredentials
-          :key="group.id"
-          ref="credentials"
-          :group="group"
-          :channel="channel"
-          @add="panel = 'add'"
-          @changed="cache.invalidateQueries({ queryKey: groupQueryKey })"
-          @pending="credentialsPending = $event"
-          @updated-at="credentialsUpdatedAt = $event"
+        <GroupTransparentConnection :group-id="group.id" />
+        <AppSegmentedControl
+          v-model="section"
+          :label="serviceLabels.title"
+          :options="[
+            {
+              value: 'credentials',
+              label: serviceLabels.credentials,
+              count: group.credentials.total,
+            },
+            { value: 'services', label: serviceLabels.title },
+          ]"
         />
+        <GroupServiceCapabilities
+          v-if="section === 'services'"
+          :key="group.id"
+          ref="services"
+          :group-id="group.id"
+        />
+        <div v-show="section === 'credentials'" class="modern-group-credentials-panel">
+          <GroupCredentials
+            :key="group.id"
+            ref="credentials"
+            :group="group"
+            :channel="channel"
+            @add="panel = 'add'"
+            @changed="cache.invalidateQueries({ queryKey: groupQueryKey })"
+            @pending="credentialsPending = $event"
+            @updated-at="credentialsUpdatedAt = $event"
+          />
+        </div>
       </div>
       <aside class="modern-group-workspace-sidebar" :aria-label="t('groupDetail.settings')">
         <GroupBasicsForm
@@ -396,6 +438,12 @@ useMessageSource(() =>
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) var(--modern-context-sidebar);
   gap: var(--modern-space-5);
+}
+.modern-group-credentials-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 .modern-group-workspace-main {
   display: flex;

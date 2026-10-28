@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gpt-load/internal/platform/httproute"
+	"gpt-load/internal/protocol"
 	"gpt-load/internal/state"
 )
 
@@ -43,7 +44,7 @@ func (handler *Handler) HTTPModule() httproute.Module {
 		Name:              "data",
 		Owner:             httproute.OwnerData,
 		Auth:              httproute.AuthAccessKey,
-		NamespacePrefixes: []string{"/v1", "/v1beta", "/mistral"},
+		NamespacePrefixes: []string{"/v1", "/v1beta", "/mistral", "/proxy"},
 		Authenticate:      handler.authenticateDataPlaneRequest,
 		Routes:            routes,
 		NotFound:          handler.dataPlaneRouteNotFound,
@@ -99,6 +100,16 @@ func (handler *Handler) authenticateDataPlaneRequest(ginContext *gin.Context) {
 
 	snapshot := handler.manager.Current()
 	initializeDebugHeaders(ginContext.Writer.Header())
+	rawQuery := ginContext.Request.URL.RawQuery
+	transparentHeaderKey := ""
+	if requestContext.selectedRoute.Protocol == protocol.TransparentHTTP {
+		transparentHeaderKey = transparentGatewayKey(ginContext.Request)
+		if transparentHeaderKey == "" {
+			_ = handler.writeReason(ginContext, reason{http.StatusUnauthorized, "transparent_header_auth_required", "Transparent forwarding requires an access key in a request header."})
+			ginContext.Abort()
+			return
+		}
+	}
 	accessKey, authenticated, failureReason := authenticate(
 		ginContext.Request,
 		snapshot,
@@ -110,6 +121,9 @@ func (handler *Handler) authenticateDataPlaneRequest(ginContext *gin.Context) {
 		_ = handler.writeReason(ginContext, reasonInvalidAccessKey)
 		ginContext.Abort()
 		return
+	}
+	if requestContext.selectedRoute.Protocol == protocol.TransparentHTTP {
+		ginContext.Request.URL.RawQuery = transparentQuery(rawQuery, transparentHeaderKey)
 	}
 
 	requestContext.snapshot = snapshot

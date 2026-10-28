@@ -29,6 +29,7 @@ type GroupUnavailableReason string
 const (
 	GroupUnavailableReasonNoAvailableCredentials GroupUnavailableReason = "no_available_credentials"
 	GroupUnavailableReasonNoModels               GroupUnavailableReason = "no_models"
+	GroupUnavailableReasonTransparentDisabled    GroupUnavailableReason = "transparent_proxy_disabled"
 )
 
 type GroupCollectionCredentialCounts struct {
@@ -55,6 +56,8 @@ type GroupCollectionItem struct {
 }
 
 type groupCollectionRecord struct {
+	TransparentHTTPEnabled bool
+	TransparentHTTPBaseURL string
 	GroupCollectionItem
 	Enabled                    bool
 	Weight                     int
@@ -372,6 +375,7 @@ func mapGroupCollectionRecords(
 
 		catalog := snapshot.GroupCatalog[group.ID]
 		record := groupCollectionRecord{
+			TransparentHTTPEnabled: catalog.TransparentHTTPEnabled, TransparentHTTPBaseURL: catalog.TransparentHTTPBaseURL,
 			GroupCollectionItem: GroupCollectionItem{
 				Priority:        group.Priority,
 				PriceMultiplier: priceMultiplierResponse(group.PriceMultiplierMicros),
@@ -522,8 +526,12 @@ func groupCollectionStatusAndReason(
 		reason := GroupUnavailableReasonNoAvailableCredentials
 		return GroupCollectionStatusUnavailable, &reason
 	}
-	if modelCount > 0 || group.ChannelID == channel.Codex {
+	if modelCount > 0 || group.ChannelID == channel.Codex || group.TransparentHTTPEnabled {
 		return GroupCollectionStatusAvailable, nil
+	}
+	if group.ChannelID == channel.TransparentHTTP {
+		reason := GroupUnavailableReasonTransparentDisabled
+		return GroupCollectionStatusUnavailable, &reason
 	}
 	reason := GroupUnavailableReasonNoModels
 	return GroupCollectionStatusUnavailable, &reason

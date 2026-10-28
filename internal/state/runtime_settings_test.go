@@ -11,6 +11,28 @@ import (
 	"gpt-load/internal/platform/config"
 )
 
+func TestTransparentProxySettingsValidateTargetAndAuthentication(t *testing.T) {
+	base := TransparentProxyConfig{Enabled: true, BaseURL: "https://service.example/", AuthHeader: "X-API-Key", Strategy: "rotate"}
+	if _, err := ResolveGroupRuntimeSettings(DefaultRuntimeSettings(), config.Settings{SettingTransparentProxy: base}); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*TransparentProxyConfig){
+		func(p *TransparentProxyConfig) { p.BaseURL = "https://user:password@service.example" },
+		func(p *TransparentProxyConfig) { p.BaseURL = "https://service.example/?key=secret" },
+		func(p *TransparentProxyConfig) { p.BaseURL = "https://service.example/a/../b" },
+		func(p *TransparentProxyConfig) { p.AuthHeader = "Host" },
+		func(p *TransparentProxyConfig) { p.AuthPrefix = "Bearer\r\nInjected: value" },
+		func(p *TransparentProxyConfig) { p.Strategy = "fixed" },
+		func(p *TransparentProxyConfig) { p.FixedCredentialID = 9 },
+	} {
+		value := base
+		change(&value)
+		if _, err := ResolveGroupRuntimeSettings(DefaultRuntimeSettings(), config.Settings{SettingTransparentProxy: value}); err == nil {
+			t.Fatalf("invalid transparent settings accepted: %+v", value)
+		}
+	}
+}
+
 func TestRouteStrategyAcceptsOnlyExplicitGlobalPolicies(t *testing.T) {
 	const key = "route_strategy"
 	if !IsRuntimeSettingKey(key) {

@@ -79,8 +79,8 @@ func validateRerankInput(body []byte) error {
 		switch name {
 		case "query":
 			var query string
-			if json.Unmarshal(raw, &query) != nil || strings.TrimSpace(query) == "" {
-				return fmt.Errorf("rerank query must be a non-empty string")
+			if !validRetrievalContent(raw) || (json.Unmarshal(raw, &query) == nil && strings.TrimSpace(query) == "") {
+				return &RequestValidationError{Field: "query", Rule: "unsupported_retrieval_content"}
 			}
 		case "documents":
 			var documents []json.RawMessage
@@ -88,8 +88,8 @@ func validateRerankInput(body []byte) error {
 				return fmt.Errorf("rerank documents must be a non-empty string array")
 			}
 			for _, document := range documents {
-				if !jsonEmbeddingString(document) {
-					return fmt.Errorf("rerank documents must contain only strings")
+				if !validRetrievalContent(document) {
+					return &RequestValidationError{Field: "documents", Rule: "unsupported_retrieval_content"}
 				}
 			}
 		case "top_n":

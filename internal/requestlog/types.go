@@ -1,6 +1,7 @@
 package requestlog
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -124,6 +125,7 @@ type AccessKeyRef struct {
 }
 
 type Record struct {
+	MeasuredUnits           json.RawMessage
 	BillingUnit             pricing.BillingUnit
 	RequestAudit            *requestaudit.Result
 	AutoDecision            *automodel.Decision

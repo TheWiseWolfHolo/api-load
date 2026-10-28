@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"gpt-load/internal/accessquota"
@@ -105,8 +106,11 @@ func (handler *Handler) prepareAutoModel(ctx context.Context, snapshot *state.Co
 		if err != nil {
 			return parsed, metadata, nil, &reasonRedactionFailed
 		}
-		clean, err := redactOutboundRequest(snapshot.RequestRedaction, selectedDialect.Protocol(), parsed, cipher)
+		clean, err := redactOutboundRequest(snapshot.RequestRedaction, selectedDialect.Protocol(), parsed, handler.RequestBodyLimit(), cipher)
 		if err != nil {
+			if errors.Is(err, errRequestTooLarge) {
+				return parsed, metadata, nil, &reasonRequestTooLarge
+			}
 			return parsed, metadata, nil, &reasonRedactionFailed
 		}
 		fingerprint := view.TaskFingerprint
@@ -242,7 +246,7 @@ func (handler *Handler) prepareAutoModel(ctx context.Context, snapshot *state.Co
 		return parsed, metadata, decision, &reasonInvalidProtocolRequest
 	}
 	body, _, err := chosen.Rules.Apply(selectedDialect.Protocol(), metadata.Operation, chosen.Model, rewritten.Body)
-	if err != nil || int64(len(body)) > maxRequestBodyBytes {
+	if err != nil || int64(len(body)) > handler.RequestBodyLimit() {
 		return parsed, metadata, decision, &reasonParameterOverrideUnavailable
 	}
 	rewritten.Body = body

@@ -34,6 +34,9 @@ func Fireworks() spec.Module {
 				FixedBaseURL:      "https://api.fireworks.ai/inference/v1",
 			},
 			Routes: []spec.Route{
+				spec.NewRoute(protocol.Rerank, execution.OperationRerank, execution.RouteNative),
+				spec.NewRoute(protocol.Rerank, execution.OperationProbe, execution.RouteNative),
+
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationChatCompletion, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationListModels, execution.RouteNative),
 				spec.NewRoute(protocol.OpenAICompletions, execution.OperationProbe, execution.RouteNative),

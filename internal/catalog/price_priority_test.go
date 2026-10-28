@@ -9,6 +9,7 @@ import (
 
 func TestAutomaticPriceProviderPriority(t *testing.T) {
 	want := []string{
+		"openrouter",
 		"openai",
 		"anthropic",
 		"google",
@@ -40,16 +41,15 @@ func TestAutomaticPriceProviderPriority(t *testing.T) {
 		"siliconflow-cn",
 		"nebius",
 		"baseten",
-		"openrouter",
 	}
 
 	if !slices.Equal(automaticPriceProviderPriority, want) {
 		t.Fatalf("automatic price provider priority = %q, want %q", automaticPriceProviderPriority, want)
 	}
-	if automaticPriceProviderPriority[0] != "openai" ||
-		automaticPriceProviderPriority[1] != "anthropic" ||
-		automaticPriceProviderPriority[2] != "google" {
-		t.Fatalf("first automatic price providers = %q, want [openai anthropic google]", automaticPriceProviderPriority[:3])
+	if automaticPriceProviderPriority[0] != "openrouter" ||
+		automaticPriceProviderPriority[1] != "openai" ||
+		automaticPriceProviderPriority[2] != "anthropic" {
+		t.Fatalf("first automatic price providers = %q, want [openrouter openai anthropic]", automaticPriceProviderPriority[:3])
 	}
 
 	seen := make(map[string]struct{}, len(automaticPriceProviderPriority))

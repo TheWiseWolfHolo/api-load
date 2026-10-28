@@ -74,6 +74,10 @@ export async function getGroupChannels(
       'embeddings_create',
       'rerank',
       'decisions_create',
+      'resource_create',
+      'resource_read',
+      'resource_delete',
+      'resource_cancel',
       'mistral_ocr',
       'mistral_fim',
       'mistral_audio_transcription',
@@ -99,7 +103,10 @@ export async function getGroupChannels(
     })
     const requestRoutes = routes.filter((route) => protocolOperations.includes(route.operation))
     const nativeRoutes = routes.filter(
-      (route) => protocolOperations.includes(route.operation) || route.operation === 'live_call',
+      (route) =>
+        protocolOperations.includes(route.operation) ||
+        route.operation === 'live_call' ||
+        route.operation === 'transparent_request',
     )
     return {
       id: text(item.channel_id),

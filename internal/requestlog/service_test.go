@@ -187,6 +187,9 @@ func TestServiceEmitLifecycleAndDeepCopy(t *testing.T) {
 	}
 
 	event := testEvent("deep-copy")
+	imageTokens := int64(0)
+	event.Usage.Result.MeasuredUnits.ImageTokens = &imageTokens
+	event.ServiceEvidence = &telemetry.ServiceEvidence{Format: "cohere-embeddings", Input: []string{"text"}, Query: []string{"text"}, Documents: []string{"image"}, Quality: "not_evaluated"}
 	firstResponseMs := int64(7)
 	requestReasoningBudget := int64(2048)
 	attemptReasoningBudget := int64(4096)
@@ -197,6 +200,11 @@ func TestServiceEmitLifecycleAndDeepCopy(t *testing.T) {
 	service.Emit(event)
 	timer := receiveValue(t, timers.created)
 	event.RequestID = "mutated-request"
+	imageTokens = 999
+	event.ServiceEvidence.Format = "mutated-format"
+	event.ServiceEvidence.Input[0] = "mutated-input"
+	event.ServiceEvidence.Query[0] = "mutated-query"
+	event.ServiceEvidence.Documents[0] = "mutated-document"
 	event.Attempts[0].GroupName = "mutated-group"
 	firstResponseMs = 8
 	requestReasoningBudget = 1024
@@ -204,6 +212,9 @@ func TestServiceEmitLifecycleAndDeepCopy(t *testing.T) {
 	timer.Fire()
 
 	rows := receiveValue(t, writes)
+	if string(rows[0].MeasuredUnits) != `{"image_tokens":"0"}` || bytes.Contains(rows[0].ServiceEvidence, []byte("mutated")) {
+		t.Fatalf("new observation fields were not frozen: %s / %s", rows[0].MeasuredUnits, rows[0].ServiceEvidence)
+	}
 	if len(rows) != 1 || rows[0].ID != "deep-copy" {
 		t.Fatalf("written rows = %+v, want original request", rows)
 	}

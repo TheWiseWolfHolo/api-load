@@ -428,6 +428,10 @@ function decisionRuleLabel(ruleID: string): string {
           </AppFormSection>
           <AppFormSection :title="t('logs.usageInfo')" compact>
             <dl class="modern-log-detail-grid is-numeric">
+              <div v-for="(quantity, unit) in log.measured_units" :key="unit">
+                <dt>{{ unit }}</dt>
+                <dd>{{ quantity }}</dd>
+              </div>
               <div v-for="field in tokenFields" :key="field">
                 <dt>{{ t('logs.columns.' + field) }}</dt>
                 <dd>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { discoveryFailureKey } from '@modern/api/group-detail'
 import { RefreshCw } from '@lucide/vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, onScopeDispose, ref, watch } from 'vue'
@@ -92,8 +93,8 @@ async function discover(): Promise<void> {
   discoveryError.value = ''
   try {
     candidates.value = await discoverGroupModels(client, props.group.id, request.signal)
-  } catch {
-    if (!request.signal.aborted) discoveryError.value = t('groupCreate.discoveryFailed')
+  } catch (cause) {
+    if (!request.signal.aborted) discoveryError.value = t(discoveryFailureKey(cause))
   } finally {
     if (!request.signal.aborted) discovering.value = false
   }

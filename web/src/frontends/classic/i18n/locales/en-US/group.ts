@@ -20,6 +20,7 @@ export default {
       statusReason: {
         no_available_credentials: 'No credentials are currently available',
         no_models: 'No models configured',
+        transparent_proxy_disabled: 'Transparent proxy disabled',
       },
       filters: {
         region: 'Filter Groups',

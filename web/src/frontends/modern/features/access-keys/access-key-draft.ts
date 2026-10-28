@@ -1,3 +1,8 @@
+import {
+  canonicalTransparentPolicy,
+  cloneTransparentPolicy,
+  transparentPolicyError,
+} from '@shared/transparent'
 import { formatLocalDateTime, parseLocalDateTime } from '@modern/components/ui/date-time'
 import type { AccessInput, AccessKey, AccessScope, CostRule } from '@modern/api/access-keys'
 import { createOperationKey } from '../groups/group-create-operation'
@@ -41,6 +46,10 @@ export function draftFor(row?: AccessKey, duplicate = false): AccessDraft {
   const scope = row
     ? {
         groups: [...row.filters.groups],
+        ...(row.filters.transparent
+          ? { transparent: cloneTransparentPolicy(row.filters.transparent) }
+          : {}),
+        ...(row.filters.allow_model_less_resources ? { allow_model_less_resources: true } : {}),
         ...(row.filters.groups_restricted ? { groups_restricted: true } : {}),
         protocols: [...row.filters.protocols],
         models: [...row.filters.models],
@@ -94,6 +103,10 @@ export function inputFor(draft: AccessDraft): AccessInput {
     rpm_limit: Number(draft.rpm || 0),
     price_multiplier: normalizeDecimal(draft.price),
     filters: {
+      ...(draft.scope.transparent
+        ? { transparent: cloneTransparentPolicy(draft.scope.transparent) }
+        : {}),
+      ...(draft.scope.allow_model_less_resources ? { allow_model_less_resources: true } : {}),
       groups: draft.modes.groups === 'all' ? [] : unique(draft.scope.groups),
       ...(draft.modes.groups !== 'all' && !draft.scope.groups.length
         ? { groups_restricted: true }
@@ -111,9 +124,15 @@ export function inputFor(draft: AccessDraft): AccessInput {
   }
 }
 function scopeJSON(scope: AccessScope): string {
-  return JSON.stringify(
-    Object.fromEntries(Object.entries(scope).map(([key, values]) => [key, [...values].sort()])),
-  )
+  return JSON.stringify({
+    transparent: canonicalTransparentPolicy(scope.transparent),
+    groups_restricted: Boolean(scope.groups_restricted) && scope.groups.length === 0,
+    allow_model_less_resources: Boolean(scope.allow_model_less_resources),
+    groups: [...scope.groups].sort((a, b) => a - b),
+    protocols: [...scope.protocols].sort(),
+    models: [...scope.models].sort(),
+    allowed_cidrs: [...scope.allowed_cidrs].sort(),
+  })
 }
 const ruleJSON = (rules: CostRule[]) =>
   JSON.stringify(
@@ -145,6 +164,15 @@ export function patchFor(base: AccessKey, input: AccessInput): Partial<AccessInp
 export function draftErrors(draft: AccessDraft, base?: AccessKey): Record<string, string> {
   const errors: Record<string, string> = {}
   const input = inputFor(draft)
+  const transparentIssue = transparentPolicyError(
+    input.filters.transparent,
+    input.filters.models,
+    input.filters.protocols,
+    input.filters.groups,
+    Boolean(input.filters.groups_restricted),
+    input.cost_limit_rules.length,
+  )
+  if (transparentIssue) errors.transparent = transparentIssue
   if (
     !input.name ||
     new TextEncoder().encode(input.name).length > 255 ||

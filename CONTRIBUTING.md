@@ -56,17 +56,19 @@ Race tests for that module run in CI; per repository convention they are not run
 
 ## 维护者发版验收 / Maintainer release acceptance
 
-本地 `make release` 是维护者在 PR 合并后使用的交互式发版入口。它从最新 `origin/main` 建立隔离工作区，执行三数据库新装与旧版升级、Compose、流式请求、新旧管理界面主要页面，以及 `gpt-load/mini` 隔离副本和一次真实上游请求。全部通过后才建议 tag；输入 `yes` 确认后推送，现有 Release workflow 随 tag 按原配置运行，手动工具不等待其完成，也不重复执行 `make check`。调用者工作区和本地 `main` 不会被切换或改写；若本地发版工具代码已落后于远端，则先停止并提示更新工具。
+本地 `make release` 从最新 `origin/main` 建立隔离工作区，执行三数据库新装与上一 API-Load 镜像升级、Compose、合成流式请求和新旧管理界面主要页面。候选程序与镜像版本读取 `VERSION`；通过后只接受匹配的 tag，输入 `yes` 才推送。当前工作区和本地 main 不会被切换或改写。它不重复运行 `make check`，发布工作流仍会先执行 CI。
 
-在 PR 合并前，可从已提交且干净的当前分支运行 `make release-simulate`。它以当前 `HEAD` 运行同一套验收（包含 mini 真实上游请求），保存报告和截图，结束时不进入 tag 输入或推送。未提交的改动不会进入隔离工作区，因此模拟模式会直接拒绝脏工作区。Playwright 依赖和测试独立放在 `scripts/release-e2e/`，不改变常规前端安装与 CI/Release 门禁。
+`make release-simulate` 使用当前已提交且干净的 HEAD，完成相同检查并保存报告，不创建或推送 tag。Playwright 依赖仍位于 `scripts/release-e2e/`，常规前端依赖不受影响。
 
-该命令需要 Docker、GitHub CLI、Go、Node/corepack，以及维护者本机已配置的 DBX `gpt-load/mini`、`gpt-load/pg` 和 `gpt-load-mini-test-db` 辅助脚本。真实数据仅复制到带归属标记的临时 PostgreSQL 库；本机报告位于 `~/.cache/gpt-load/release-acceptance/`，不得上传其中的日志或浏览器 trace。失败时先核对报告与远端 tag 状态，不要强制改写 tag。
+默认验收不读取维护者私有 DBX 数据，也不发送收费模型请求。确实配置了上游 mini 验收环境并获准进行真实请求时，显式执行 `python3 -m scripts.release --simulate --with-mini`。它额外需要原 `gpt-load-mini-test-db` 辅助脚本及相应 `.env`。未启用时报告记录 `external_mini=not_requested`，不能把它视为生产数据或真实上游验收已通过。
 
-`make release` is an interactive maintainer command used after PRs have merged. It accepts the latest `origin/main` in an isolated worktree and checks three database drivers, upgrades from the previous release, Compose, streaming, both management interfaces, and an isolated copy of the maintainer's `gpt-load/mini` data with one live upstream request. It suggests a tag only after all checks pass; pushing requires an explicit `yes`. The existing Release workflow runs after the tag push; this tool neither waits for it nor repeats `make check`. The caller's checkout and local `main` are left untouched.
+命令需要 Docker、GitHub CLI、Go、Node/corepack、Python 和 jq。本机报告存放在 `~/.cache/api-load/release-acceptance/`，可能包含敏感诊断和浏览器记录，不得公开上传。生产数据库副本、客户端兼容与恢复步骤须按实际部署单独验收。正式发版前查看 [2.1 版本与上游评估](docs/v2.1-upstream-review.md)。
 
-Before merging the PR, run `make release-simulate` from a clean branch with a committed `HEAD`. It runs the same acceptance checks, including the live upstream request, and saves the report and screenshots without prompting for or pushing a tag. It rejects uncommitted changes because the isolated worktree cannot include them. Playwright dependencies and tests live independently under `scripts/release-e2e/`, leaving regular web installs and CI/Release gates unchanged.
+`make release` accepts the latest `origin/main` in an isolated worktree and checks fresh databases and upgrades from the previous API-Load image, Compose, synthetic streaming, and both interfaces. Candidate builds read `VERSION`; only a matching tag can be published after an explicit `yes`. The caller's checkout and local main stay unchanged. The command does not repeat `make check`; publishing still runs CI first.
 
-The command requires Docker, GitHub CLI, Go, Node/corepack, and the maintainer's configured DBX connections and `gpt-load-mini-test-db` helper. Local reports under `~/.cache/gpt-load/release-acceptance/` can contain sensitive diagnostics and browser traces; do not upload them. If it fails, inspect the report and remote tag state before retrying.
+`make release-simulate` checks committed, clean HEAD and saves results without creating or pushing a tag. It uses the same browser checks, with their existing dependencies under `scripts/release-e2e/`.
+
+Private DBX data and a real upstream request are opt-in through `python3 -m scripts.release --simulate --with-mini`. This requires the existing mini helper and its `.env`, plus authorization for that request. The default report records `external_mini=not_requested`. Production-copy migration and real-provider acceptance remain separate checks. Reports are private under `~/.cache/api-load/release-acceptance/`.
 
 ## 提交 PR / Submitting a pull request
 

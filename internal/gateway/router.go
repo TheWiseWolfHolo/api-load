@@ -49,6 +49,7 @@ type dataPlaneEndpoint struct {
 
 func dataPlaneEndpointCatalog() []dataPlaneEndpoint {
 	return []dataPlaneEndpoint{
+		{name: "data.transparent", methods: []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions, http.MethodConnect, http.MethodTrace}, path: "/proxy/:group_id/*path", resolve: staticRoute(protocol.TransparentHTTP, endpointForward)},
 		{name: "data.usage", methods: []string{http.MethodGet}, path: "/v1/user/balance", resolve: staticRoute("", endpointUsage)},
 		{name: "data.usage.unversioned", methods: []string{http.MethodGet}, path: "/user/balance", resolve: staticRoute("", endpointUsage)},
 		{
@@ -120,6 +121,8 @@ func dataPlaneEndpointCatalog() []dataPlaneEndpoint {
 			path:    openAIEmbeddingsPath,
 			resolve: staticRoute(protocol.OpenAIEmbeddings, endpointForward),
 		},
+		{name: "data.native.services", methods: []string{http.MethodPost, http.MethodGet, http.MethodDelete}, path: "/native/:service/*resource_path", resolve: staticRoute(protocol.NativeServices, endpointForward)},
+		{name: "data.cohere.embed", methods: []string{http.MethodPost}, path: "/v2/embed", resolve: staticRoute(protocol.CohereEmbeddings, endpointForward)},
 		{name: "data.rerank", methods: []string{http.MethodPost}, path: "/v1/rerank", resolve: staticRoute(protocol.Rerank, endpointForward)},
 		{name: "data.decisions", methods: []string{http.MethodPost}, path: decisionsPath, resolve: staticRoute(protocol.Decisions, endpointForward)},
 		{name: "data.mistral.ocr", methods: []string{http.MethodPost}, path: "/v1/ocr", resolve: staticRoute(protocol.Mistral, endpointForward)},

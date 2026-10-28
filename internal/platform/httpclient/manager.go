@@ -137,9 +137,36 @@ func (m *HTTPClientManager) NewClientForOutboundProxy(
 	config *Config,
 	effective outboundproxy.Effective,
 ) (*http.Client, error) {
+	resolved, err := configForOutboundProxy(config, effective)
+	if err != nil {
+		return nil, err
+	}
+	return newHTTPClient(&resolved), nil
+}
+
+// GetClientForOutboundProxy reuses connections for a frozen configuration.
+func (m *HTTPClientManager) GetClientForOutboundProxy(config *Config, effective outboundproxy.Effective) (*http.Client, error) {
+	resolved, err := configForOutboundProxy(config, effective)
+	if err != nil {
+		return nil, err
+	}
+	return m.GetClient(&resolved), nil
+}
+
+// CloseIdleConnections retires a configuration generation without interrupting active requests.
+func (m *HTTPClientManager) CloseIdleConnections() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	for _, client := range m.clients {
+		client.CloseIdleConnections()
+	}
+	m.clients = make(map[string]*http.Client)
+}
+
+func configForOutboundProxy(config *Config, effective outboundproxy.Effective) (Config, error) {
 	normalized, err := outboundproxy.NormalizeEffective(effective)
 	if err != nil {
-		return nil, fmt.Errorf("invalid outbound proxy policy")
+		return Config{}, fmt.Errorf("invalid outbound proxy policy")
 	}
 	resolved := Config{}
 	if config != nil {
@@ -154,9 +181,9 @@ func (m *HTTPClientManager) NewClientForOutboundProxy(
 	case outboundproxy.ModeCustom:
 		resolved.ProxyURL = normalized.Config.URL
 	default:
-		return nil, fmt.Errorf("invalid outbound proxy policy")
+		return Config{}, fmt.Errorf("invalid outbound proxy policy")
 	}
-	return newHTTPClient(&resolved), nil
+	return resolved, nil
 }
 
 var errCrossOriginRedirect = errors.New("cross-origin redirect is not allowed")

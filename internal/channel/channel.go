@@ -38,6 +38,8 @@ const (
 	CLIProxyAPI      = spec.CLIProxyAPI
 	Sub2API          = spec.Sub2API
 	OpenAICompatible = spec.OpenAICompatible
+	NativeAPI        = spec.NativeAPI
+	TransparentHTTP  = spec.TransparentHTTP
 	DeepSeek         = spec.DeepSeek
 	MoonshotAI       = spec.MoonshotAI
 	SiliconFlow      = spec.SiliconFlow
@@ -57,6 +59,7 @@ const (
 	Wafer            = spec.Wafer
 	HuggingFace      = spec.HuggingFace
 	Cohere           = spec.Cohere
+	Soniox           = spec.Soniox
 	OpenCodeGo       = spec.OpenCodeGo
 	OpenCodeZen      = spec.OpenCodeZen
 )
@@ -245,6 +248,17 @@ type ResolvedTarget struct {
 	modes                   map[protocol.Protocol]map[execution.Operation]RouteMode
 	resolvers               map[routeKey]spec.RouteResolver
 	responsesStoreHandlings map[routeKey]ResponsesStoreHandling
+}
+
+// WithTransparentHTTP adds an explicitly enabled group route without changing the provider's native routes.
+func (t ResolvedTarget) WithTransparentHTTP() ResolvedTarget {
+	modes := make(map[protocol.Protocol]map[execution.Operation]RouteMode, len(t.modes)+1)
+	for p, operations := range t.modes {
+		modes[p] = operations
+	}
+	modes[protocol.TransparentHTTP] = map[execution.Operation]RouteMode{execution.OperationTransparentRequest: RouteNative}
+	t.modes = modes
+	return t
 }
 
 type routeKey struct {
@@ -593,10 +607,15 @@ func (r *Registry) ResolveExecutionTarget(id ID, raw json.RawMessage) (ResolvedT
 
 func resolvedTargetConfig(definition definition, params Params) json.RawMessage {
 	if len(definition.fixedTargetConfig) > 0 {
-		if baseURL, overridden := params.Value("base_url"); overridden {
-			return canonicalJSON(map[string]string{"base_url": normalizeEndpointVersion(definition, baseURL)})
+		values := make(map[string]string)
+		_ = json.Unmarshal(definition.fixedTargetConfig, &values)
+		for key, value := range params.values {
+			if key == "base_url" {
+				value = normalizeEndpointVersion(definition, value)
+			}
+			values[key] = value
 		}
-		return append(json.RawMessage(nil), definition.fixedTargetConfig...)
+		return canonicalJSON(values)
 	}
 	if len(definition.params) > 0 {
 		if baseURL, ok := params.Value("base_url"); ok && baseURL != "" {

@@ -122,6 +122,10 @@ func TestCreateAccessKeyIdempotentReplaysMetadataWithoutPersistingSecret(t *test
 		t.Fatalf("different request error = %v", err)
 	}
 	var count int64
+	_, flagErr := fixture.service.CreateAccessKeyIdempotent(t.Context(), key, AccessKeyCreateRequest{Name: "idempotent-client", Filters: &AccessKeyFilters{AllowModelLessResources: true}})
+	if !errors.As(flagErr, &apiErr) || apiErr.Code != app_errors.ErrIdempotencyKeyReused.Code {
+		t.Fatalf("resource permission change reused old idempotency result: %v", flagErr)
+	}
 	if err := fixture.db.Model(&models.AccessKey{}).Count(&count).Error; err != nil {
 		t.Fatalf("count AccessKeys: %v", err)
 	}

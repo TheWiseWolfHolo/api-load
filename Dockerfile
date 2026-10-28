@@ -14,7 +14,7 @@ RUN pnpm --dir web run build
 
 FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS go-builder
 
-ARG VERSION=2.0.0-dev
+ARG VERSION
 ARG TARGETOS
 ARG TARGETARCH
 # GOPROXY 使用竖线分隔：任何错误（含网络错误）都回退到下一个源。
@@ -30,10 +30,12 @@ COPY third_party/cpaembedded/go.mod third_party/cpaembedded/go.sum ./third_party
 RUN go mod download
 
 COPY *.go ./
+COPY VERSION ./
 COPY internal ./internal
 COPY third_party/cpaembedded ./third_party/cpaembedded
 COPY --from=web-builder /build/internal/webui/dist ./internal/webui/dist
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+RUN VERSION="${VERSION:-$(cat VERSION)}" \
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X gpt-load/internal/platform/version.Version=${VERSION}" \
     -o gpt-load
 

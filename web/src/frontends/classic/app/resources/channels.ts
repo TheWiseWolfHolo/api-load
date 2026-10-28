@@ -60,6 +60,11 @@ export type ChannelOperation =
   | 'embeddings_create'
   | 'rerank'
   | 'decisions_create'
+  | 'resource_create'
+  | 'resource_read'
+  | 'resource_delete'
+  | 'resource_cancel'
+  | 'transparent_request'
   | 'mistral_ocr'
   | 'mistral_fim'
   | 'mistral_audio_transcription'
@@ -178,6 +183,11 @@ const operations = [
   'embeddings_create',
   'rerank',
   'decisions_create',
+  'resource_create',
+  'resource_read',
+  'resource_delete',
+  'resource_cancel',
+  'transparent_request',
   'mistral_ocr',
   'mistral_fim',
   'mistral_audio_transcription',
