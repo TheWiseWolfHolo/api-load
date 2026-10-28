@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -17,6 +18,7 @@ import (
 	"gpt-load/internal/dialect"
 	"gpt-load/internal/health"
 	"gpt-load/internal/state"
+	"gpt-load/internal/telemetry"
 	"gpt-load/internal/testutil/encryptiontest"
 )
 
@@ -147,8 +149,24 @@ func TestMistralRealtimeCopiesFramesWithUpstreamKey(t *testing.T) {
 	if seenAuth != "Bearer upstream-key" || seenModel != upstreamModel || seenPath != "/v1/audio/transcriptions/realtime" {
 		t.Fatalf("upstream saw auth=%q model=%q path=%q", seenAuth, seenModel, seenPath)
 	}
-	events := waitWebsocketLogs(t, sink, 3)
-	event := events[len(events)-1]
+	// Rejected HTTP handshakes can finish logging after the next request starts.
+	// Wait for the WebSocket request itself instead of assuming emission order.
+	var event telemetry.RequestEvent
+	deadline := time.Now().Add(2 * time.Second)
+	for event.ClientModel == "" {
+		for _, candidate := range sink.snapshot() {
+			if candidate.ClientModel == "public" {
+				event = candidate
+				break
+			}
+		}
+		if event.ClientModel == "" {
+			if time.Now().After(deadline) {
+				t.Fatal("WebSocket request log did not arrive")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
 	attempt := event.Attempts
 	if event.Status != "success" || event.UpstreamModel != upstreamModel || len(attempt) != 1 || attempt[0].CredentialID != 1 || attempt[0].GroupID != 1 || attempt[0].StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("log = status %s model %s attempts %+v", event.Status, event.UpstreamModel, attempt)
