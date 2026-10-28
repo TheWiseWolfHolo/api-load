@@ -269,6 +269,11 @@ func TestServiceCapabilitiesRetainEvidenceAcrossUnrelatedTraffic(t *testing.T) {
 }
 
 func TestServiceRouteEvidenceUsesOperationSpecificMethodsAndPaths(t *testing.T) {
+	path, output := servicePath(protocol.AudioSpeech, execution.OperationAudioSpeech, "openrouter")
+	speech := serviceRoute(protocol.AudioSpeech, execution.OperationAudioSpeech, execution.RouteNative, serviceMethod(execution.OperationAudioSpeech), path, output)
+	if speech.Path != "/v1/audio/speech" || speech.Method != "POST" || speech.Output != "audio" || len(speech.Input) != 1 || speech.Input[0] != "text" || len(speech.Limitations) != 1 || speech.Limitations[0] != "buffered_audio" {
+		t.Fatalf("speech route evidence = %#v", speech)
+	}
 	for _, test := range []struct {
 		o            execution.Operation
 		method, path string

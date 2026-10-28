@@ -18,6 +18,7 @@ const (
 	Gemini            Protocol = "gemini"
 	GeminiEmbeddings  Protocol = "gemini-embeddings"
 	CohereEmbeddings  Protocol = "cohere-embeddings"
+	AudioSpeech       Protocol = "audio-speech"
 	// Mistral is the native surface for Mistral-only HTTP APIs. Chat and
 	// embeddings stay on the OpenAI-compatible protocols.
 	Mistral Protocol = "mistral"
@@ -26,7 +27,7 @@ const (
 func (p Protocol) Valid() bool {
 	switch p {
 	case OpenAICompletions, OpenAIResponses, OpenAIImages, OpenAIEmbeddings, CodexLive, Rerank, Decisions,
-		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, Mistral, NativeServices, TransparentHTTP:
+		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, AudioSpeech, Mistral, NativeServices, TransparentHTTP:
 		return true
 	default:
 		return false
@@ -36,7 +37,7 @@ func (p Protocol) Valid() bool {
 func (p Protocol) DataPlaneEnabled() bool {
 	switch p {
 	case OpenAICompletions, OpenAIResponses, OpenAIImages, OpenAIEmbeddings, CodexLive, Rerank, Decisions,
-		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, Mistral, NativeServices, TransparentHTTP:
+		Anthropic, Gemini, GeminiEmbeddings, CohereEmbeddings, AudioSpeech, Mistral, NativeServices, TransparentHTTP:
 		return true
 	default:
 		return false
@@ -56,6 +57,7 @@ func DataPlaneProtocols() []Protocol {
 		CodexLive,
 		Rerank,
 		Decisions,
+		AudioSpeech,
 		Anthropic,
 		Gemini,
 		GeminiEmbeddings,

@@ -446,7 +446,7 @@ func evidenceHeaders(headers http.Header) http.Header {
 	result := make(http.Header)
 	for name, values := range headers {
 		canonical := http.CanonicalHeaderKey(name)
-		if canonical == "Request-Id" || canonical == "X-Request-Id" || canonical == "Retry-After" ||
+		if canonical == "Request-Id" || canonical == "X-Request-Id" || canonical == "X-Generation-Id" || canonical == "Retry-After" ||
 			canonical == "Traceparent" || strings.HasPrefix(canonical, "Ratelimit-") || strings.HasPrefix(canonical, "X-Ratelimit-") {
 			result[canonical] = append([]string(nil), values...)
 		}
@@ -464,7 +464,10 @@ func upstreamRequestID(headers http.Header) string {
 	if value := headers.Get("X-Request-Id"); value != "" {
 		return value
 	}
-	return headers.Get("Request-Id")
+	if value := headers.Get("Request-Id"); value != "" {
+		return value
+	}
+	return headers.Get("X-Generation-Id")
 }
 
 func retryAfter(headers http.Header) time.Duration {

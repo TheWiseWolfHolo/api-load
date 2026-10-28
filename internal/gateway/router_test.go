@@ -92,7 +92,7 @@ func TestDataPlaneEndpointCatalogDeclaresCompleteHTTPRoutes(t *testing.T) {
 		{name: "data.mistral.fim", methods: []string{http.MethodPost}, path: "/v1/fim/completions"},
 		{name: "data.mistral.audio.transcriptions", methods: []string{http.MethodPost}, path: "/v1/audio/transcriptions"},
 		{name: "data.mistral.realtime", methods: []string{http.MethodGet}, path: "/v1/audio/transcriptions/realtime"},
-		{name: "data.mistral.audio.speech", methods: []string{http.MethodPost}, path: "/v1/audio/speech"},
+		{name: "data.audio.speech", methods: []string{http.MethodPost}, path: "/v1/audio/speech"},
 		{name: "data.mistral.voices", methods: []string{http.MethodGet, http.MethodHead}, path: "/mistral/v1/audio/voices"},
 		{name: "data.mistral.voices.resource", methods: []string{http.MethodGet, http.MethodHead}, path: "/mistral/v1/audio/voices/*resource_path"},
 		{name: "data.mistral.voices.v2", methods: []string{http.MethodGet, http.MethodHead}, path: "/mistral/v2/audio/voices"},

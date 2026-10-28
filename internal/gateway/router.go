@@ -129,7 +129,7 @@ func dataPlaneEndpointCatalog() []dataPlaneEndpoint {
 		{name: "data.mistral.fim", methods: []string{http.MethodPost}, path: "/v1/fim/completions", resolve: staticRoute(protocol.Mistral, endpointForward)},
 		{name: "data.mistral.audio.transcriptions", methods: []string{http.MethodPost}, path: "/v1/audio/transcriptions", resolve: staticRoute(protocol.Mistral, endpointForward)},
 		{name: "data.mistral.realtime", methods: []string{http.MethodGet}, path: "/v1/audio/transcriptions/realtime", resolve: staticRoute(protocol.Mistral, endpointMistralRealtime)},
-		{name: "data.mistral.audio.speech", methods: []string{http.MethodPost}, path: "/v1/audio/speech", resolve: staticRoute(protocol.Mistral, endpointForward)},
+		{name: "data.audio.speech", methods: []string{http.MethodPost}, path: "/v1/audio/speech", resolve: staticRoute(protocol.AudioSpeech, endpointForward)},
 		{name: "data.mistral.voices", methods: mistralVoiceMethods(), path: "/mistral/v1/audio/voices", resolve: staticRoute(protocol.Mistral, endpointForward)},
 		{name: "data.mistral.voices.resource", methods: mistralVoiceMethods(), path: "/mistral/v1/audio/voices/*resource_path", pathValidator: mistralResourcePath, resolve: staticRoute(protocol.Mistral, endpointForward)},
 		{name: "data.mistral.voices.v2", methods: []string{http.MethodGet, http.MethodHead}, path: "/mistral/v2/audio/voices", resolve: staticRoute(protocol.Mistral, endpointForward)},

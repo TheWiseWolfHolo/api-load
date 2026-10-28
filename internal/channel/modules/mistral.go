@@ -51,6 +51,7 @@ func Mistral() spec.Module {
 				spec.NewRoute(protocol.Gemini, execution.OperationChatCompletion, execution.RouteConverted),
 				spec.NewRoute(protocol.Gemini, execution.OperationListModels, execution.RouteConverted),
 				spec.NewRoute(protocol.Gemini, execution.OperationProbe, execution.RouteConverted),
+				spec.NewRoute(protocol.AudioSpeech, execution.OperationAudioSpeech, execution.RouteNative),
 				spec.NewRoute(protocol.Mistral, execution.OperationMistralOCR, execution.RouteNative),
 				spec.NewRoute(protocol.Mistral, execution.OperationMistralFIM, execution.RouteNative),
 				spec.NewRoute(protocol.Mistral, execution.OperationMistralAudioTranscription, execution.RouteNative),

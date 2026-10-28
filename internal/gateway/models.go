@@ -196,6 +196,7 @@ func modelListProtocols(value protocol.Protocol) []protocol.Protocol {
 			protocol.CodexLive,
 			protocol.Rerank,
 			protocol.Decisions,
+			protocol.AudioSpeech,
 		}
 	}
 	if value == protocol.Gemini {

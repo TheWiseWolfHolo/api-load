@@ -66,6 +66,7 @@ export type RequestLogOperation =
   | 'resource_delete'
   | 'resource_cancel'
   | 'transparent_request'
+  | 'audio_speech'
   | 'mistral_ocr'
   | 'mistral_fim'
   | 'mistral_audio_transcription'
@@ -322,6 +323,7 @@ const operations = [
   'resource_delete',
   'resource_cancel',
   'transparent_request',
+  'audio_speech',
   'mistral_ocr',
   'mistral_fim',
   'mistral_audio_transcription',

@@ -408,7 +408,10 @@ complete:
 		(!nativeSpeechAudio(spec, headers) || encodedAudio(bodyBytes, r.unaryResponseBodyLimit(spec))) {
 		return startedUnaryFailure(status, headers, execution.ErrorKindInternal, "encoded upstream response cannot be safely forwarded")
 	}
-	model := openAIResponseModel(bodyBytes, spec.UpstreamModel)
+	model := spec.UpstreamModel
+	if !nativeSpeechAudio(spec, headers) {
+		model = openAIResponseModel(bodyBytes, spec.UpstreamModel)
+	}
 	if status >= http.StatusOK && status < http.StatusMultipleChoices {
 		if prepared.mode == channel.RouteConverted && spec.ClientProtocol == protocol.OpenAIImages {
 			var err error
@@ -440,7 +443,7 @@ complete:
 			}
 			model = openAIResponseModel(bodyBytes, "")
 		}
-		if needsClientModelAlias(spec) && headers.Get("Content-Encoding") == "" {
+		if needsClientModelAlias(spec) && headers.Get("Content-Encoding") == "" && !nativeSpeechAudio(spec, headers) {
 			var err error
 			bodyBytes, err = rewriteClientResponseModel(spec.ClientProtocol, bodyBytes, spec.ClientModel)
 			if err != nil {
@@ -474,7 +477,7 @@ complete:
 // PCM sample bytes can start with a compression signature. Preserve the old
 // Mistral protocol and the Soniox route while distinguishing actual compression.
 func nativeSpeechAudio(spec execution.AttemptSpec, headers http.Header) bool {
-	if spec.Operation != execution.OperationMistralAudioSpeech && !(spec.ClientProtocol == protocol.NativeServices && spec.Path == "/native/soniox/tts") {
+	if spec.Operation != execution.OperationAudioSpeech && spec.Operation != execution.OperationMistralAudioSpeech && !(spec.ClientProtocol == protocol.NativeServices && spec.Path == "/native/soniox/tts") {
 		return false
 	}
 	mediaType, _, err := mime.ParseMediaType(headers.Get("Content-Type"))

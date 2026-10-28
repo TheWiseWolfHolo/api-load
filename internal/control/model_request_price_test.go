@@ -54,3 +54,59 @@ func TestModelPriceHTTPFixedRequestPriceAndReset(t *testing.T) {
 		t.Fatalf("reset fixed price = %#v", data)
 	}
 }
+
+func TestModelPriceReferencePreservesRequestUnitAndUnknownPrice(t *testing.T) {
+	t.Parallel()
+	fixture := newServiceFixture(t)
+	rows, _ := priceReferenceFixture(t, fixture, 3)
+	request := func(value string) ModelPriceUpdateRequest {
+		return mustModelPriceUpdateRequest(t, fmt.Sprintf(`{"billing_unit":"request","request_price":%s,"input":null,"output":null,"cache_read":null,"cache_write":null,"context_tiers":[],"mode_schedules":{},"confirm_unpriced":true}`, value))
+	}
+	initial := request(`"0.0025"`)
+	if _, err := fixture.service.UpdateModelPrice(t.Context(), rows[0].ID, initial); err != nil {
+		t.Fatal(err)
+	}
+	followPrice(t, fixture, rows[1].ID, rows[0].ID)
+	if _, err := fixture.service.BatchModelPrices(t.Context(), ModelPriceBatchRequest{IDs: []uint{rows[2].ID}, Mode: "copy", Price: &initial}); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{`"0.005"`, `"0"`, `null`} {
+		update := request(value)
+		if _, err := fixture.service.UpdateModelPrice(t.Context(), rows[0].ID, update); err != nil {
+			t.Fatal(err)
+		}
+		var linked models.ModelPrice
+		if err := fixture.db.First(&linked, rows[1].ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if linked.BillingUnit != "request" || !pricePointerEqual(linked.RequestPriceNanoUSD, update.RequestPrice.nanoUSD) || linked.InputPriceNanoUSDPerMillionTokens != nil || linked.SourcePriceID == nil || *linked.SourcePriceID != rows[0].ID {
+			t.Fatalf("request price reference lost semantics: %#v", linked)
+		}
+		quote := fixture.priceRuntime.Load().Quote(pricing.Identity{ChannelID: linked.ChannelID, ModelID: linked.ModelID}, usage.Result{State: usage.StateNotApplicable})
+		if update.RequestPrice.nanoUSD == nil {
+			if quote.State != pricing.CostStateUnpriced {
+				t.Fatalf("unknown request price was treated as free: %#v", quote)
+			}
+		} else if quote.State != pricing.CostStatePriced || int64(quote.EstimatedCostNanoUSD) != *update.RequestPrice.nanoUSD {
+			t.Fatalf("referenced request quote = %#v", quote)
+		}
+	}
+	var copied models.ModelPrice
+	if err := fixture.db.First(&copied, rows[2].ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !copied.IsManual || copied.SourcePriceID != nil || copied.BillingUnit != "request" || !pricePointerEqual(copied.RequestPriceNanoUSD, initial.RequestPrice.nanoUSD) {
+		t.Fatalf("copy should remain independent of its source: %#v", copied)
+	}
+	tokens := mustModelPriceUpdateRequest(t, `{"billing_unit":"token","request_price":null,"input":"3","output":"1","cache_read":null,"cache_write":null,"context_tiers":[],"mode_schedules":{}}`)
+	if _, err := fixture.service.UpdateModelPrice(t.Context(), rows[0].ID, tokens); err != nil {
+		t.Fatal(err)
+	}
+	var linked models.ModelPrice
+	if err := fixture.db.First(&linked, rows[1].ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if linked.BillingUnit != "token" || linked.RequestPriceNanoUSD != nil || !pricePointerEqual(linked.InputPriceNanoUSDPerMillionTokens, tokens.Input.nanoUSD) {
+		t.Fatalf("unit change did not propagate: %#v", linked)
+	}
+}

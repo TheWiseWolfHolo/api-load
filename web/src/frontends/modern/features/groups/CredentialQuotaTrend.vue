@@ -30,10 +30,12 @@ const curves = computed(() =>
       ),
       { observedAt: props.report.to, usedBasisPoints: last.usedBasisPoints },
     ]
+    // Keep the last observed value until the next recorded change.
     const path = points
-      .map(
-        (point, pointIndex) =>
-          `${pointIndex ? 'L' : 'M'}${x(point.observedAt)},${y(point.usedBasisPoints)}`,
+      .map((point, pointIndex) =>
+        pointIndex
+          ? `H${x(point.observedAt)} V${y(point.usedBasisPoints)}`
+          : `M${x(point.observedAt)},${y(point.usedBasisPoints)}`,
       )
       .join(' ')
     const startX = x(points[0]!.observedAt)

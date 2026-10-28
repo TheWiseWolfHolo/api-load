@@ -244,6 +244,8 @@ func servicePath(p protocol.Protocol, o execution.Operation, channelID string) (
 		return "/v1/rerank", "relevance"
 	case protocol.Decisions:
 		return "/v1/systemone", "decision"
+	case protocol.AudioSpeech:
+		return "/v1/audio/speech", "audio"
 	case protocol.OpenAIImages:
 		if o == execution.OperationImagesEdit {
 			return "/v1/images/edits", "image"
@@ -312,6 +314,9 @@ func servicePath(p protocol.Protocol, o execution.Operation, channelID string) (
 func serviceRoute(p protocol.Protocol, o execution.Operation, mode execution.RouteMode, method, path, output string) serviceRouteEvidence {
 	r := serviceRouteEvidence{Protocol: p, Operation: o, Mode: mode, Method: method, Path: path, Output: output, Limitations: []string{}}
 	switch p {
+	case protocol.AudioSpeech:
+		r.Input = []string{"text"}
+		r.Limitations = []string{"buffered_audio"}
 	case protocol.CohereEmbeddings:
 		r.Input = []string{"text", "image"}
 	case protocol.OpenAIEmbeddings:

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"reflect"
 	"sort"
@@ -55,7 +56,10 @@ func (forwarder *responseProcessor) prepareSuccessRepresentation(
 	if err != nil {
 		return preparedSuccessRepresentation{}, successRepresentationProtocolError("unsupported or malformed Content-Encoding")
 	}
-	opaqueRepresentation := input.ClientProtocol == protocol.NativeServices || input.ClientProtocol == protocol.OpenAIImages ||
+	mediaType, _, _ := mime.ParseMediaType(headers.Get("Content-Type"))
+	nativeAudio := strings.HasPrefix(mediaType, "audio/") && (input.Operation == execution.OperationAudioSpeech ||
+		input.Operation == execution.OperationMistralAudioSpeech || input.ClientProtocol == protocol.NativeServices)
+	opaqueRepresentation := nativeAudio || input.ClientProtocol == protocol.NativeServices || input.ClientProtocol == protocol.OpenAIImages ||
 		embeddingsProtocol(input.ClientProtocol) || input.ClientProtocol == protocol.Rerank
 	nativeSearch := input.Operation == execution.OperationWebSearch
 	var originalPlain []byte
@@ -75,10 +79,12 @@ func (forwarder *responseProcessor) prepareSuccessRepresentation(
 		}
 	}
 	modelTracker := newResponseModelTracker(input.Dialect, input.UpstreamModelID)
-	modelTracker.observe(originalPlain)
+	if !nativeAudio {
+		modelTracker.observe(originalPlain)
+	}
 
 	var safePlain []byte
-	if nativeSearch {
+	if nativeSearch || nativeAudio {
 		if credentialLiteralsRemain(originalPlain, secrets) {
 			return preparedSuccessRepresentation{}, successRepresentationProtocolError("credential remains in response body")
 		}
@@ -117,7 +123,7 @@ func (forwarder *responseProcessor) prepareSuccessRepresentation(
 		inspectablePlain = bytes.Clone(safePlain)
 	}
 	downstreamPlain := safePlain
-	if !nativeSearch && needsModelRewrite(input) {
+	if !nativeSearch && !nativeAudio && needsModelRewrite(input) {
 		rewriteModel := true
 		if embeddingsProtocol(input.ClientProtocol) {
 			if required, valid := embeddingsResponseModelRewriteRequired(
@@ -172,7 +178,7 @@ func (forwarder *responseProcessor) prepareSuccessRepresentation(
 	// model back to the client alias. Conservatively treat every aliased route
 	// as a representation rewrite so upstream validators/digests are never
 	// forwarded for bytes whose identity changed before this boundary.
-	changed := encoding != contentcoding.Identity || needsModelRewrite(input) ||
+	changed := encoding != contentcoding.Identity || (!nativeAudio && needsModelRewrite(input)) ||
 		!bytes.Equal(originalPlain, downstreamPlain)
 	if status == http.StatusPartialContent && changed {
 		return preparedSuccessRepresentation{}, successRepresentationProtocolError("changed partial response")

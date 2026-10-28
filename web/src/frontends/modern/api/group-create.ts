@@ -78,6 +78,7 @@ export async function getGroupChannels(
       'resource_read',
       'resource_delete',
       'resource_cancel',
+      'audio_speech',
       'mistral_ocr',
       'mistral_fim',
       'mistral_audio_transcription',

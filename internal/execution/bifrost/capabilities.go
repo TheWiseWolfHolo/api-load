@@ -125,6 +125,9 @@ func nativeRouteImplemented(
 			return false
 		}
 	case channel.ProviderOpenAICompatible:
+		if clientProtocol == protocol.AudioSpeech {
+			return operation == execution.OperationAudioSpeech
+		}
 		if clientProtocol == protocol.Mistral {
 			return mistralNativeOperation(operation)
 		}
@@ -145,6 +148,9 @@ func nativeRouteImplemented(
 			return false
 		}
 	case channel.ProviderOpenRouter:
+		if clientProtocol == protocol.AudioSpeech {
+			return operation == execution.OperationAudioSpeech
+		}
 		if clientProtocol == protocol.OpenAIEmbeddings {
 			return operation == execution.OperationEmbeddingsCreate || operation == execution.OperationProbe
 		}

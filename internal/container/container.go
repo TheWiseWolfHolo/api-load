@@ -175,6 +175,7 @@ func BuildContainer() (*dig.Container, error) {
 		dialect.NewAnthropic,
 		dialect.NewGemini,
 		dialect.NewGeminiEmbeddings,
+		dialect.NewAudioSpeech,
 		dialect.NewMistral,
 		func(
 			openAI *dialect.OpenAI,
@@ -188,9 +189,10 @@ func BuildContainer() (*dig.Container, error) {
 			anthropic *dialect.Anthropic,
 			gemini *dialect.Gemini,
 			geminiEmbeddings *dialect.GeminiEmbeddings,
+			audioSpeech *dialect.AudioSpeech,
 			mistral *dialect.Mistral,
 		) dialect.Set {
-			return dialect.NewSet(nativeServices, cohereEmbeddings,
+			return dialect.NewSet(nativeServices, cohereEmbeddings, audioSpeech,
 				openAI, openAIResponses, openAIImages, openAIEmbeddings, rerank, decisions, anthropic, gemini, geminiEmbeddings, mistral,
 			)
 		},

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Boxes, ListOrdered, RefreshCw, Search } from '@lucide/vue'
+import { Boxes, ListOrdered, PencilLine, RefreshCw, Search } from '@lucide/vue'
 import { keepPreviousData, useIsFetching, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   getModels,
   modelContextKey,
+  modelPricingMethods,
   modelsKey,
   syncModelPrices,
   type ModelFilters,
@@ -31,6 +32,7 @@ import { modelStateKeys, parseModelsState, serializeModelsState } from './models
 import ModelCard from './ModelCard.vue'
 import ClientModelCatalogDialog from './ClientModelCatalogDialog.vue'
 import ModelDetailPanel from './ModelDetailPanel.vue'
+import ModelPriceSetupDialog from './ModelPriceSetupDialog.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -42,6 +44,7 @@ const filters = computed<ModelFilters>(() => ({
   q: state.value.q,
   groups: admin.value ? state.value.groups : 'enabled',
   pricing: admin.value ? state.value.pricing : 'all',
+  method: admin.value ? state.value.method : 'all',
   page: state.value.page,
   pageSize: state.value.pageSize,
 }))
@@ -56,6 +59,17 @@ const query = useQuery(
 const data = computed(() => query.data.value)
 const search = ref(state.value.q)
 const catalogOpen = ref(false)
+const priceSetupOpen = ref(false)
+function openPriceSetup(): void {
+  priceSetupOpen.value = true
+}
+function inspectPrice(model: string, source: number): void {
+  state.value = { ...state.value, model, source, groups: 'all' }
+}
+async function pricesSaved(): Promise<void> {
+  priceSetupOpen.value = false
+  await changed()
+}
 const composing = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 const frame = ref<InstanceType<typeof AppListFrame>>()
@@ -69,6 +83,17 @@ const groupOptions = computed(() => [
   { value: 'enabled', label: t('modelManager.enabledGroups') },
   { value: 'all', label: t('modelManager.allGroups') },
 ])
+const pricingMethodOptions = computed(() =>
+  modelPricingMethods.map((value) => ({
+    value,
+    label: t(
+      value === 'all' ? 'modelManager.allPricingMethods' : 'modelManager.priceMethods.' + value,
+    ),
+  })),
+)
+function setPricingMethod(value: string): void {
+  change({ method: modelPricingMethods.find((method) => method === value) ?? 'all' })
+}
 const pricingOptions = computed(() => [
   { value: 'all', label: t('modelManager.allModels') },
   { value: 'pending', label: t('modelManager.pending') },
@@ -78,6 +103,15 @@ const summary = computed(() => [
   ...(state.value.q ? [{ key: 'q', label: t('modelManager.search'), value: state.value.q }] : []),
   ...(admin.value && state.value.groups !== 'enabled'
     ? [{ key: 'groups', label: t('modelManager.groupStatus'), value: t('modelManager.allGroups') }]
+    : []),
+  ...(admin.value && state.value.method !== 'all'
+    ? [
+        {
+          key: 'method',
+          label: t('modelManager.pricingMethod'),
+          value: t('modelManager.priceMethods.' + state.value.method),
+        },
+      ]
     : []),
   ...(admin.value && state.value.pricing !== 'all'
     ? [
@@ -121,11 +155,12 @@ function reset(key?: string): void {
     ...(key === undefined || key === 'q' ? { q: '' } : {}),
     ...(key === undefined || key === 'groups' ? { groups: 'enabled' } : {}),
     ...(key === undefined || key === 'pricing' ? { pricing: 'all' } : {}),
+    ...(key === undefined || key === 'method' ? { method: 'all' } : {}),
   })
 }
 function open(model: RequestModel, source = 0): void {
   if (query.isPlaceholderData.value) return
-  if (filters.value.pricing === 'all')
+  if (filters.value.pricing === 'all' && filters.value.method === 'all')
     cache.setQueryData(modelContextKey(model.name, filters.value.groups), model)
   state.value = { ...state.value, model: model.name, source }
 }
@@ -164,7 +199,9 @@ watch(
 )
 watch(
   () => JSON.stringify(filters.value),
-  () => frame.value?.scrollToTop(),
+  () => {
+    frame.value?.scrollToTop()
+  },
 )
 watch([data, () => query.isPlaceholderData.value], ([result, placeholder]) => {
   if (!result || placeholder) return
@@ -174,8 +211,13 @@ watch([data, () => query.isPlaceholderData.value], ([result, placeholder]) => {
 watch(
   admin,
   (value) => {
-    if (!value && (state.value.groups !== 'enabled' || state.value.pricing !== 'all'))
-      state.value = { ...state.value, groups: 'enabled', pricing: 'all' }
+    if (
+      !value &&
+      (state.value.groups !== 'enabled' ||
+        state.value.pricing !== 'all' ||
+        state.value.method !== 'all')
+    )
+      state.value = { ...state.value, groups: 'enabled', pricing: 'all', method: 'all' }
   },
   { immediate: true },
 )
@@ -226,6 +268,18 @@ useMessageSource(() =>
         class="modern-models-filter"
         @update:model-value="change({ groups: $event === 'all' ? 'all' : 'enabled' })"
       />
+      <AppSelect
+        v-if="admin"
+        :model-value="state.method"
+        :options="pricingMethodOptions"
+        :label="t('modelManager.pricingMethod')"
+        label-hidden
+        class="modern-models-filter"
+        @update:model-value="setPricingMethod"
+      />
+      <AppButton v-if="admin" :icon="PencilLine" @click="openPriceSetup">{{
+        t('modelManager.reuse.bulk')
+      }}</AppButton>
       <AppButton v-if="admin" :icon="ListOrdered" @click="catalogOpen = true">{{
         t('modelManager.clientCatalog.title')
       }}</AppButton>
@@ -308,6 +362,12 @@ useMessageSource(() =>
       @close="state = { ...state, model: '', source: 0 }"
       @select="state = { ...state, source: $event }"
       @changed="changed"
+      @inspect="inspectPrice"
+    />
+    <ModelPriceSetupDialog
+      v-if="admin && priceSetupOpen"
+      @close="priceSetupOpen = false"
+      @saved="pricesSaved"
     />
     <ClientModelCatalogDialog v-if="admin && catalogOpen" @close="catalogOpen = false" />
   </div>
@@ -315,6 +375,7 @@ useMessageSource(() =>
 
 <style scoped>
 .modern-models-workspace {
+  --modern-list-header-background: var(--modern-canvas);
   display: flex;
   flex: 1;
   min-width: 0;

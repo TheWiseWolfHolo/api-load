@@ -125,6 +125,15 @@ func (handler *Handler) authenticateDataPlaneRequest(ginContext *gin.Context) {
 	if requestContext.selectedRoute.Protocol == protocol.TransparentHTTP {
 		ginContext.Request.URL.RawQuery = transparentQuery(rawQuery, transparentHeaderKey)
 	}
+	if requestContext.selectedRoute.Protocol == protocol.AudioSpeech && len(accessKey.Filters.Protocols) > 0 {
+		_, speechAllowed := accessKey.Filters.Protocols[protocol.AudioSpeech]
+		_, legacyMistralAllowed := accessKey.Filters.Protocols[protocol.Mistral]
+		if !speechAllowed && legacyMistralAllowed {
+			// Preserve the old token's Mistral route without granting speech on
+			// other providers. The scheduler still applies its group/model scope.
+			requestContext.selectedRoute.Protocol = protocol.Mistral
+		}
+	}
 
 	requestContext.snapshot = snapshot
 	requestContext.accessKey = accessKey

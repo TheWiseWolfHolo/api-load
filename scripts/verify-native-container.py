@@ -60,7 +60,7 @@ def main():
                '-e', 'POSTGRES_DB=fixture', '-e', 'POSTGRES_PASSWORD=' + password, postgres)
         stage = 'postgres_ready'
         for _ in range(90):
-            if subprocess.run(['docker', 'exec', pg, 'pg_isready', '-U', 'fixture'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            if subprocess.run(['docker', 'exec', pg, 'pg_isready', '-h', '127.0.0.1', '-U', 'fixture'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
                 break
             time.sleep(.5)
         else:
@@ -72,7 +72,7 @@ def main():
             command = ['run', '-d', '--name', app, '--network', name, '--memory', '384m', '--cpus', '0.5',
                        '--pids-limit', '128', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
                        '--tmpfs', '/tmp:rw,size=64m,uid=10001,gid=10001', '-v', str(data) + ':/fixture-data',
-                       '-e', 'HOST=0.0.0.0', '-e', 'PORT=3000', '-e', 'DATA_DIR=/fixture-data',
+                       '-e', 'HOST=0.0.0.0', '-e', 'PORT=3000', '-e', 'DATA_DIR=/fixture-data', '-e', 'MODELS_DEV_AUTO_SYNC_ENABLED=false',
                        '-e', 'AUTH_KEY=' + admin, '-e', 'DATABASE_DSN=postgresql://fixture:' + password + '@fixture-db:5432/fixture?sslmode=disable']
             if use_candidate:
                 command += ['-v', str(candidate) + ':/candidate:ro', '--entrypoint', '/candidate/gpt-load']
@@ -90,9 +90,9 @@ def main():
                     time.sleep(.5)
             raise RuntimeError('app readiness timeout')
 
-        def call(url, path, body=None, token=None):
+        def call(url, path, body=None, token=None, method=None):
             request = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
-                      headers={'Authorization': 'Bearer ' + (token or admin), 'Content-Type': 'application/json', 'Idempotency-Key': str(uuid.uuid4())})
+                      headers={'Authorization': 'Bearer ' + (token or admin), 'Content-Type': 'application/json', 'Idempotency-Key': str(uuid.uuid4())}, method=method)
             with urllib.request.urlopen(request, timeout=15) as response:
                 result = json.load(response)
             if path.startswith('/api/'):
@@ -105,10 +105,19 @@ def main():
         old, url, health = start_app('old', False)
         report['old_health'] = health
         group = call(url, '/api/groups', {'name': 'Synthetic upgrade fixture', 'channel_id': 'cohere', 'connection_type': 'api_key',
-                     'params': {}, 'models': [{'id': 'rerank-v3.5', 'alias_enabled': False}], 'credentials': 'synthetic-upgrade-provider-key'})
+                     'params': {}, 'models': [{'id': model, 'alias_enabled': False} for model in ('rerank-v3.5', 'embed-v4.0', 'rerank-v4.0')], 'credentials': 'synthetic-upgrade-provider-key'})
         group_id = group['group_id']
         credential = call(url, f'/api/groups/{group_id}/credentials?page=1&page_size=20')['items'][0]['credential_id']
         access = call(url, '/api/access-keys', {'name': 'Synthetic upgrade token', 'filters': {'groups_restricted': True, 'groups': [group_id], 'protocols': ['rerank'], 'models': ['rerank-v3.5']}})
+        prices = call(url, '/api/model-prices?page=1&page_size=100')['items']
+        ids = {row['model_id']: row['id'] for row in prices if row['channel_id'] == 'cohere'}
+        source, linked, copied = (ids[model] for model in ('rerank-v3.5', 'embed-v4.0', 'rerank-v4.0'))
+
+        def fixed_price(value):
+            return {'billing_unit': 'request', 'request_price': value, 'input': None, 'output': None,
+                    'cache_read': None, 'cache_write': None, 'context_tiers': [], 'mode_schedules': {}, 'confirm_unpriced': True}
+
+        call(url, f'/api/model-prices/{source}', fixed_price('0.0025'), method='PUT')
         docker('stop', '-t', '10', old)
         stage = 'candidate_migration'
         new, url, health = start_app('new', True)
@@ -125,7 +134,25 @@ def main():
         columns = docker('exec', pg, 'psql', '-U', 'fixture', '-d', 'fixture', '-Atc',
                          "SELECT column_name || ':' || is_nullable FROM information_schema.columns WHERE table_name='request_logs' AND column_name IN ('measured_units','service_evidence') ORDER BY column_name")
         assert columns.splitlines() == ['measured_units:YES', 'service_evidence:YES']
-        report.update(status='passed', retained_group_id=group_id, retained_credential=True, decryption_preserved=True, retained_access_token=True, nullable_columns=columns.splitlines())
+        stage = 'price_reference_roundtrip'
+        retained = call(url, f'/api/model-prices/{source}')['price']
+        assert retained['billing_unit'] == 'request' and retained['request_price'] == '0.0025' and not retained.get('source_price_id')
+        call(url, '/api/model-prices/batch', {'ids': [linked], 'mode': 'link', 'reference': {'price_id': source}})
+        call(url, '/api/model-prices/batch', {'ids': [copied], 'mode': 'copy', 'price': fixed_price('0.0025')})
+        for value in ('0.005', '0', None):
+            call(url, f'/api/model-prices/{source}', fixed_price(value), method='PUT')
+            followed = call(url, f'/api/model-prices/{linked}')['price']
+            independent = call(url, f'/api/model-prices/{copied}')['price']
+            assert followed['billing_unit'] == 'request' and followed['request_price'] == value and followed['source_price_id'] == source
+            assert independent['request_price'] == '0.0025' and not independent.get('source_price_id')
+        # Restart verifies that linkage and unknown values survive reload from PostgreSQL.
+        docker('stop', '-t', '10', new)
+        _, url, _ = start_app('restarted', True)
+        followed = call(url, f'/api/model-prices/{linked}')['price']
+        assert followed['source_price_id'] == source and followed['request_price'] is None
+        report.update(status='passed', retained_group_id=group_id, retained_credential=True, decryption_preserved=True,
+                      retained_access_token=True, nullable_columns=columns.splitlines(), retained_request_price=True,
+                      price_reference_updates=True, independent_copy=True, zero_and_unknown_distinct=True, restart_preserved=True)
     except Exception as error:
         report.update(stage=stage, error_type=type(error).__name__)
     finally:
