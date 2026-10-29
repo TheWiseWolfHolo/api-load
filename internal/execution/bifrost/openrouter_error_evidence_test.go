@@ -52,3 +52,22 @@ func TestOpenRouterErrorWithGenerationIDKeepsUpstreamEvidence(t *testing.T) {
 		})
 	}
 }
+
+// OpenRouter 在 200 流里推送 {"error":{"code":429}} 时，数字 code 也应被认作限流。
+func TestStreamErrorEventWithNumericRateLimitCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"error\":{\"code\":429,\"message\":\"free model is temporarily unavailable\"}}\n\n")
+	}))
+	defer server.Close()
+	runtime := newProtocolTestRuntime(t, testRuntimeOptions{allowPrivateNetwork: true})
+	spec := compatibleTestSpec(t, server.URL, `{"model":"client-model","input":"hi"}`, true)
+	result := runtime.ExecuteStream(t.Context(), spec, func(execution.StreamEvent) error { return nil })
+	if result.Error == nil || result.Error.Hint != execution.FailureHintRateLimited ||
+		result.Error.OriginHint != execution.ErrorOriginUpstream {
+		t.Fatalf("stream error = %+v", result.Error)
+	}
+	if err := result.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

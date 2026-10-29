@@ -681,9 +681,15 @@ func errorEvidence(
 		evidenceStatus = 0
 	}
 	summary := errorSummary(kind, errorSummaryStatus(status, resultStatus))
+	hintStatus := status
+	// OpenRouter 在已开始的流里用数字 code 报错，例如 {"error":{"code":429}}，这时没有 HTTP 状态可用。
+	// 只把 429 当作限流证据；其他数字不据此判断凭据失效或主机故障。
+	if hintStatus == 0 && strings.TrimSpace(codeValue) == "429" {
+		hintStatus = http.StatusTooManyRequests
+	}
 	evidence := &execution.ErrorEvidence{
 		Kind:       kind,
-		Hint:       neutralFailureHint(status, typeValue, codeValue, messageValue),
+		Hint:       neutralFailureHint(hintStatus, typeValue, codeValue, messageValue),
 		StatusCode: evidenceStatus,
 		Type:       typeValue,
 		Code:       codeValue,
