@@ -1,0 +1,20 @@
+# Windows 本机运行 Go 测试时额外跳过的上游测试，CI 不读取本文件，Linux 上这些测试照常运行。
+# 每条都核对过失败原因出在测试环境，而不是程序行为（2026-10-29，Windows 11，Go 1.27.3）。
+# 不改上游测试文件，合并上游时不会冲突。用法见 scripts/go-test-windows.ps1。
+
+# 错误信息用 %q 输出路径，Windows 反斜杠被转义成两个，测试按原始路径做子串匹配。
+TestCacheReplaceErrorAndRollbackFailureRetainsPreviousBackupPath
+TestCacheRollbackReplaceFailureKeepsRecoverablePreviousBackup
+
+# logrus 文本日志同样会转义反斜杠，测试按原始路径查找。
+TestResolveLogsPathWithoutMaterialOnlyWhenCreated
+
+# Windows 环境变量不区分大小写，测试先设 HTTPS_PROXY 再把 https_proxy 设为空，等于清掉了前者。
+TestSystemOutboundProxyProviderUsesEnvironmentAndLatestGlobalSnapshot
+
+# Windows 回环连接会一次缓冲 32 MiB，连接前后调小收发缓冲区都无效，写超时触发不了。
+# 同一机制由 TestBufferedWriteDeadlineStopsEmptyResponseWithLargeHeaderSlowReader 覆盖，它在 Windows 上通过。
+TestBufferedWriteDeadlineStopsRealTCPSlowReader
+
+# 脚本要创建符号链接，非管理员终端没有这个权限；上游在提权的自托管 Windows 运行器上执行。
+TestWindowsSmokeRecovery
