@@ -41,6 +41,7 @@ type FileRuntimeStateCheckpoint struct {
 	responseBindings *state.ResponseBindings
 	resourceStore    ResourceBindingSaver
 	removeFile       func(string) error
+	renameFile       func(string, string) error
 }
 
 // ResourceBindingSaver persists native resource ownership restored from an
@@ -67,20 +68,33 @@ func NewFileRuntimeStateCheckpoint(
 		stats:            stats,
 		responseBindings: responseBindings,
 		removeFile:       os.Remove,
+		renameFile:       os.Rename,
 	}
 }
 
 // Restore consumes the checkpoint file if present. Failures are returned to
 // the lifecycle owner, which continues startup with database-backed state.
-func (checkpoint *FileRuntimeStateCheckpoint) Restore(ctx context.Context) error {
+func (checkpoint *FileRuntimeStateCheckpoint) Restore(ctx context.Context) (restoreErr error) {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
 	pendingPath := filepath.Join(filepath.Dir(checkpoint.path), pendingResourceBindingsFileName)
+	var pendingErr error
+	defer func() {
+		if pendingErr != nil {
+			restoreErr = errors.Join(pendingErr, restoreErr)
+		}
+	}()
 	var pending []state.ResponseBinding
 	if raw, err := os.ReadFile(pendingPath); err == nil {
 		if err := json.Unmarshal(raw, &pending); err != nil {
-			return fmt.Errorf("decode pending resource bindings: %w", err)
+			pendingErr = fmt.Errorf("decode pending resource bindings: %w", err)
+			preserved, renameErr := checkpoint.preserveCorruptPending(pendingPath)
+			if renameErr != nil {
+				return renameErr
+			}
+			pendingErr = fmt.Errorf("decode pending resource bindings (preserved as %s): %w", filepath.Base(preserved), err)
+			pending = nil
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read pending resource bindings: %w", err)
@@ -140,6 +154,24 @@ func (checkpoint *FileRuntimeStateCheckpoint) Restore(ctx context.Context) error
 		}
 	}
 	return importErr
+}
+
+func (checkpoint *FileRuntimeStateCheckpoint) preserveCorruptPending(path string) (string, error) {
+	pattern := filepath.Base(path) + ".corrupt-" + time.Now().UTC().Format("20060102T150405.000000000Z") + "-*"
+	reserved, err := os.CreateTemp(filepath.Dir(path), pattern)
+	if err != nil {
+		return "", fmt.Errorf("reserve corrupt resource bindings backup: %w", err)
+	}
+	target := reserved.Name()
+	if err := reserved.Close(); err != nil {
+		_ = os.Remove(target)
+		return "", fmt.Errorf("close corrupt resource bindings backup: %w", err)
+	}
+	if err := checkpoint.renameFile(path, target); err != nil {
+		_ = os.Remove(target)
+		return "", fmt.Errorf("preserve corrupt resource bindings: %w", err)
+	}
+	return target, nil
 }
 
 func mergePendingResourceBindings(pending, restored []state.ResponseBinding) []state.ResponseBinding {

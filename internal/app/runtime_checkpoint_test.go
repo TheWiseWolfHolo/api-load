@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -443,5 +444,129 @@ func TestFileRuntimeStateCheckpointConsumesMalformedFileAndReturnsError(t *testi
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("malformed checkpoint file was not consumed, stat error = %v", err)
+	}
+}
+
+func TestCorruptPendingBindingsDoNotBlockValidRuntimeCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	entries := []state.CredentialEntry{{ID: 1, GroupID: 3, Version: 1, IdentityGeneration: 1, Fingerprint: "synthetic", Status: state.CredentialStatusActive, EncryptedValue: "synthetic-cipher"}}
+	registry := state.NewCredentialRegistry()
+	if err := registry.ReplaceCredentials(entries); err != nil {
+		t.Fatal(err)
+	}
+	registry.IncrFailure(1)
+	bindings := state.NewResponseBindings()
+	ref := state.CredentialRef{ID: 1, GroupID: 3, IdentityGeneration: 1}
+	for _, key := range []string{"stored-response", "native/mistral/files/valid-main"} {
+		if !bindings.Record(7, key, ref) {
+			t.Fatal("record failed")
+		}
+	}
+	if err := NewFileRuntimeStateCheckpoint(dir, registry, nil, bindings).Save(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	partial := state.ResponseBinding{AccessKeyID: 7, ResponseID: "native/mistral/files/corrupt-partial", GroupID: 3, CredentialID: 1, IdentityGeneration: 1, ExpiresAt: time.Now().Add(time.Hour)}
+	encoded, err := json.Marshal(partial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupt := append(append([]byte("["), encoded...), []byte(",false]")...)
+	pendingPath := filepath.Join(dir, pendingResourceBindingsFileName)
+	if err := os.WriteFile(pendingPath, corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loadedRegistry := state.NewCredentialRegistry()
+	if err := loadedRegistry.ReplaceCredentials(entries); err != nil {
+		t.Fatal(err)
+	}
+	restored := state.NewResponseBindings()
+	saver := &resourceBindingSaverFake{}
+	loader := NewFileRuntimeStateCheckpoint(dir, loadedRegistry, nil, restored)
+	loader.SetResourceBindingStore(saver)
+	var decodeErr *json.UnmarshalTypeError
+	if err := loader.Restore(t.Context()); !errors.As(err, &decodeErr) {
+		t.Fatalf("restore must report the isolated corrupt file: %v", err)
+	}
+	if loadedRegistry.Snapshot()[0].FailureCount != 1 {
+		t.Fatal("corrupt pending file blocked the valid runtime checkpoint")
+	}
+	for _, key := range []string{"stored-response", "native/mistral/files/valid-main"} {
+		if _, found := restored.Lookup(7, key); !found {
+			t.Fatalf("valid main binding %q was not restored", key)
+		}
+	}
+	if len(saver.saved) != 1 || saver.saved[0].ResponseID != "native/mistral/files/valid-main" {
+		t.Fatal("partially decoded corrupt pending bindings were imported")
+	}
+	backups, err := filepath.Glob(pendingPath + ".corrupt-*")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("corrupt file was not preserved separately: %v", err)
+	}
+	preserved, err := os.ReadFile(backups[0])
+	if err != nil || !bytes.Equal(preserved, corrupt) {
+		t.Fatalf("preserved corrupt bytes changed: %v", err)
+	}
+	if _, err := os.Stat(pendingPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("corrupt pending file remains active: %v", err)
+	}
+	retry := NewFileRuntimeStateCheckpoint(dir, nil, nil, state.NewResponseBindings())
+	retry.SetResourceBindingStore(saver)
+	if err := retry.Restore(t.Context()); err != nil {
+		t.Fatalf("next restart was blocked by the same corrupt file: %v", err)
+	}
+	if _, err := os.Stat(backups[0]); err != nil {
+		t.Fatalf("later restart removed the corrupt backup: %v", err)
+	}
+}
+
+func TestCorruptPendingBindingsPreservationFailureKeepsOriginalFiles(t *testing.T) {
+	dir := t.TempDir()
+	pendingPath := filepath.Join(dir, pendingResourceBindingsFileName)
+	corrupt := []byte("[")
+	if err := os.WriteFile(pendingPath, corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mainPath := filepath.Join(dir, runtimeStateCheckpointFileName)
+	if err := os.WriteFile(mainPath, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewFileRuntimeStateCheckpoint(dir, nil, nil, nil)
+	loader.renameFile = func(string, string) error { return os.ErrPermission }
+	err := loader.Restore(t.Context())
+	var decodeErr *json.SyntaxError
+	if !errors.Is(err, os.ErrPermission) || !errors.As(err, &decodeErr) {
+		t.Fatalf("rename and parse errors were not both reported: %v", err)
+	}
+	got, err := os.ReadFile(pendingPath)
+	if err != nil || !bytes.Equal(got, corrupt) {
+		t.Fatalf("failed rename changed corrupt original: %v", err)
+	}
+	if _, err := os.Stat(mainPath); err != nil {
+		t.Fatalf("main checkpoint was consumed after failed preservation: %v", err)
+	}
+	if backups, err := filepath.Glob(pendingPath + ".corrupt-*"); err != nil || len(backups) != 0 {
+		t.Fatalf("failed rename left an empty backup: %v", err)
+	}
+}
+
+func TestCorruptPendingBindingsJoinLaterImportFailure(t *testing.T) {
+	dir := t.TempDir()
+	bindings := state.NewResponseBindings()
+	if !bindings.Record(7, "native/mistral/files/import-failure", state.CredentialRef{ID: 1, GroupID: 3, IdentityGeneration: 1}) {
+		t.Fatal("record failed")
+	}
+	if err := NewFileRuntimeStateCheckpoint(dir, nil, nil, bindings).Save(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, pendingResourceBindingsFileName), []byte("["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	importFailure := errors.New("synthetic import failure")
+	loader := NewFileRuntimeStateCheckpoint(dir, nil, nil, state.NewResponseBindings())
+	loader.SetResourceBindingStore(&resourceBindingSaverFake{err: importFailure})
+	err := loader.Restore(t.Context())
+	var decodeErr *json.SyntaxError
+	if !errors.As(err, &decodeErr) || !errors.Is(err, importFailure) {
+		t.Fatalf("corruption and later import failure were not both reported: %v", err)
 	}
 }
