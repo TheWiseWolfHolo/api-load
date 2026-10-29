@@ -15,7 +15,7 @@ API keys, subscription accounts, traffic scheduling, failure handling, request l
 English · [中文](README_CN.md) · [日本語](README_JP.md) | [Official Website](https://www.gpt-load.com)
 
 [![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
-[![Source version](https://img.shields.io/badge/source-2.2.3-blue)](VERSION)
+[![Source version](https://img.shields.io/badge/source-2.2.4-blue)](VERSION)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -146,7 +146,7 @@ docker compose pull && docker compose up -d   # update to the latest 2.x image
 docker compose stop         # stop the service
 ```
 
-Compose uses `ghcr.io/thewisewolfholo/api-load:2`, which follows stable 2.x releases only. This source targets `2.2.3`; publishing its release tag produces `:v2.2.3` and `:v2.2.3-sha-<commit>`. Pin a version or digest for production. `edge` tracks main, and prereleases do not update `:2`. A source version does not imply that its image has been published.
+Compose uses `ghcr.io/thewisewolfholo/api-load:2`, which follows stable 2.x releases only. This source targets `2.2.4`; publishing its release tag produces `:v2.2.4` and `:v2.2.4-sha-<commit>`. Pin a version or digest for production. `edge` tracks main, and prereleases do not update `:2`. A source version does not imply that its image has been published.
 
 2.1 adds optional transparent HTTP sources at `/proxy/{group_id}/*path`, with explicit source, method and path grants. Existing native and compatibility routes remain available. See [configuration and boundaries](docs/transparent-forwarding-proposal.md) and the [release, upgrade and recovery guide](docs/operations.md).
 
