@@ -171,3 +171,28 @@ func TestResponseBindingsRejectConflictingCheckpoint(t *testing.T) {
 		t.Fatal("conflicting checkpoint left routable ownership")
 	}
 }
+
+func TestResponseBindingsRememberKeepsPersistedExpiry(t *testing.T) {
+	now := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
+	bindings := NewResponseBindings()
+	bindings.now = func() time.Time { return now }
+	binding := ResponseBinding{AccessKeyID: 1, ResponseID: "native/mistral/files/f", GroupID: 2, CredentialID: 3, IdentityGeneration: 4, ExpiresAt: now.Add(time.Minute)}
+	if bindings.Remember(ResponseBinding{AccessKeyID: 1, ResponseID: "native/x", GroupID: 2, CredentialID: 3, IdentityGeneration: 4, ExpiresAt: now}) {
+		t.Fatal("expired binding was remembered")
+	}
+	if !bindings.Remember(binding) {
+		t.Fatal("remember failed")
+	}
+	if saved, ok := bindings.Lookup(1, binding.ResponseID); !ok || !saved.ExpiresAt.Equal(binding.ExpiresAt) {
+		t.Fatalf("remembered binding = %#v, %t", saved, ok)
+	}
+	conflict := binding
+	conflict.CredentialID = 9
+	if bindings.Remember(conflict) {
+		t.Fatal("persisted binding replaced a different in-memory owner")
+	}
+	now = now.Add(time.Minute)
+	if _, ok := bindings.Lookup(1, binding.ResponseID); ok {
+		t.Fatal("remembered binding outlived its persisted expiry")
+	}
+}

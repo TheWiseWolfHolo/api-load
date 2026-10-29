@@ -35,6 +35,7 @@ import (
 	"gpt-load/internal/ratelimit"
 	"gpt-load/internal/releasecheck"
 	"gpt-load/internal/requestlog"
+	"gpt-load/internal/resourcebinding"
 	"gpt-load/internal/rpm"
 	"gpt-load/internal/state"
 	stateloader "gpt-load/internal/state/loader"
@@ -68,6 +69,7 @@ func BuildContainer() (*dig.Container, error) {
 		webui.NewServer,
 		state.NewCredentialRegistry,
 		state.NewResponseBindings,
+		resourcebinding.NewStore,
 		accessquota.NewRuntime,
 		channel.CompileRegistry,
 		control.NewPriceRuntime,
@@ -133,8 +135,11 @@ func BuildContainer() (*dig.Container, error) {
 			registry *state.CredentialRegistry,
 			stats *health.StatsStore,
 			responseBindings *state.ResponseBindings,
+			resourceStore *resourcebinding.Store,
 		) app.RuntimeStateCheckpoint {
-			return app.NewFileRuntimeStateCheckpoint(cfg.DataDir, registry, stats, responseBindings)
+			checkpoint := app.NewFileRuntimeStateCheckpoint(cfg.DataDir, registry, stats, responseBindings)
+			checkpoint.SetResourceBindingStore(resourceStore)
+			return checkpoint
 		},
 		control.NewRuntime,
 		func(runtime *control.Runtime) app.ControlRuntime { return runtime },
@@ -265,9 +270,11 @@ func BuildContainer() (*dig.Container, error) {
 		cfg *config.Config,
 		service *control.Service,
 		memory memlimit.Memory,
+		resourceStore *resourcebinding.Store,
 	) *gateway.Handler {
 		handler.ConfigureCodexLive(adapter, cfg.CodexLive)
 		handler.ConfigureRequestBodyLimit(memory)
+		handler.SetResourceBindingStore(resourceStore)
 		handler.SetLiveModelLister(service)
 		return handler
 	}); err != nil {

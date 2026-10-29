@@ -132,7 +132,7 @@ func TestExternalDatabaseLifecycle(t *testing.T) {
 	if err := db.Table("schema_migrations").Order("id").Pluck("id", &migrationIDs).Error; err != nil {
 		t.Fatalf("read migration ledger: %v", err)
 	}
-	if len(migrationIDs) != 32 || migrationIDs[29] != "0030_model_request_prices" || migrationIDs[30] != "0031_usage_units" || migrationIDs[31] != "0032_model_price_reference" || migrationIDs[0] != "0001_initial" ||
+	if len(migrationIDs) != 33 || migrationIDs[29] != "0030_model_request_prices" || migrationIDs[30] != "0031_usage_units" || migrationIDs[31] != "0032_model_price_reference" || migrationIDs[32] != "0033_resource_bindings" || migrationIDs[0] != "0001_initial" ||
 		migrationIDs[1] != "0002_access_key_cost_limits" ||
 		migrationIDs[2] != "0003_remove_observation_fresh_until" ||
 		migrationIDs[3] != "0004_usage_stats_group_activity_index" ||

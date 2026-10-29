@@ -261,6 +261,40 @@ func TestFileRuntimeStateCheckpointRestoresResponseOwnership(t *testing.T) {
 	}
 }
 
+type resourceBindingSaverFake struct {
+	saved []state.ResponseBinding
+	err   error
+}
+
+func (fake *resourceBindingSaverFake) Save(_ context.Context, binding state.ResponseBinding) error {
+	fake.saved = append(fake.saved, binding)
+	return fake.err
+}
+
+func TestFileRuntimeStateCheckpointPersistsRestoredResourceOwnership(t *testing.T) {
+	dir := t.TempDir()
+	original := state.NewResponseBindings()
+	ref := state.CredentialRef{ID: 2, GroupID: 3, IdentityGeneration: 4}
+	if !original.Record(7, "stored-response", ref) || !original.Record(7, "native/mistral/files/file-1", ref) {
+		t.Fatal("record failed")
+	}
+	if err := NewFileRuntimeStateCheckpoint(dir, nil, nil, original).Save(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	saver := &resourceBindingSaverFake{err: errors.New("database is down")}
+	loader := NewFileRuntimeStateCheckpoint(dir, nil, nil, state.NewResponseBindings())
+	loader.SetResourceBindingStore(saver)
+	if err := loader.Restore(context.Background()); err == nil {
+		t.Fatal("failed resource persistence was not reported")
+	}
+	if len(saver.saved) != 1 || saver.saved[0].ResponseID != "native/mistral/files/file-1" || saver.saved[0].CredentialID != 2 {
+		t.Fatalf("persisted bindings = %#v; want only the native resource", saver.saved)
+	}
+	if _, ok := loader.responseBindings.Lookup(7, "stored-response"); !ok {
+		t.Fatal("persistence failure dropped restored in-memory ownership")
+	}
+}
+
 func TestFileRuntimeStateCheckpointReturnsErrorWhenDeleteFails(t *testing.T) {
 	dataDir := t.TempDir()
 	path := filepath.Join(dataDir, runtimeStateCheckpointFileName)

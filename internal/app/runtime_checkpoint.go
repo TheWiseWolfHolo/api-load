@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gpt-load/internal/health"
 	"gpt-load/internal/state"
@@ -36,7 +37,20 @@ type FileRuntimeStateCheckpoint struct {
 	registry         *state.CredentialRegistry
 	stats            *health.StatsStore
 	responseBindings *state.ResponseBindings
+	resourceStore    ResourceBindingSaver
 	removeFile       func(string) error
+}
+
+// ResourceBindingSaver persists native resource ownership restored from an
+// older checkpoint, so bindings created before the resource table existed are
+// not lost on the next unclean exit.
+type ResourceBindingSaver interface {
+	Save(context.Context, state.ResponseBinding) error
+}
+
+// SetResourceBindingStore wires the persistent resource ownership store.
+func (checkpoint *FileRuntimeStateCheckpoint) SetResourceBindingStore(store ResourceBindingSaver) {
+	checkpoint.resourceStore = store
 }
 
 func NewFileRuntimeStateCheckpoint(
@@ -88,6 +102,25 @@ func (checkpoint *FileRuntimeStateCheckpoint) Restore(ctx context.Context) error
 		if err := checkpoint.responseBindings.RestoreCheckpoint(document.Responses); err != nil {
 			return err
 		}
+	}
+	return checkpoint.persistResourceBindings(ctx, document.Responses)
+}
+
+func (checkpoint *FileRuntimeStateCheckpoint) persistResourceBindings(ctx context.Context, bindings []state.ResponseBinding) error {
+	if checkpoint.resourceStore == nil {
+		return nil
+	}
+	var failures []error
+	for _, binding := range bindings {
+		if !state.IsResourceBindingKey(binding.ResponseID) || !binding.ExpiresAt.After(time.Now()) {
+			continue
+		}
+		if err := checkpoint.resourceStore.Save(ctx, binding); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("persist %d checkpoint resource bindings: %w", len(failures), errors.Join(failures...))
 	}
 	return nil
 }

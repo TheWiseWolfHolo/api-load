@@ -55,7 +55,8 @@ func verifyMigrationValidationQueryLimits(t *testing.T, db *gorm.DB) {
 		t.Fatalf("initialize schema: %v", err)
 	}
 	t.Logf("driver=%s phase=initialize total=%d current_database=%d information_schema=%d", db.Dialector.Name(), initialize.total, initialize.currentDatabase, initialize.informationSchema)
-	initialLimit := 1000
+	// 每张新表的建表与首次校验约 20 条语句；0033 新增 resource_bindings 后 SQLite 约 1019 条。
+	initialLimit := 1100
 	if db.Dialector.Name() == "mysql" {
 		initialLimit = 1800
 	}

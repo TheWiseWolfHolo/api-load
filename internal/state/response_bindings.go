@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,6 +115,28 @@ func (bindings *ResponseBindings) Record(accessKeyID uint, responseID string, re
 		ExpiresAt: now.Add(bindings.ttl),
 	}
 	return bindings.insert(binding)
+}
+
+// Remember 放回从持久层读出的归属，保留原到期时间；已过期或字段不全时拒绝。
+func (bindings *ResponseBindings) Remember(binding ResponseBinding) bool {
+	if bindings == nil || binding.AccessKeyID == 0 || binding.ResponseID == "" || binding.CredentialID == 0 ||
+		binding.GroupID == 0 || binding.IdentityGeneration == 0 || len(binding.ResponseID) > maxResponseIDBytes {
+		return false
+	}
+	bindings.mu.Lock()
+	defer bindings.mu.Unlock()
+	now := bindings.now()
+	if !binding.ExpiresAt.After(now) {
+		return false
+	}
+	bindings.expire(now)
+	return bindings.insert(binding)
+}
+
+// IsResourceBindingKey 判断归属键是否属于原生资源（文件、批任务等），格式见 dialect.NativeResourceKey。
+// 这类归属需要持久化；Responses 续聊 ID 只留在内存和停机 checkpoint 里。
+func IsResourceBindingKey(key string) bool {
+	return strings.HasPrefix(key, "native/")
 }
 
 func (bindings *ResponseBindings) insert(binding ResponseBinding) bool {

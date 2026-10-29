@@ -127,6 +127,7 @@ type Handler struct {
 	lifecycle            *httplifecycle.Coordinator
 	affinityCache        *affinity.Cache
 	responseBindings     *state.ResponseBindings
+	resourceBindingStore ResourceBindingStore
 	websocketLimits      websocketLimits
 	websocketBudget      websocketBudget
 	liveOpener           execution.LiveOpener
@@ -727,7 +728,11 @@ func (handler *Handler) Handle(ginContext *gin.Context) {
 	if len(metadata.ResourceReferences) > 0 {
 		var owner state.ResponseBinding
 		for i, key := range metadata.ResourceReferences {
-			binding, found := handler.responseBindings.Lookup(accessKey.ID, key)
+			binding, found, err := handler.lookupResourceBinding(ginContext.Request.Context(), accessKey.ID, key)
+			if err != nil {
+				handler.completeReason(ginContext, recorder, reason{Status: 503, Code: "resource_binding_unavailable", Message: "Resource ownership could not be read; try again later."})
+				return
+			}
 			if !found {
 				handler.completeReason(ginContext, recorder, reason{Status: 404, Code: "resource_binding_not_found", Message: "Resource ownership is unavailable for this access key."})
 				return
