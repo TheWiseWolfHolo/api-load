@@ -388,6 +388,7 @@ func validateSafeEvidenceHeader(header http.Header) error {
 		if canonical == "Retry-After" ||
 			canonical == "Request-Id" ||
 			canonical == "X-Request-Id" ||
+			canonical == "X-Generation-Id" ||
 			canonical == "Traceparent" ||
 			strings.HasPrefix(canonical, "Ratelimit-") ||
 			strings.HasPrefix(canonical, "X-Ratelimit-") {
