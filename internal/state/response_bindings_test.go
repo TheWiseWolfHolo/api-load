@@ -8,6 +8,45 @@ import (
 	"time"
 )
 
+func TestPrepareResourceKeepsCandidatePrivateAndRemembersCanonicalExpiry(t *testing.T) {
+	now := time.Now().Truncate(time.Millisecond)
+	bindings := NewResponseBindings()
+	bindings.now = func() time.Time { return now }
+	ref := CredentialRef{ID: 1, GroupID: 2, IdentityGeneration: 3}
+	key := "native/mistral/files/prepared"
+	candidate, ok := bindings.PrepareResource(7, key, ref)
+	if !ok {
+		t.Fatal("prepare failed")
+	}
+	if _, visible := bindings.Lookup(7, key); visible {
+		t.Fatal("candidate was visible before persistence")
+	}
+	if !bindings.Remember(candidate) {
+		t.Fatal("fallback remember failed")
+	}
+	canonical := candidate
+	canonical.ExpiresAt = now.Add(time.Minute)
+	if !bindings.Remember(canonical) {
+		t.Fatal("canonical remember failed")
+	}
+	prepared, ok := bindings.PrepareResource(7, key, ref)
+	if !ok || !prepared.ExpiresAt.Equal(canonical.ExpiresAt) {
+		t.Fatalf("prepare lost canonical expiry: %#v, %t", prepared, ok)
+	}
+	if !bindings.Remember(candidate) {
+		t.Fatal("same owner rejected")
+	}
+	other := ref
+	other.IdentityGeneration++
+	if _, ok := bindings.PrepareResource(7, key, other); ok {
+		t.Fatal("another owner prepared over an active binding")
+	}
+	now = canonical.ExpiresAt
+	if _, ok := bindings.Lookup(7, key); ok {
+		t.Fatal("memory extended the canonical expiry")
+	}
+}
+
 func TestResponseBindingsPreserveIdentityAndOriginalExpiry(t *testing.T) {
 	now := time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC)
 	bindings := NewResponseBindings()

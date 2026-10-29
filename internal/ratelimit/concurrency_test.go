@@ -136,4 +136,18 @@ func TestSharedAccountWindowsAreReleasedWhenIdle(t *testing.T) {
 	if window := c.accountWindows["active"]; window.len() != 1 {
 		t.Fatalf("active account window length = %d, want 1", window.len())
 	}
+
+	c.accountWindows["removed-account"] = stale
+	c.lastSweep = time.Time{}
+	release, allowed := c.TryAcquireGroup(2, 0)
+	if !allowed {
+		t.Fatal("ordinary group admission failed")
+	}
+	release()
+	if _, kept := c.accountWindows["removed-account"]; kept {
+		t.Fatal("ordinary group traffic retained an expired account window")
+	}
+	if window := c.accountWindows["active"]; window.len() != 1 {
+		t.Fatalf("ordinary group sweep removed an active RPM window: %d", window.len())
+	}
 }

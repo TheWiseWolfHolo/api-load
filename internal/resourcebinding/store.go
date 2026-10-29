@@ -20,6 +20,8 @@ import (
 // purgeInterval 限制清理过期归属的频率；清理顺带在写入时进行，不需要单独的后台任务。
 const purgeInterval = time.Hour
 
+var ErrOwnershipConflict = state.ErrResourceBindingConflict
+
 // Store 只保存归属关系。凭据是否仍可用由调用方按当前配置和身份版本判断。
 type Store struct {
 	db        *gorm.DB
@@ -37,16 +39,28 @@ func resourceHash(key string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Save 写入一条归属；同一访问令牌下已有同一资源时保留先写入的记录，和内存归属的冲突规则一致。
+// Save preserves the checkpoint import contract. Claim also returns the actual
+// persisted expiry for callers that cache a binding after writing it.
 func (store *Store) Save(ctx context.Context, binding state.ResponseBinding) error {
+	_, err := store.Claim(ctx, binding)
+	return err
+}
+
+// Claim atomically retains an active first owner or replaces an expired entry.
+// The returned binding is canonical, including its original expiry.
+func (store *Store) Claim(ctx context.Context, binding state.ResponseBinding) (state.ResponseBinding, error) {
 	if store == nil || store.db == nil {
-		return nil
+		return binding, nil
 	}
 	if !state.IsResourceBindingKey(binding.ResponseID) {
-		return fmt.Errorf("resource binding key has an unexpected format")
+		return state.ResponseBinding{}, fmt.Errorf("resource binding key has an unexpected format")
 	}
 	if binding.AccessKeyID == 0 || binding.GroupID == 0 || binding.CredentialID == 0 || binding.IdentityGeneration == 0 {
-		return fmt.Errorf("resource binding is incomplete")
+		return state.ResponseBinding{}, fmt.Errorf("resource binding is incomplete")
+	}
+	now := store.now().UnixMilli()
+	if binding.ExpiresAt.UnixMilli() <= now {
+		return state.ResponseBinding{}, fmt.Errorf("resource binding has expired")
 	}
 	row := models.ResourceBinding{
 		AccessKeyID:        binding.AccessKeyID,
@@ -57,11 +71,27 @@ func (store *Store) Save(ctx context.Context, binding state.ResponseBinding) err
 		IdentityGeneration: binding.IdentityGeneration,
 		ExpiresAtMS:        binding.ExpiresAt.UnixMilli(),
 	}
-	if err := store.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
-		return fmt.Errorf("save resource binding: %w", err)
+	var saved models.ResourceBinding
+	err := store.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("access_key_id = ? AND resource_hash = ? AND expires_at_ms <= ?", row.AccessKeyID, row.ResourceHash, now).Delete(&models.ResourceBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("access_key_id = ? AND resource_hash = ?", row.AccessKeyID, row.ResourceHash).Take(&saved).Error; err != nil {
+			return err
+		}
+		if saved.ResourceKey != row.ResourceKey || saved.GroupID != row.GroupID || saved.CredentialID != row.CredentialID || saved.IdentityGeneration != row.IdentityGeneration {
+			return ErrOwnershipConflict
+		}
+		return nil
+	})
+	if err != nil {
+		return state.ResponseBinding{}, fmt.Errorf("save resource binding: %w", err)
 	}
 	store.purgeExpired(ctx)
-	return nil
+	return bindingFromRow(saved), nil
 }
 
 // Load 读取未过期的归属；没有记录时 found 为 false，数据库错误单独返回。
@@ -83,6 +113,10 @@ func (store *Store) Load(ctx context.Context, accessKeyID uint, key string) (sta
 		// 哈希碰撞或手工改动过的数据都不能借用别的资源归属。
 		return state.ResponseBinding{}, false, nil
 	}
+	return bindingFromRow(row), true, nil
+}
+
+func bindingFromRow(row models.ResourceBinding) state.ResponseBinding {
 	return state.ResponseBinding{
 		AccessKeyID:        row.AccessKeyID,
 		ResponseID:         row.ResourceKey,
@@ -90,7 +124,7 @@ func (store *Store) Load(ctx context.Context, accessKeyID uint, key string) (sta
 		CredentialID:       row.CredentialID,
 		IdentityGeneration: row.IdentityGeneration,
 		ExpiresAt:          time.UnixMilli(row.ExpiresAtMS),
-	}, true, nil
+	}
 }
 
 func (store *Store) purgeExpired(ctx context.Context) {

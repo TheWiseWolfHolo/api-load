@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,8 @@ import (
 
 	"gpt-load/internal/automodel"
 )
+
+var ErrResourceBindingConflict = errors.New("resource binding has a different owner")
 
 const (
 	DefaultResponseBindingTTL      = 30 * 24 * time.Hour
@@ -117,6 +120,30 @@ func (bindings *ResponseBindings) Record(accessKeyID uint, responseID string, re
 	return bindings.insert(binding)
 }
 
+// PrepareResource builds a candidate without inserting it, so persistence can
+// reject conflicting ownership before the candidate becomes visible in memory.
+func (bindings *ResponseBindings) PrepareResource(accessKeyID uint, key string, ref CredentialRef) (ResponseBinding, bool) {
+	if bindings == nil || accessKeyID == 0 || !IsResourceBindingKey(key) || ref.ID == 0 || ref.GroupID == 0 || ref.IdentityGeneration == 0 || len(key) > maxResponseIDBytes {
+		return ResponseBinding{}, false
+	}
+	bindings.mu.Lock()
+	defer bindings.mu.Unlock()
+	now := bindings.now()
+	if element := bindings.entries[responseBindingKey{accessKeyID, key}]; element != nil {
+		existing := element.Value.(ResponseBinding)
+		if existing.ExpiresAt.After(now) {
+			if existing.GroupID != ref.GroupID || existing.CredentialID != ref.ID || existing.IdentityGeneration != ref.IdentityGeneration {
+				return ResponseBinding{}, false
+			}
+			return cloneBinding(existing), true
+		}
+	}
+	if bindings.capacity <= 0 || bindings.ttl <= 0 {
+		return ResponseBinding{}, false
+	}
+	return ResponseBinding{AccessKeyID: accessKeyID, ResponseID: key, GroupID: ref.GroupID, CredentialID: ref.ID, IdentityGeneration: ref.IdentityGeneration, ExpiresAt: now.Add(bindings.ttl)}, true
+}
+
 // Remember 放回从持久层读出的归属，保留原到期时间；已过期或字段不全时拒绝。
 func (bindings *ResponseBindings) Remember(binding ResponseBinding) bool {
 	if bindings == nil || binding.AccessKeyID == 0 || binding.ResponseID == "" || binding.CredentialID == 0 ||
@@ -128,6 +155,9 @@ func (bindings *ResponseBindings) Remember(binding ResponseBinding) bool {
 	now := bindings.now()
 	if !binding.ExpiresAt.After(now) {
 		return false
+	}
+	if element := bindings.entries[responseBindingKey{binding.AccessKeyID, binding.ResponseID}]; element != nil && !element.Value.(ResponseBinding).ExpiresAt.After(now) {
+		bindings.remove(element)
 	}
 	bindings.expire(now)
 	return bindings.insert(binding)
@@ -145,8 +175,13 @@ func (bindings *ResponseBindings) insert(binding ResponseBinding) bool {
 		existing := element.Value.(ResponseBinding)
 		existingAuto, _ := json.Marshal(existing.AutoSelection)
 		incomingAuto, _ := json.Marshal(binding.AutoSelection)
-		return existing.GroupID == binding.GroupID && existing.CredentialID == binding.CredentialID &&
+		matches := existing.GroupID == binding.GroupID && existing.CredentialID == binding.CredentialID &&
 			existing.IdentityGeneration == binding.IdentityGeneration && bytes.Equal(existingAuto, incomingAuto)
+		if matches && binding.ExpiresAt.Before(existing.ExpiresAt) {
+			existing.ExpiresAt = binding.ExpiresAt
+			element.Value = existing
+		}
+		return matches
 	}
 	if bindings.capacity <= 0 || bindings.ttl <= 0 {
 		return false

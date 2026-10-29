@@ -262,13 +262,58 @@ func TestFileRuntimeStateCheckpointRestoresResponseOwnership(t *testing.T) {
 }
 
 type resourceBindingSaverFake struct {
-	saved []state.ResponseBinding
-	err   error
+	saved   []state.ResponseBinding
+	err     error
+	onClaim func(context.Context)
 }
 
-func (fake *resourceBindingSaverFake) Save(_ context.Context, binding state.ResponseBinding) error {
+func (fake *resourceBindingSaverFake) Claim(ctx context.Context, binding state.ResponseBinding) (state.ResponseBinding, error) {
 	fake.saved = append(fake.saved, binding)
-	return fake.err
+	if fake.onClaim != nil {
+		fake.onClaim(ctx)
+	}
+	return binding, fake.err
+}
+
+func TestPendingResourceImportStopsOnCancellationAndKeepsRemainingBindings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, pendingResourceBindingsFileName)
+	bindings := state.NewResponseBindings()
+	ref := state.CredentialRef{ID: 2, GroupID: 3, IdentityGeneration: 4}
+	for _, key := range []string{"native/mistral/files/first", "native/mistral/files/second"} {
+		if !bindings.Record(7, key, ref) {
+			t.Fatal("record failed")
+		}
+	}
+	pending := bindings.CaptureCheckpoint()
+	if err := writePendingResourceBindings(path, pending); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	saver := &resourceBindingSaverFake{onClaim: func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > resourceBindingImportTimeout {
+			t.Error("import has no bounded overall deadline")
+		}
+		cancel()
+	}}
+	loader := NewFileRuntimeStateCheckpoint(dir, nil, nil, nil)
+	loader.SetResourceBindingStore(saver)
+	if _, err := loader.persistResourceBindings(ctx, path, pending); !errors.Is(err, context.Canceled) {
+		t.Fatalf("import cancellation = %v", err)
+	}
+	if len(saver.saved) != 1 {
+		t.Fatal("import kept querying the database after cancellation")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var remaining []state.ResponseBinding
+	if err := json.Unmarshal(raw, &remaining); err != nil || len(remaining) != 1 || remaining[0].ResponseID != pending[1].ResponseID {
+		t.Fatalf("unattempted resource was lost: %#v, %v", remaining, err)
+	}
 }
 
 func TestFileRuntimeStateCheckpointPersistsRestoredResourceOwnership(t *testing.T) {
@@ -292,6 +337,54 @@ func TestFileRuntimeStateCheckpointPersistsRestoredResourceOwnership(t *testing.
 	}
 	if _, ok := loader.responseBindings.Lookup(7, "stored-response"); !ok {
 		t.Fatal("persistence failure dropped restored in-memory ownership")
+	}
+	pending := filepath.Join(dir, pendingResourceBindingsFileName)
+	if _, err := os.Stat(pending); err != nil {
+		t.Fatalf("resource persistence failure lost its durable retry file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, runtimeStateCheckpointFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("disposable runtime state was not consumed: %v", err)
+	}
+	saver.err = nil
+	saver.saved = nil
+	retry := NewFileRuntimeStateCheckpoint(dir, nil, nil, state.NewResponseBindings())
+	retry.SetResourceBindingStore(saver)
+	if err := retry.Restore(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(saver.saved) != 1 {
+		t.Fatal("next startup did not retry pending resource ownership")
+	}
+	if _, ok := retry.responseBindings.Lookup(7, "stored-response"); ok {
+		t.Fatal("pending resource import replayed ordinary runtime state")
+	}
+	if _, ok := retry.responseBindings.Lookup(7, "native/mistral/files/file-1"); !ok {
+		t.Fatal("retried resource was not restored")
+	}
+	if _, err := os.Stat(pending); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("successful import left pending resources: %v", err)
+	}
+}
+
+func TestFileRuntimeCheckpointDoesNotRestoreConflictingPersistentOwner(t *testing.T) {
+	dir := t.TempDir()
+	bindings := state.NewResponseBindings()
+	if !bindings.Record(7, "native/mistral/files/conflict", state.CredentialRef{ID: 2, GroupID: 3, IdentityGeneration: 4}) {
+		t.Fatal("record failed")
+	}
+	if err := NewFileRuntimeStateCheckpoint(dir, nil, nil, bindings).Save(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewFileRuntimeStateCheckpoint(dir, nil, nil, state.NewResponseBindings())
+	loader.SetResourceBindingStore(&resourceBindingSaverFake{err: state.ErrResourceBindingConflict})
+	if err := loader.Restore(t.Context()); !errors.Is(err, state.ErrResourceBindingConflict) {
+		t.Fatalf("restore conflict = %v", err)
+	}
+	if _, ok := loader.responseBindings.Lookup(7, "native/mistral/files/conflict"); ok {
+		t.Fatal("conflicting owner was published to memory")
+	}
+	if _, err := os.Stat(filepath.Join(dir, pendingResourceBindingsFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("known conflicting owner remained queued for a later retry: %v", err)
 	}
 }
 

@@ -544,12 +544,14 @@ func (forwarder *ExecutionForwarder) ForwardStream(
 			Summary:    summary,
 		}
 	}
-	if !committed && streamEvents.firstEventWasProviderError() {
+	initialProviderError := !committed && streamEvents.firstEventWasProviderError()
+	committedProviderError := committed && result.Stream.EndReason == StreamEndSSEError && streamEvents.sawErrorEvent
+	if initialProviderError || committedProviderError {
 		summary := streamEvents.firstSummary
 		if summary == "" {
 			summary = fixedErrorSummary("upstream_sse_error")
 		}
-		result.ProviderErrorBeforeCommit = true
+		result.ProviderErrorBeforeCommit = !committed
 		result.ErrorSummary = summary
 		result.ExecutionError = firstStreamErrorEvidence(
 			streamEvents.firstErrorPayload,
@@ -560,6 +562,11 @@ func (forwarder *ExecutionForwarder) ForwardStream(
 			redactor,
 			summarySecrets,
 		)
+		if committed {
+			// A later error describes the accepted stream, not an unprocessed
+			// request. Keep its classification without allowing replay.
+			result.ExecutionError.ReplaySafety = execution.ReplaySafetyUnknown
+		}
 	}
 	if !committed && result.HasResponse() && !result.ProviderErrorBeforeCommit &&
 		!result.EmptyResponseBeforeCommit {
@@ -674,8 +681,14 @@ func firstStreamErrorEvidence(
 		evidence.Code = codeValue
 	}
 	if evidence.Hint == "" {
+		hintStatus := statusCode
+		// Native OpenRouter SSE errors stay on their original 200 response.
+		// An exact numeric 429 identifies throttling without proving safe replay.
+		if (hintStatus == 0 || hintStatus >= http.StatusOK && hintStatus < http.StatusMultipleChoices) && codeValue == "429" {
+			hintStatus = http.StatusTooManyRequests
+		}
 		evidence.Hint = streamErrorFailureHint(
-			statusCode,
+			hintStatus,
 			typeValue,
 			codeValue,
 			statusValue,

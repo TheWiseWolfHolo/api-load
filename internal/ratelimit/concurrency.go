@@ -56,6 +56,8 @@ func (c *Concurrency) TryAcquireGroup(group uint, limit int64) (func(), bool) {
 // TryAcquireGroupAccount 复用分组准入锁和滑动分钟窗口；不按 key 数增加额度。
 func (c *Concurrency) TryAcquireGroupAccount(group uint, limit int64, account string, accountLimit, accountRPM int64) (func(), string) {
 	c.mu.Lock()
+	now := time.Now()
+	c.sweepAccountWindows(now)
 	if limit > 0 && c.groups[group] >= limit {
 		c.mu.Unlock()
 		return nil, "group_concurrency"
@@ -65,8 +67,6 @@ func (c *Concurrency) TryAcquireGroupAccount(group uint, limit int64, account st
 			c.mu.Unlock()
 			return nil, "account_concurrency"
 		}
-		now := time.Now()
-		c.sweepAccountWindows(now)
 		window := c.accountWindows[account]
 		window.dropThrough(now.Add(-time.Minute))
 		if accountRPM > 0 && int64(window.len()) >= accountRPM {

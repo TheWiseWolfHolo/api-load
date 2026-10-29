@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -43,6 +44,76 @@ func requestLogSelection(groupID, credentialID uint, name string) scheduler.Sele
 		GroupID: groupID, ChannelID: channel.OpenAI, CredentialID: credentialID,
 		RouteMode: channel.RouteNative,
 		Group:     state.GroupView{ID: groupID, Name: name, ChannelID: channel.OpenAI},
+	}
+}
+
+func TestOpenRouterGenerationIDNeverLogsCredentialEcho(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stream=%t", stream), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-Generation-Id", "generation-"+strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = io.WriteString(w, `{"error":{"code":429,"message":"synthetic rate limit"}}`)
+			}))
+			defer server.Close()
+			handler, engine, sink := newContinuationFixture(t, newTestExecutionForwarder(t))
+			handler.dialects = dialect.NewSet(dialect.NewOpenAI())
+			setContinuationChannel(t, handler, channel.OpenRouter, server.URL+"/api")
+			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(fmt.Sprintf(`{"model":"gpt-4o","stream":%t,"messages":[{"role":"user","content":"synthetic"}]}`, stream)))
+			request.Header.Set("Authorization", "Bearer gl-client")
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			engine.ServeHTTP(response, request)
+			if response.Code != http.StatusTooManyRequests || response.Header().Get("X-Generation-Id") != "" {
+				t.Fatalf("unexpected response status or unsafe header: %d", response.Code)
+			}
+			events := sink.snapshot()
+			if len(events) != 1 || len(events[0].Attempts) == 0 {
+				t.Fatal("missing attempt diagnostics")
+			}
+			encoded, err := json.Marshal(events)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"sk-one", "sk-two"} {
+				if bytes.Contains(encoded, []byte(key)) {
+					t.Fatal("upstream request ID copied a managed credential into telemetry")
+				}
+			}
+		})
+	}
+}
+
+func TestOpenRouterNativeStreamNumeric429KeepsCooldownWithoutReplay(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("X-Generation-Id", "gen-stream-synthetic")
+		_, _ = io.WriteString(w, "data: {\"id\":\"gen-stream-synthetic\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"synthetic first output\"},\"finish_reason\":null}]}\n\n")
+		w.(http.Flusher).Flush()
+		_, _ = io.WriteString(w, "data: {\"error\":{\"code\":429,\"message\":\"provider temporarily unavailable\"}}\n\n")
+	}))
+	defer server.Close()
+	h, engine, sink := newContinuationFixture(t, newTestExecutionForwarder(t))
+	h.dialects = dialect.NewSet(dialect.NewOpenAI())
+	setContinuationChannel(t, h, channel.OpenRouter, server.URL+"/api")
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"synthetic"}]}`))
+	request.Header.Set("Authorization", "Bearer gl-client")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, request)
+	if response.Code != 200 || calls.Load() != 1 || !strings.Contains(response.Body.String(), "synthetic first output") {
+		t.Fatal("accepted stream was replayed or its delivered output changed")
+	}
+	events := sink.snapshot()
+	if len(events) != 1 || len(events[0].Attempts) != 1 {
+		t.Fatal("unexpected request attempts")
+	}
+	attempt := events[0].Attempts[0]
+	if attempt.FailureCategory != telemetry.FailureCategoryRateLimited || attempt.WillRetry || attempt.Effect != telemetry.EffectCooldownModel || attempt.UpstreamRequestID != "gen-stream-synthetic" {
+		t.Fatalf("numeric rate limit evidence was lost: category=%s effect=%s retry=%t request_id=%q", attempt.FailureCategory, attempt.Effect, attempt.WillRetry, attempt.UpstreamRequestID)
 	}
 }
 

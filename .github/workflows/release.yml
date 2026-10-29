@@ -66,8 +66,8 @@ jobs:
           images: ghcr.io/thewisewolfholo/api-load
           flavor: latest=false
           tags: |
-            type=sha,prefix=v2-sha-
-            type=raw,value=v${{ steps.version.outputs.base }}-sha-${{ steps.version.outputs.sha }}
+            type=sha,prefix=v2-sha-,enable=${{ steps.version.outputs.release != 'true' }}
+            type=raw,value=v${{ steps.version.outputs.base }}-sha-${{ steps.version.outputs.sha }},enable=${{ steps.version.outputs.release == 'true' }}
             type=raw,value=edge,enable=${{ steps.version.outputs.release != 'true' }}
             type=raw,value=v${{ steps.version.outputs.value }},enable=${{ steps.version.outputs.release == 'true' }}
             type=raw,value=2,enable=${{ steps.version.outputs.stable == 'true' }}

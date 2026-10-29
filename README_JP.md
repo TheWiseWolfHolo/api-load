@@ -13,7 +13,7 @@ API キー、サブスクリプションアカウント、トラフィック制�
 [English](README.md) · [中文](README_CN.md) · 日本語 | [公式サイト](https://www.gpt-load.com)
 
 [![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
-[![Source version](https://img.shields.io/badge/source-2.2.2-blue)](VERSION)
+[![Source version](https://img.shields.io/badge/source-2.2.3-blue)](VERSION)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -144,7 +144,7 @@ docker compose pull && docker compose up -d   # 最新の 2.x イメージへ更
 docker compose stop         # サービスを停止
 ```
 
-Compose の `ghcr.io/thewisewolfholo/api-load:2` は 2.x 正式版だけを追跡します。現在のソースは `2.2.2` で、リリースタグの公開後に `:v2.2.2` と `:v2.2.2-sha-<commit>` を生成します。本番ではバージョンかダイジェストを固定してください。`edge` は main を追跡し、候補版で `:2` を更新しません。ソースのバージョン表示は、対応するイメージの公開済みを意味しません。
+Compose の `ghcr.io/thewisewolfholo/api-load:2` は 2.x 正式版だけを追跡します。現在のソースは `2.2.3` で、リリースタグの公開後に `:v2.2.3` と `:v2.2.3-sha-<commit>` を生成します。本番ではバージョンかダイジェストを固定してください。`edge` は main を追跡し、候補版で `:2` を更新しません。ソースのバージョン表示は、対応するイメージの公開済みを意味しません。
 
 2.1 では `/proxy/{group_id}/*path` に任意選択の透過 HTTP 転送を追加し、アクセスキーごとに転送元、メソッド、パスを明示的に制限できます。既存のネイティブ API と互換 API は維持します。[設定と制限](docs/transparent-forwarding-proposal.md)、[リリース・更新・復旧ガイド](docs/operations.md)を参照してください。
 

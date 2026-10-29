@@ -18,6 +18,7 @@ import (
 	"gpt-load/internal/execution"
 	"gpt-load/internal/health"
 	"gpt-load/internal/platform/contentcoding"
+	"gpt-load/internal/platform/redact"
 	"gpt-load/internal/protocol"
 	"gpt-load/internal/reasoning"
 	"gpt-load/internal/state"
@@ -1280,6 +1281,25 @@ func TestExecutionForwarderPreservesFirstProviderErrorEvidence(t *testing.T) {
 	}
 }
 
+func TestStreamNumericErrorCodeDoesNotInventHTTPStatusOrCredentialFailure(t *testing.T) {
+	for _, test := range []struct {
+		code string
+		hint execution.FailureHint
+	}{
+		{"429", execution.FailureHintRateLimited},
+		{`"429"`, execution.FailureHintRateLimited},
+		{"401", ""},
+		{"500", ""},
+	} {
+		t.Run(test.code, func(t *testing.T) {
+			evidence := firstStreamErrorEvidence([]byte(`{"error":{"code":`+test.code+`,"message":"synthetic failure"}}`), nil, 200, "gen-synthetic", "synthetic failure", redact.New(), nil)
+			if evidence.Hint != test.hint || evidence.StatusCode != 200 || evidence.ReplaySafety == execution.ReplaySafetyRejectedBeforeProcessing || evidence.ScopeHint == execution.ErrorScopeCredential {
+				t.Fatalf("numeric code changed unrelated evidence: %+v", evidence)
+			}
+		})
+	}
+}
+
 func TestExecutionForwarderClassifiesFirstCapacityErrorReplaySafety(t *testing.T) {
 	for _, test := range []struct {
 		name      string
@@ -1401,8 +1421,11 @@ func TestExecutionForwarderDoesNotPromoteCapacityErrorAfterCommit(t *testing.T) 
 		context.Background(), input, httptest.NewRecorder(),
 	)
 	if !result.Committed || result.ProviderErrorBeforeCommit ||
-		result.ExecutionError != nil && result.ExecutionError.ReplaySafety != "" {
+		result.ExecutionError == nil || result.ExecutionError.ReplaySafety != execution.ReplaySafetyUnknown {
 		t.Fatalf("ForwardStream() result = %#v", result)
+	}
+	if decision := judgeUpstreamResult(result, time.Now(), health.DecisionContext{Method: http.MethodPost, Operation: execution.OperationResponsesCreate}); decision.Retry != health.RetryNone {
+		t.Fatalf("committed capacity error was replayable: %#v", decision)
 	}
 }
 

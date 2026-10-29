@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,7 +19,7 @@ const resourceBindingStoreTimeout = 3 * time.Second
 
 // ResourceBindingStore 持久保存原生资源归属；内存中的 responseBindings 仍是首选查询来源。
 type ResourceBindingStore interface {
-	Save(context.Context, state.ResponseBinding) error
+	Claim(context.Context, state.ResponseBinding) (state.ResponseBinding, error)
 	Load(context.Context, uint, string) (state.ResponseBinding, bool, error)
 }
 
@@ -27,29 +28,34 @@ func (handler *Handler) SetResourceBindingStore(store ResourceBindingStore) {
 	handler.resourceBindingStore = store
 }
 
-// recordResourceBinding 先在内存登记，冲突时拒绝；持久化失败只记日志，当前进程内的归属仍然有效。
+// recordResourceBinding 先确认持久归属，再缓存数据库返回的原到期时间。
+// 数据库暂不可用时保留当前创建归属；确定的归属冲突不能使用内存降级。
 func (handler *Handler) recordResourceBinding(accessKeyID uint, key string, ref state.CredentialRef) bool {
-	if !handler.responseBindings.Record(accessKeyID, key, ref) {
+	binding, valid := handler.responseBindings.PrepareResource(accessKeyID, key, ref)
+	if !valid {
 		return false
 	}
 	if handler.resourceBindingStore == nil {
-		return true
-	}
-	binding, found := handler.responseBindings.Lookup(accessKeyID, key)
-	if !found {
-		return true
+		return handler.responseBindings.Remember(binding)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resourceBindingStoreTimeout)
 	defer cancel()
-	if err := handler.resourceBindingStore.Save(ctx, binding); err != nil {
+	canonical, err := handler.resourceBindingStore.Claim(ctx, binding)
+	if errors.Is(err, state.ErrResourceBindingConflict) {
+		return false
+	}
+	if err != nil {
 		handler.logger.WithFields(logrus.Fields{
 			"event":         "resource_binding.persist_failed",
 			"access_key_id": accessKeyID,
 			"group_id":      ref.GroupID,
 			"credential_id": ref.ID,
-		}).WithError(err).Warn("resource ownership is kept in memory only")
+			"error_class":   "store_unavailable",
+		}).Warn("resource ownership is kept in memory only")
+	} else {
+		binding = canonical
 	}
-	return true
+	return handler.responseBindings.Remember(binding)
 }
 
 // lookupResourceBinding 在内存未命中时回查持久层，并把找到的归属放回内存。
@@ -66,7 +72,9 @@ func (handler *Handler) lookupResourceBinding(ctx context.Context, accessKeyID u
 	if err != nil || !found {
 		return state.ResponseBinding{}, false, err
 	}
-	handler.responseBindings.Remember(binding)
+	if !handler.responseBindings.Remember(binding) {
+		return state.ResponseBinding{}, false, errors.New("resource ownership could not be accepted by the cache")
+	}
 	return binding, true, nil
 }
 

@@ -13,7 +13,7 @@
 [English](README.md) · 中文 · [日本語](README_JP.md) | [官方网站](https://www.gpt-load.com)
 
 [![Release](https://img.shields.io/github/v/release/TheWiseWolfHolo/api-load?label=Release)](https://github.com/TheWiseWolfHolo/api-load/releases/latest)
-[![Source version](https://img.shields.io/badge/source-2.2.2-blue)](VERSION)
+[![Source version](https://img.shields.io/badge/source-2.2.3-blue)](VERSION)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fthewisewolfholo%2Fapi--load%3A2-2496ED?logo=docker&logoColor=white)](https://github.com/TheWiseWolfHolo/api-load/pkgs/container/api-load)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -144,7 +144,7 @@ docker compose pull && docker compose up -d   # 更新到最新 2.x 镜像
 docker compose stop         # 停止服务
 ```
 
-官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:2`，只跟随 2.x 正式版。当前源码版本为 `2.2.2`，发布标签后生成 `:v2.2.2` 和 `:v2.2.2-sha-<commit>`。生产部署应固定版本或摘要。`edge` 跟随 main，候选版不会覆盖 `:2`。源码中的版本号不表示该镜像已经发布。
+官方 Compose 使用 `ghcr.io/thewisewolfholo/api-load:2`，只跟随 2.x 正式版。当前源码版本为 `2.2.3`，发布标签后生成 `:v2.2.3` 和 `:v2.2.3-sha-<commit>`。生产部署应固定版本或摘要。`edge` 跟随 main，候选版不会覆盖 `:2`。源码中的版本号不表示该镜像已经发布。
 
 2.1 支持独立的透明 HTTP 来源和 `/proxy/{group_id}/*path` 入口，可显式限制访问令牌的来源、方法和路径；现有原生与兼容接口保留。配置和限制见[透明转发说明](docs/transparent-forwarding-proposal.md)，升级与恢复见[通用运维指南](docs/operations.md)。
 

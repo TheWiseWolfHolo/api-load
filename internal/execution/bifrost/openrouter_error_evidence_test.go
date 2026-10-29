@@ -1,6 +1,7 @@
 package bifrost
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,6 +67,33 @@ func TestStreamErrorEventWithNumericRateLimitCode(t *testing.T) {
 	if result.Error == nil || result.Error.Hint != execution.FailureHintRateLimited ||
 		result.Error.OriginHint != execution.ErrorOriginUpstream {
 		t.Fatalf("stream error = %+v", result.Error)
+	}
+	if err := result.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenRouterNativeStreamKeepsNumericErrorFrameForGateway(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("X-Generation-Id", "gen-started-synthetic")
+		_, _ = io.WriteString(w, "data: {\"id\":\"gen-started-synthetic\",\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"synthetic first output\"},\"finish_reason\":null}]}\n\n")
+		w.(http.Flusher).Flush()
+		_, _ = io.WriteString(w, "data: {\"error\":{\"code\":429,\"message\":\"provider temporarily unavailable\"}}\n\n")
+	}))
+	defer server.Close()
+	runtime := newRuntimeForTest(t, testRuntimeOptions{allowPrivateNetwork: true})
+	spec := openAIChatAttempt(t, channel.OpenRouter, server.URL+"/api", "native-key")
+	spec.Body = []byte(`{"model":"upstream-model","stream":true,"messages":[{"role":"user","content":"synthetic"}]}`)
+	var delivered bytes.Buffer
+	result := runtime.ExecuteStream(t.Context(), spec, func(event execution.StreamEvent) error {
+		if event.Kind == execution.StreamEventData {
+			_, _ = delivered.Write(event.Data)
+		}
+		return nil
+	})
+	if !bytes.Contains(delivered.Bytes(), []byte(`"code":429`)) || result.StatusCode != 200 || result.Error != nil || result.UpstreamRequestID != "gen-started-synthetic" {
+		t.Fatalf("native error frame or metadata was lost: status=%d error=%+v request_id=%q", result.StatusCode, result.Error, result.UpstreamRequestID)
 	}
 	if err := result.Validate(); err != nil {
 		t.Fatal(err)
