@@ -14,6 +14,7 @@ type Concurrency struct {
 	groups         map[uint]int64
 	accounts       map[string]int64
 	accountWindows map[string]timestampDeque
+	lastSweep      time.Time
 }
 
 type ConcurrencySnapshot struct {
@@ -65,6 +66,7 @@ func (c *Concurrency) TryAcquireGroupAccount(group uint, limit int64, account st
 			return nil, "account_concurrency"
 		}
 		now := time.Now()
+		c.sweepAccountWindows(now)
 		window := c.accountWindows[account]
 		window.dropThrough(now.Add(-time.Minute))
 		if accountRPM > 0 && int64(window.len()) >= accountRPM {
@@ -74,7 +76,11 @@ func (c *Concurrency) TryAcquireGroupAccount(group uint, limit int64, account st
 		}
 		if accountRPM > 0 {
 			window.push(now)
+		}
+		if window.len() > 0 {
 			c.accountWindows[account] = window
+		} else {
+			delete(c.accountWindows, account)
 		}
 		c.accounts[account]++
 	}
@@ -94,6 +100,24 @@ func (c *Concurrency) TryAcquireGroupAccount(group uint, limit int64, account st
 			delete(c.groups, group)
 		}
 	}), ""
+}
+
+// sweepAccountWindows 每分钟最多一次删除已经清空的账号窗口，账号改名或删除后不会一直占内存。
+// 调用方持有 c.mu。
+func (c *Concurrency) sweepAccountWindows(now time.Time) {
+	if now.Sub(c.lastSweep) < time.Minute {
+		return
+	}
+	c.lastSweep = now
+	cutoff := now.Add(-time.Minute)
+	for account, window := range c.accountWindows {
+		window.dropThrough(cutoff)
+		if window.len() == 0 {
+			delete(c.accountWindows, account)
+		} else {
+			c.accountWindows[account] = window
+		}
+	}
 }
 
 func (c *Concurrency) Snapshot() ConcurrencySnapshot {

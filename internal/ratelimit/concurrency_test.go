@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestConcurrencyLimitsAndRelease(t *testing.T) {
@@ -107,4 +108,32 @@ func TestSharedAccountLimitsAcrossGroups(t *testing.T) {
 		t.Fatal(reason)
 	}
 	release()
+}
+
+func TestSharedAccountWindowsAreReleasedWhenIdle(t *testing.T) {
+	c := NewConcurrency()
+	release, blocked := c.TryAcquireGroupAccount(1, 0, "plain", 0, 0)
+	if blocked != "" {
+		t.Fatal(blocked)
+	}
+	release()
+	if _, kept := c.accountWindows["plain"]; kept {
+		t.Fatal("account without an RPM limit kept an empty window")
+	}
+
+	stale := timestampDeque{}
+	stale.push(time.Now().Add(-2 * time.Minute))
+	c.accountWindows["removed-account"] = stale
+	c.lastSweep = time.Time{}
+	release, blocked = c.TryAcquireGroupAccount(1, 0, "active", 0, 5)
+	if blocked != "" {
+		t.Fatal(blocked)
+	}
+	release()
+	if _, kept := c.accountWindows["removed-account"]; kept {
+		t.Fatal("stale window of a removed account was not swept")
+	}
+	if window := c.accountWindows["active"]; window.len() != 1 {
+		t.Fatalf("active account window length = %d, want 1", window.len())
+	}
 }
