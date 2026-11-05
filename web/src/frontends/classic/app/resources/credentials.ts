@@ -959,7 +959,8 @@ export function projectCredentialTestResult(value: unknown): CredentialTestResul
     protocol: projectEnum(record.protocol, enabledDataProtocols),
     latency_ms: projectSafeInteger(record.latency_ms, { minimum: 0 }),
     reason,
-    error_detail: record.error_detail === undefined ? undefined : projectString(record.error_detail),
+    error_detail:
+      record.error_detail === undefined ? undefined : projectString(record.error_detail),
     can_restore: canRestore,
     restore_proof: restoreProof,
     tested_at_ms: projectEpochMilliseconds(record.tested_at_ms),

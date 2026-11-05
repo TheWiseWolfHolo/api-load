@@ -206,14 +206,13 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
                 : 'warning'
           "
           >{{ t('credentialCards.testResult.' + result.outcome) }} · {{ result.latency }} ms
-            <span v-if="result.reason">
-              · {{ t('credentialCards.testReason.' + result.reason) }}
-            </span>
-            <div v-if="result.errorDetail" class="modern-credential-test-error">
-              {{ result.errorDetail }}
-            </div>
-          </AppNotice
-        >
+          <span v-if="result.reason">
+            · {{ t('credentialCards.testReason.' + result.reason) }}
+          </span>
+          <div v-if="result.errorDetail" class="modern-credential-test-error">
+            {{ result.errorDetail }}
+          </div>
+        </AppNotice>
         <div class="modern-credential-test-actions">
           <AppButton :disabled="pending" @click="close">{{ t('shell.close') }}</AppButton
           ><AppButton
@@ -250,9 +249,9 @@ useMessageSource(() => (error.value ? { text: error.value, tone: 'danger' } : un
   margin-top: var(--modern-space-2);
 }
 .modern-credential-test-error {
-	max-height: 8lh;
-	margin-top: var(--modern-space-2);
-	overflow: auto;
-	white-space: pre-wrap;
+  max-height: 8lh;
+  margin-top: var(--modern-space-2);
+  overflow: auto;
+  white-space: pre-wrap;
 }
 </style>
