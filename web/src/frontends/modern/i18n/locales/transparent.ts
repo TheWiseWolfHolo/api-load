@@ -13,6 +13,7 @@ const zh = {
   fixed: '固定同一条凭据',
   credential: '固定凭据',
   credentialSearch: '搜索凭据名称或掩码',
+  credentialUnavailable: '固定凭据详情暂时无法读取，保存时会重新验证。',
   fixedHelp: '上传、创建任务及后续查询应固定同一凭据。固定来源不可用时直接报错。',
   behavior: '原样转发请求体和响应体，不改模型 ID，不解析用量。请求发出后不自动重试。',
   supported:
@@ -65,6 +66,8 @@ const en: Messages = {
   fixed: 'Always use one credential',
   credential: 'Fixed credential',
   credentialSearch: 'Search credential name or masked key',
+  credentialUnavailable:
+    'The fixed credential details are temporarily unavailable and will be checked again when saved.',
   fixedHelp:
     'Uploads, task creation and later queries should use the same credential. If it is unavailable, the request fails.',
   behavior:
@@ -120,6 +123,7 @@ const ja: Messages = {
   fixed: '同じ認証情報に固定',
   credential: '固定する認証情報',
   credentialSearch: '名前またはマスク済みキーで検索',
+  credentialUnavailable: '固定する認証情報の詳細を一時的に読み取れません。保存時に再確認します。',
   fixedHelp:
     'アップロード、タスク作成と後続の照会では同じ認証情報を使用してください。利用できない場合は失敗します。',
   behavior:

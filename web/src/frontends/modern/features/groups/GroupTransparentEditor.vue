@@ -51,13 +51,18 @@ const selected = useQuery(
   })),
 )
 const selectedOption = computed(() =>
-  selected.data.value
-    ? {
-        value: String(selected.data.value.id),
-        label: selected.data.value.name
-          ? `${selected.data.value.name} · ${selected.data.value.mask}`
-          : selected.data.value.mask,
-      }
+  model.value.fixed_credential_id > 0
+    ? selected.data.value
+      ? {
+          value: String(selected.data.value.id),
+          label: selected.data.value.name
+            ? `${selected.data.value.name} · ${selected.data.value.mask}`
+            : selected.data.value.mask,
+        }
+      : {
+          value: String(model.value.fixed_credential_id),
+          label: `#${model.value.fixed_credential_id}`,
+        }
     : undefined,
 )
 const strategies = computed(() => [
@@ -122,6 +127,9 @@ async function credentials(query: string, signal: AbortSignal) {
         :disabled="disabled"
         :error="attempted && issue === 'credentialRequired' ? t(issue) : undefined"
       />
+      <AppNotice v-if="model.strategy === 'fixed' && selected.isError.value" tone="warning">
+        {{ t('credentialUnavailable') }}
+      </AppNotice>
       <p class="modern-transparent-note">{{ t('fixedHelp') }}</p>
       <div class="modern-transparent-endpoint">
         <span>{{ t('endpoint') }}</span
