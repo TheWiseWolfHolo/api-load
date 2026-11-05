@@ -759,6 +759,26 @@ func failedCredentialProbeResult(
 	}
 }
 
+func TestCredentialProbeErrorDetailIsBoundedAndRedacted(t *testing.T) {
+	result := failedCredentialProbeResult(http.StatusUnauthorized, execution.ErrorKindHTTP, execution.FailureHintInvalidCredential)
+	result.Error.Code = "invalid_api_key"
+	result.Error.RequestID = "probe-request-id"
+	result.Error.Summary = "Invalid key probe-secret and Bearer abcdefghijklmnopqrstuvwxyz"
+	detail := credentialProbeErrorDetail(result, "probe-secret")
+	if !strings.Contains(detail, "HTTP 401") || !strings.Contains(detail, "invalid_api_key") ||
+		!strings.Contains(detail, "request_id=probe-request-id") {
+		t.Fatalf("detail = %q, missing diagnostic fields", detail)
+	}
+	if strings.Contains(detail, "probe-secret") || strings.Contains(detail, "abcdefghijklmnopqrstuvwxyz") {
+		t.Fatalf("detail leaked credential material: %q", detail)
+	}
+	result.Error.Summary = strings.Repeat("额度不足", execution.MaxErrorSummaryLength)
+	detail = credentialProbeErrorDetail(result, "long-secret")
+	if detail != "" {
+		t.Fatalf("invalid oversized error evidence must be omitted, got %q", detail)
+	}
+}
+
 func credentialProbeReasonPointer(reason CredentialProbeReason) *CredentialProbeReason {
 	return &reason
 }

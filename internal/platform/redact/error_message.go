@@ -28,6 +28,16 @@ func ExtractErrorMessage(body []byte) string {
 	return safeErrorMessageText(text)
 }
 
+// SanitizeErrorMessageText validates an already extracted diagnostic summary.
+func SanitizeErrorMessageText(value string) string {
+	value = strings.TrimSpace(value)
+	if !utf8.ValidString(value) || strings.HasPrefix(value, "{") || looksLikeMarkup(value) ||
+		(strings.HasPrefix(value, "[") && json.Valid([]byte(value))) {
+		return ""
+	}
+	return safeErrorMessageText(value)
+}
+
 func extractJSONErrorMessage(body []byte) (string, bool) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()

@@ -6,6 +6,27 @@ import (
 	"testing"
 )
 
+func TestSanitizeErrorMessageTextKeepsUsefulDiagnosticsWithoutUnsafePayloads(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "diagnostic", in: "  [provider] quota exceeded  ", want: "[provider] quota exceeded"},
+		{name: "json object", in: `{"message":"private"}`},
+		{name: "json array", in: `["private"]`},
+		{name: "markup", in: "<html>private</html>"},
+		{name: "control", in: "private\x00diagnostic"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := SanitizeErrorMessageText(test.in); got != test.want {
+				t.Fatalf("SanitizeErrorMessageText() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestRedactorStringCoversCredentialShapes(t *testing.T) {
 	redactor := New()
 	tests := []struct {
